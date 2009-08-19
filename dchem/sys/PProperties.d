@@ -1,7 +1,54 @@
-module blip.chem.sysStruct.PProperties;
+module dchem.sys.PProperties;
 import blip.narray.NArray;
 import blip.Serializer
+/+
+    /// Meta informations, properties of a property
+    interface PropertyKind: CopiableOjectI,Serializable{
+        enum Distribution:int{
+            Replicated,
+            ParticleLocal
+        }
+        enum DetailLevel:int{
+            KindLevel,
+            ParticleLevel
+        }
+        enum Storage:int{
+            NArrayReal0DT,
+            NArrayReal1DT,
+            NArrayReal2DT,
+            NArrayReal3DT,
+            VariantT
+        }
+        Distribution distribution();
+        DetailLevel detailLevel();
+        Storage storageLevel();
+        char[] propertyName();
+        int propertyIdx();
+        ParticleKind particleKind();
+        ParticleKindKind dup(PSCopyDepthLevel level);
+        BulkArray!(idxType)[] kinds2particles;
+    }
 
+    /// generic property interface
+    interface GenProperty:CopiableOjectI,Serializable {
+        PropertyKind kind(); /// kind of this property
+        Variant storage(); /// the data
+        GenProperty dup(PSCopyDepthLevel level);
+    }
+
+    /// properties local to a particle
+    interface ParticleProperty(T): GenProperty{
+        T opIndex(idxType i);
+        void opIndexAssign(idxType i,T val);
+        void value(T val);
+    }
+
+    /// property local to a kind
+    interface PKindProperty(T): GenProperty{
+        T value();
+        void value(T val);
+        T opIndex(idxType i);
+    }
 /// a particle property using an NArray
 class NArrayPProperty!(T,int rank,bool readOnly=false): ParticleProperty!(NArray!(T,rank)){
     /// creates a property storage with the given shape and for the given number of particles
@@ -57,3 +104,4 @@ class NArrayPKindProperty!(T,int rank,bool readOnly=false): PKindProperty!(NArra
         return arr;
     }
 }
++/
