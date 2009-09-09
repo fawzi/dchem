@@ -1,5 +1,5 @@
 /// particle indexes
-module dchem.sys.ParticleIndexes;
+module dchem.sys.PIndexes;
 
 version(LongIndexes){
     alias ulong idxType; /// type used for particle,... indexing
@@ -112,6 +112,25 @@ struct PIndex{
     // default implementations are ok
     // int opCmp(PIndex o)
     // equals_t    opEquals(Object o);
+    
+    /// increments the particle part
+    PIndex opAddAssign(ulong i){
+        assert((data & 0x0000_FFFF_FFFF_FFFFUL) != 0x0000_FFFF_FFFF_FFFFUL),"increment invalid particle");
+        data+=i;
+        return *this;
+    }
+    /// ditto
+    PIndex opAddAssign(ParticleIdx i){
+        assert((data & 0x0000_FFFF_FFFF_FFFFUL) != 0x0000_FFFF_FFFF_FFFFUL),"increment invalid particle");
+        data+=i;
+        return *this;
+    }
+    /// increments the kind part
+    PIndex opAddAssign(KindIdx i){
+        assert((data & 0xFFFF_0000_0000_0000UL) != 0xFFFF_0000_0000_0000UL),"kind increment invalid particle kind");
+        data+=(cast(ulong)i)<<48;
+        return *this;
+    }
 }
 
 typedef PIndex LocalPIndex; /// an index local to a subset of atoms (clearly not transferrable between different subsets)

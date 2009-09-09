@@ -1,0 +1,130 @@
+#!/bin/bash
+
+version=opt
+clean=
+relink=
+out=
+compiler=
+out_name=
+verbose=
+if [ -z "$D_HOME" ] ; then
+    D_HOME=$HOME
+fi
+while [ $# -gt 0 ]
+do
+    case $1 in
+        --help)
+            echo "usage: build [--dbg] [--opt] [--full] [--d-home d_home] [--dchem-home dchemHome]"
+            echo "           [--tango-home tangoHome] [--blip-home blipHome]"
+            echo "           [--out outName] [--verbose] mainDFile.d [compiler options]"
+            echo ""
+            echo "  builds mainDFile.d linking tango, blip and all needed libs (lapack, bz2,...)"
+            echo "  --debug         builds the debug version"
+            echo "  --opt           builds the optimized version"
+            echo "  --full          forces a clean before rebuilding"
+            echo "  --verbose       verbose building"
+            echo "  --d-home x      uses x as d home (default is $D_HOME )"
+            echo "  --dchem-home x  uses x as tango home (default is $D_HOME/dchem )"
+            echo "  --tango-home x  uses x as tango home (default is $D_HOME/tango )"
+            echo "  --blip-home x   uses x as blip home (default is $D_HOME/blip )"
+            exit 0
+            ;;
+        --dbg)
+            version=dbg
+            ;;
+        --opt)
+            version=opt
+            ;;
+        --full)
+            clean=1
+            ;;
+        --verbose)
+            verbose="+v"
+            ;;
+        --dchem-home)
+            shift
+            DCHEM_HOME=$1
+            ;;
+        --d-home)
+            shift
+            D_HOME=$1
+            ;;
+        --tango-home)
+            shift
+            TANGO_HOME=$1
+            ;;
+        --blip-home)
+            shift
+            BLIP_HOME=$1
+            ;;
+        --out)
+            shift
+            out_name=$1
+            ;;
+        *.d)
+            main_d=$1
+            shift
+            break
+            ;;
+        *)
+            die "expected a .d file, got $1"
+            break
+            ;;
+    esac
+    shift
+done
+if [ -z "$TANGO_HOME" ] ; then
+    TANGO_HOME="$D_HOME/tango"
+fi
+if [ -z "$BLIP_HOME" ] ; then
+    BLIP_HOME="$D_HOME/blip"
+fi
+if [ -z "$DCHEM_HOME" ] ; then
+    DCHEM_HOME="$D_HOME/dchem"
+fi
+
+if [ -z "$compiler" ]; then
+    compiler=`$TANGO_HOME/build/tools/guessCompiler.sh --path $DC`
+fi
+compShort=`$TANGO_HOME/build/tools/guessCompiler.sh $compiler`
+case $compShort in
+    dmd)
+    linkLib="-L-l"
+    linkPath="-L-L"
+    extra_libs="-L-framework -LAccelerate"
+    ;;
+    ldc)
+    linkLib="-L=-l"
+    linkPath="-L=-L"
+    extra_libs="-L=-framework -L=Accelerate"
+    ;;
+    *)
+    die "unsupported compiler"
+    ;;
+esac
+case $version in
+    opt)
+    flags="-release -O"
+    ;;
+    dbg)
+    flags="-g"
+    ;;
+    *)
+    die "unknown version"
+    ;;
+esac
+if [ -z "$out_name" ]; then
+    out_name=${main_d%%d}$version
+fi
+if [ "$version" == "opt" ]; then
+    libExt=
+else
+    libExt="-$version"
+fi
+
+if [ -n "$clean" ]; then
+    rm -rf deps_${out_name}_${version} objs_${out_name}
+fi
+rm -f $out_name
+
+xfbuild +c$compiler +xtango +xblip +xstd +Ddeps_${out_name}_${version} +Oobjs_${out_name} $verbose +o$out_name $main_d -I$TANGO_HOME/user -I$BLIP_HOME -I$DCHEM_HOME $flags  ${linkLib}tango-user-${compShort}$libExt ${linkLib}blip-${compShort}$libExt $extra_libs $*

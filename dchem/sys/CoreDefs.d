@@ -1,4 +1,6 @@
-module dchem.sys.Models;
+module dchem.sys.CoreDefs;
+import dchem.sys.Requests;
+import dchem.PIndexes;
 
 /// various levels of duplication
 enum PSCopyDepthLevel{
@@ -40,6 +42,10 @@ class ParticleKind: CopiableOjectI,Serializable{
             SerializationLevel.debugLevel);
         metaI.addFieldOfType!(ushort)("pKind","kind index");
         metaI.addFieldOfType!(size_t)("position","number of 3D space elements",
+            SerializationLevel.debugLevel);
+        metaI.addFieldOfType!(size_t)("degreesOfFreedom","number of 3D space elements",
+            SerializationLevel.debugLevel);
+        metaI.addFieldOfType!(size_t)("orientation","number of 3D space elements",
             SerializationLevel.debugLevel);
     }
     ClassMetaInfo getSerializationMetaInfo(){
@@ -88,103 +94,6 @@ class ParticleKind: CopiableOjectI,Serializable{
     void minimizeMemory(ParticleSys p){}
 }
 
-/+
-/// Meta informations, properties of a property
-interface PropertyKind: CopiableOjectI,Serializable{
-    enum Distribution:int{
-        Replicated,
-        ParticleLocal
-    }
-    enum DetailLevel:int{
-        KindLevel,
-        ParticleLevel
-    }
-    enum Storage:int{ // ragged (sparse) storage to add
-        NArrayReal0DT,
-        NArrayReal1DT,
-        NArrayReal2DT,
-        NArrayReal3DT,
-        VariantT
-    }
-    Distribution distribution();
-    DetailLevel detailLevel();
-    Storage storageLevel();
-    char[] propertyName();
-    ParticleKind particleKind();
-    PropertyKind dup(PSCopyDepthLevel level);
-    BulkArray!(idxType)[] kinds2particles;
-}
-
-/// generic property interface
-interface GenProperty:CopiableObjectI,Serializable {
-    PropertyKind kind(); /// kind of this property
-    Variant storage(); /// the data
-    GenProperty dup(PSCopyDepthLevel level);
-}
-
-/// properties local to a particle
-interface ParticleProperty(T): GenProperty{
-    T opIndex(idxType i);
-    void opIndexAssign(idxType i,T val);
-    void value(T val);
-}
-
-/// property local to a kind
-interface PKindProperty(T): GenProperty{
-    T value();
-    void value(T val);
-    T opIndex(idxType i);
-}
-+/
-
-final class ParticleIterFromIdx(IType,PIType):FIteratorI!(Particle*) {
-    IType it;
-    BulkArray!(Particle) particles
-    idxType next(){
-        return particles[it.next()];
-    }
-    bool atEnd(){
-        return it.atEnd();
-    }
-    int opApply(int delegate(Particle*) loopBody){
-        return it.opApply(delegate int(idxType idx){ return loopBody(particles[idx]); });
-    }
-    ParticleIterFromIdx!(PIType,PIType) parallelLoop(size_t optimalCS){
-        return new ParticleIterFromIdx!(PIType,PIType)(it.parallelLoop(optimalCS));
-    }
-    ParticleIterFromIdx!(PIType,PIType) parallelLoop(size_t optimalCS){
-        return new ParticleIterFromIdx!(PIType,PIType)(it.parallelLoop());
-    }
-}
-
-/++
- +  description of the simulation cell
- +   - periodicity: an array with 1 if that dimension is periodic, 0 if it isn't
- +   - h: matrix that maps the cell [0,1]^3 to the real cell in atomic units
- +   - h_inv: inverse of h
- +   - x0: shift of the origin (the mapping reduced points -> real points is
- +     r_real=dot(h,r_red)+x0
- +/
-class Cell
-{
-    int[3] periodic;
-    NArray!(Real,2) h,hInv;
-    NArray!(Real,1) x0;
-    OrthoCell orthoCell
-    this(NArray!(Real,2)h,int[3] periodic,NArray!(Real,2)hInv=null){
-        this.h=h;
-        this.periodic=periodic;
-        if (hInv is null){
-            this.hInv=LinAlg.inv(h);
-        } else {
-            this.hInv=hInv;
-        }
-    }
-    Cell dup(){
-        return new Cell(h.dup(),periodic,hInv.dup);
-    }
-}
-
 /// variables that normally an integrator should care about
 // (put here mainly for tidiness reasons)
 struct DynamicsVars{
@@ -192,17 +101,17 @@ struct DynamicsVars{
     Cell cell;
 
     // position in 3D space (used for neigh lists/hierarchical partitioning, screening)
-    SegmentedArray!(float) spos;
+    SegmentedArray!(float[3]) spos;
 
     // position in 3D space
-    SegmentedArray!(Real) pos;
-    SegmentedArray!(Real) dpos;
-    SegmentedArray!(Real) ddpos;
+    SegmentedArray!(Real[3]) pos;
+    SegmentedArray!(Real[3]) dpos;
+    SegmentedArray!(Real[3]) ddpos;
 
     // orientation (quaternions)
-    SegmentedArray!(Real) orient;
-    SegmentedArray!(Real) dorient;
-    SegmentedArray!(Real) ddorient;
+    SegmentedArray!(Real[4]) orient;
+    SegmentedArray!(Real[4]) dorient;
+    SegmentedArray!(Real[4]) ddorient;
 
     // other degrees of freedom to be integrated (internal coords, extended lagrangian,...)
     SegmentedArray!(Real) dof;
@@ -230,10 +139,12 @@ struct DynamicsVars{
         }
         return *this;
     }
+    
+    mixin(serializeSome("dchem.sys.DynamicsVars","cell|spos|pos|dpos|ddpos|orient|dorient|"))
 }
 
 /// represent the structure of a system of particles
-class SysStruct, CopiableOjectI //,Serializable
+class SysStruct, CopiableOjectI,Serializable
 {
     SubMapping fullSystem;
     SegmentedArray!(PIndex) particles;
@@ -241,32 +152,51 @@ class SysStruct, CopiableOjectI //,Serializable
     SegmentedArray!(size_t) subParticleIdxs;
     SegmentedArray!(PKinds) particleKinds;
     
+    this(){ }
+    this(SubMapping fullSystem,SegmentedArray!(PIndex) particles,
+        SegmentedArray!(PIndex) superParticle,SegmentedArray!(size_t) subParticleIdxs,
+        SegmentedArray!(PKinds) particleKinds)
+    {
+        this.fullSystem=fullSystem;
+        this.particles=particles;
+        this.superParticle=superParticle;
+        this.subParticleIdxs=subParticleIdxs;
+        this.particleKinds=particleKinds;
+    }
     SysStruct dup(PSCopyDepthLevel l){
-        if (l==PSCopyDepthLevel.None){
-            return this;
-        } else if (l==PSCopyDepthLevel.PSysLevel) {
-            return new ParticleSys(cell.dup(),pLevels.dup());
-        } else if (cast(int)l>cast(int)PSCopyDepthLevel.PSysLevel) {
-            auto newPS=new ParticleSys(new LevelMappings[pLevels.length]);
-            foreach (i,pLevel;pLevels){
-                newPS.pLevels[i]=pLevel.dup(l);
-            }
+        if (l==PSCopyDepthLevel.SysStruct){
+            return new SysStruct(fullSystem,particles,superParticle,subParticleIdxs,particleKinds);
+        } else if (l > PSCopyDepthLevel.SysStruct) {
+            return new SysStruct(fullSystem.dup,particles.dup,superParticle.dup,
+                subParticleIdxs.dup,particleKinds.dup);
         }
+        return this;
     }
     SysStruct dup(){
-        return dup(PSCopyDepthLevel.PSysLevel);
+        return dup(PSCopyDepthLevel.SysStruct);
     }
     SysStruct deepDup(){
         return dup(PSCopyDepthLevel.All);
     }
+    mixin(serializeSome("dchem.sys.SysStruct",
+        `fullSystem: sub mapping to the whole system
+        particles: particle indexes
+        superParticle: super particle, i.e. molecule for example
+        subParticleIdxs: index within the super particle
+        particleKinds: particle kinds`))
 }
 
 /// represent a system of particles
-class ParticleSys, CopiableOjectI //,Serializable
+class ParticleSys, CopiableOjectI,Serializable
 {
     SysStruct sysStruct;
     
     DynamicsVars dynVars;
+    
+    this(SysStruct sysStruct,DynamicsVars dynVars){
+        this.sysStruct=sysStruct;
+        this.dynVars=dynVars;
+    }
     
     ParticleSys dup(PSCopyDepthLevel l){
         if (l==PSCopyDepthLevel.None){
@@ -277,13 +207,17 @@ class ParticleSys, CopiableOjectI //,Serializable
             return new ParticleSys(sysStruct.dup(l),dynVars.dup(l));
         }
     }
+    
     ParticleSys dup(){
-        return dup(PSCopyDepthLevel.PSysLevel);
+        return dup(PSCopyDepthLevel.DynProperties);
     }
+    
     ParticleSys deepDup(){
         return dup(PSCopyDepthLevel.All);
     }
     
-    // mixin(expose!(NewSerializationExpose)(`cell|pLevels`));
+    mixin(serializeSome("dchem.sys.ParticleSys",
+        `sysStruct: structure of the system (particle, particle kinds,...)
+        dynVars: dynamic variables (position,cell,velocities)`));
 }
                                                                     

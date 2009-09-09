@@ -16,12 +16,21 @@
 /// fawzi
 /// License: GPLv3
 module dchem.Physcon;
-public import tango.math.Math:pi;
+public import tango.math.Math:PI;
+import tango.math.Math;
 
-static this(){
+/// Speed of light in vacuum [m/s]
+const real c_light = 299792458.0;
+
+/// Magnetic constant or permeability of vacuum [N/A**2]
+const real mu_perm = 4.0*PI*1.0E-7;
+
+/// Electric constant or permittivity of vacuum [F/m]
+const real permittivity = 1.0/(mu_perm*c_light*c_light);
+
 /// Planck constant [J*s]
 const real h_planck = 6.62606896E-34;
-const real h_bar = h_planck/(2.0*pi)
+const real h_bar = h_planck/(2.0*PI);
 
 /// Elementary charge [C]
 const real e_charge = 1.602176487E-19;
@@ -53,7 +62,7 @@ const real boltzmann = 1.3806504E-23;
 const real a_mass = 1.660538782E-27;
 
 /// Bohr radius [m]
-//MK a_bohr = a_fine/(4.0*pi*rydberg)
+//MK a_bohr = a_fine/(4.0*PI*rydberg)
 const real a_bohr = 0.52917720859E-10;
 
 // Conversion factors
@@ -68,7 +77,7 @@ const real angstrom = 1.0E+10*a_bohr;
 const real bohr = 1.0/angstrom;
 
 /// [a.u.] -> [s]
-const real seconds = 1.0/(4.0*pi*rydberg*c_light);
+const real seconds = 1.0/(4.0*PI*rydberg*c_light);
 
 /// [a.u.] -> [fs]
 const real femtoseconds = 1.0E+15*seconds;
@@ -89,7 +98,7 @@ const real kjmol = 0.001*joule*n_avogadro;
 const real kcalmol = kjmol/4.184;
 
 /// [a.u.] -> [Pa]
-const real pascal = joule/a_bohr**3;
+const real pascal = joule/(a_bohr*a_bohr*a_bohr);
 
 /// [a.u.] -> [bar]
 const real bar = pascal/1.0E+5;
@@ -104,23 +113,25 @@ const real evolt = joule/e_charge;
 const real hertz = joule/h_planck;
 
 // [a.u./Bohr**2] -> [1/cm] (wave numbers)
-const real vibfac;
+real vibfac;
+
 static this(){
-    vibfac = 5.0*sqrt(kjmol)/(pi*a_bohr*c_light);
+    vibfac = 5.0*sqrt(kjmol)/(PI*a_bohr*c_light);
 }
 
 /// [a.u.] -> [1/cm] (wave numbers)
 const real wavenumbers = 0.02*rydberg;
 
 /// [a.u.] -> [esu] (electrostatic units)
-const real[3] esu;
+real[3] esu;
 /// [a.u.] -> [debye] (electrostatic units)
-const real debye;
+real debye;
+
 static this(){
     esu[0] = 1.0E+21*a_bohr*c_light*e_charge;
     for (int i=1;i<esu.length;++i){
         esu[i] = esu[i-1]/bohr;
     }
-    debye = esu(1);
+    debye = esu[0];
 }
 
