@@ -7,6 +7,8 @@ out=
 compiler=
 out_name=
 verbose=
+run=
+remote=1
 if [ -z "$D_HOME" ] ; then
     D_HOME=$HOME
 fi
@@ -14,13 +16,13 @@ while [ $# -gt 0 ]
 do
     case $1 in
         --help)
-            echo "usage: build [--dbg] [--opt] [--full] [--d-home d_home] [--dchem-home dchemHome]"
-            echo "           [--tango-home tangoHome] [--blip-home blipHome]"
+            echo "usage: build [--version x] [--full] [--d-home d_home] [--dchem-home dchemHome]"
+            echo "           [--run] [--tango-home tangoHome] [--blip-home blipHome]"
             echo "           [--out outName] [--verbose] mainDFile.d [compiler options]"
             echo ""
             echo "  builds mainDFile.d linking tango, blip and all needed libs (lapack, bz2,...)"
-            echo "  --debug         builds the debug version"
-            echo "  --opt           builds the optimized version"
+            echo "  --version x     builds the version x (typically dbg or opt"
+            echo "  --run           runs the executable if sucessfully created"
             echo "  --full          forces a clean before rebuilding"
             echo "  --verbose       verbose building"
             echo "  --d-home x      uses x as d home (default is $D_HOME )"
@@ -29,11 +31,12 @@ do
             echo "  --blip-home x   uses x as blip home (default is $D_HOME/blip )"
             exit 0
             ;;
-        --dbg)
-            version=dbg
+        --version)
+	    shift
+            version=$1
             ;;
-        --opt)
-            version=opt
+        --run)
+            run=1
             ;;
         --full)
             clean=1
@@ -87,24 +90,41 @@ if [ -z "$compiler" ]; then
     compiler=`$TANGO_HOME/build/tools/guessCompiler.sh --path $DC`
 fi
 compShort=`$TANGO_HOME/build/tools/guessCompiler.sh $compiler`
+
+if [ "$version" == "opt" ]; then
+    libExt=
+else
+    libExt="-$version"
+fi
+
 case $compShort in
     dmd)
-    linkLib="-L-l"
-    linkPath="-L-L"
-    extra_libs="-L-framework -LAccelerate"
+    linkFlag="-L"
+    compFlags=
     ;;
     ldc)
-    linkLib="-L=-l"
-    linkPath="-L=-L"
-    extra_libs="-L=-framework -L=Accelerate"
+    linkFlag="-L="
+    compFlags="+q"
     ;;
     *)
     die "unsupported compiler"
-    ;;
 esac
+
+case `uname` in
+  Darwin)
+  extra_libs_os="${linkFlag}-framework ${linkFlag}Accelerate ${linkFlag}-lz ${linkFlag}-lbz2"
+  ;;
+  Linux)
+  extra_libs_os="${linkFlag}-lgoto2 ${linkFlag}-ldl ${linkFlag}-lz ${linkFlag}-lbz2 ${linkFlag}-lg2c"
+  ;;
+  *)
+  die "unknown platform, you need to set extra_libs_os"
+esac
+extra_libs="${linkFlag}-L${D_HOME}/lib ${linkFlag}-lblip-${compShort}$libExt ${linkFlag}-ltango-user-${compShort}$libExt $extra_libs_os"
+
 case $version in
     opt)
-    flags="-release -O"
+    flags="-release -O -relocation-model=pic"
     ;;
     dbg)
     flags="-g"
@@ -114,17 +134,39 @@ case $version in
     ;;
 esac
 if [ -z "$out_name" ]; then
-    out_name=${main_d%%d}$version
+    out_name=`basename ${main_d%%d}`$version
 fi
-if [ "$version" == "opt" ]; then
-    libExt=
-else
-    libExt="-$version"
+if [ -z "$D_BUILD_DIR" ] ; then
+    D_BUILD_DIR=.
 fi
-
+if [ -z "$remote" ] ; then
+    D_BUILD_DIR=.
+    out2=out_name
+fi
+mkdir -p $D_BUILD_DIR
+MAIN_DIR=`pwd`
 if [ -n "$clean" ]; then
-    rm -rf deps_${out_name}_${version} objs_${out_name}
+    rm -rf $D_BUILD_DIR/deps_${out_name} $D_BUILD_DIR/objs_${out_name}
 fi
-rm -f $out_name
+rm -f $D_BUILD_DIR/_$out_name
+if [ -n "$remote" ] ; then
+  MAIN_DIR=`pwd`
+fi
 
-xfbuild +c$compiler +xtango +xblip +xstd +Ddeps_${out_name}_${version} +Oobjs_${out_name} $verbose +o$out_name $main_d -I$TANGO_HOME/user -I$BLIP_HOME -I$DCHEM_HOME $flags  ${linkLib}tango-user-${compShort}$libExt ${linkLib}blip-${compShort}$libExt $extra_libs $*
+cmd="xfbuild +c$compiler $compFlags +xtango +xblip +xstd +xldc +xgobo +Ddeps_${out_name}_${version} +Oobjs_${out_name} $verbose +o_$out_name $MAIN_DIR/$main_d -I$MAIN_DIR -I$TANGO_HOME/user -I$BLIP_HOME -I$DCHEM_HOME $flags $extra_libs $*"
+
+if [ -n "$verbose" ] ; then
+    echo "$cmd"
+fi
+if [ -n "$remote" ] ; then
+  pushd $D_BUILD_DIR
+fi
+$cmd || exit 1
+mv _$out_name $MAIN_DIR/$out_name
+if [ -n "$remote" ] ; then
+  popd
+fi
+
+if [ -n "$run" ] ; then
+    ./$out_name
+fi
