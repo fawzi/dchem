@@ -124,7 +124,7 @@ extra_libs="${linkFlag}-L${D_HOME}/lib ${linkFlag}-lblip-${compShort}$libExt ${l
 
 case $version in
     opt)
-    flags="-release -O -relocation-model=pic"
+    flags="-release -O"
     ;;
     dbg)
     flags="-g"
