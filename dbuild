@@ -1,5 +1,10 @@
 #!/bin/bash
 
+die() {
+    echo "$1"
+    exit $2
+}
+
 version=opt
 clean=
 relink=
@@ -32,7 +37,7 @@ do
             exit 0
             ;;
         --version)
-	    shift
+        shift
             version=$1
             ;;
         --run)
