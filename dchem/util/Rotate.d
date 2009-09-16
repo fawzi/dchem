@@ -2,9 +2,10 @@
 module dchem.util.Rotate;
 import blip.narray.NArray;
 import tango.util.log.Trace;
+import tango.io.Stdout;
 
 /// rotation from one *unit* vector v1 to a *unit* vector v2
-M rotateV1V2(V,M)(V v1,V v2,M m){
+M rotateVV(V,M)(V v1,V v2,M m){
     auto c=dot(v1,v2);
     alias typeof(c) S;
     auto s2=cast(S)1-c*c;
@@ -23,9 +24,8 @@ M rotateV1V2(V,M)(V v1,V v2,M m){
     return m;
 }
 
-/+ to debug
 /// rotation from one delta i vector to a *unit* vector v2
-M rotateEiV1(V,M)(size_t i,V v2,M m){
+M rotateEiV(V,M)(size_t i,V v2,M m){
     auto c=v2[i];
     alias typeof(c) S;
     auto s2=cast(S)1-c*c;
@@ -36,6 +36,9 @@ M rotateEiV1(V,M)(size_t i,V v2,M m){
       vOrtC=cast(S)(-1)/cast(S)2;
     }
     auto v1m=m[i];
+    static if(is(typeof(v1m.dup()))){
+      v1m=v1m.dup();
+    }
     auto v2Ortho=v2.dup;
     auto v2OrthoM=dot(v2,m);
     v2OrthoM[i]=cast(S)0;
@@ -48,7 +51,7 @@ M rotateEiV1(V,M)(size_t i,V v2,M m){
 }
 
 /// rotation from one *unit* vector v2 to the vector delta_i (transpose of the previous one)
-M rotateV1Ei(V,M)(V v2,size_t i,M m){
+M rotateVEi(V,M)(V v2,size_t i,M m){
     auto c=v2[i];
     alias typeof(c) S;
     auto s2=cast(S)1-c*c;
@@ -59,6 +62,9 @@ M rotateV1Ei(V,M)(V v2,size_t i,M m){
       vOrtC=cast(S)(-1)/cast(S)2;
     }
     auto v1m=m[i];
+    static if(is(typeof(v1m.dup()))){
+      v1m=v1m.dup();
+    }
     auto v2Ortho=v2.dup;
     auto v2OrthoM=dot(v2,m);
     v2OrthoM[i]=cast(S)0;
@@ -69,5 +75,5 @@ M rotateV1Ei(V,M)(V v2,size_t i,M m){
     outer(v2OrthoM,v2Ortho,m,cast(S)1,cast(S)1);
     return m;
 }
-+/
+
 
