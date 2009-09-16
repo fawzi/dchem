@@ -4,11 +4,8 @@ import dchem.Common;
 import blip.serialization.Serialization;
 import blip.narray.NArray;
 import blip.serialization.StringSerialize;
-import blip.rtest.RTest;
-import blip.narray.TestSupport;
 import tango.math.Math;
 import tango.util.log.Trace;
-import dchem.util.Rotate;
 
 /// conversion of a,b,c,alpha,beta,gamma to h
 NArray!(Real,2) cellParam2h(Real a,Real b,Real c,Real alpha,Real beta,Real gamma){
@@ -75,27 +72,6 @@ Real[] h2CellParam(NArray!(Real,2)h,Real[] params=null){
     return params;
 }
 
-void testCell2Param(Real a,Real b,Real c,Real alpha,Real beta,Real gamma,SizedRandomNArray!(Real,3)dirA){
-    auto h=cellParam2h(a,b,c,alpha,beta,gamma);
-    auto param=h2CellParam(h);
-    auto error=abs(param[0]-a)+abs(param[1]-b)+abs(param[2]-c)+abs(param[3]-alpha)
-        +abs(param[4]-beta)+abs(param[5]-gamma);
-    if (error>1.e-9) {
-        Trace.formatln("error:{}",error);
-        throw new Exception("Error too big",__FILE__,__LINE__);
-    }
-    auto dir=dirA.arr;
-    dir/=norm2(dir);
-    auto h2=rotateVEi(dir,0,h);
-    param=h2CellParam(h2);
-    error=abs(param[0]-a)+abs(param[1]-b)+abs(param[2]-c)+abs(param[3]-alpha)
-        +abs(param[4]-beta)+abs(param[5]-gamma);
-    if (error>1.e-9) {
-        Trace.formatln("error2:{}",error);
-        throw new Exception("Error2 too big",__FILE__,__LINE__);
-    }
-}
-
 /++
  +  description of the simulation cell
  +   - periodicity: an array with 1 if that dimension is periodic, 0 if it isn't
@@ -137,90 +113,5 @@ class Cell
     }
 }
 
-// testing support
-
-/// random orthorombic cell
-class RandomOrthoCell{
-    Cell cell;
-    this(){}
-    static typeof(this) randomGenerate(Rand r){
-        auto h=zerosR([3,3]);
-        h[0,0]=r.uniformR2!(Real)(1.5,15.0);
-        h[1,1]=r.uniformR2!(Real)(1.5,15.0);
-        h[2,2]=r.uniformR2!(Real)(1.5,15.0);
-        auto x0=emptyR(3);
-        randomizeNArray(r.normalD(cast(Real)2.0),x0);
-        int[3] periodic;
-        for (int idim=0;idim<3;++idim){
-          periodic[idim]=(r.uniform!(bool)?1:0);
-        }
-        auto res=new typeof(this)();
-        res.cell=new Cell(h,periodic,x0);
-        return res;
-    }
-    char[] toString(){
-        return cell.toString();
-    }
-}
-  
-/// random cell with a along x axis, and b in the xy axis (h is upper triangular)
-class RandomNromCell{
-    Cell cell;
-    this(){}
-    static typeof(this) randomGenerate(Rand r){
-        auto param=emptyR(6);
-        randomizeNArray(r.uniformD!(Real)(),param);
-        param[Range(0,3)]*=13.5;
-        param[Range(0,3)]+=1.5;
-        param[Range(3,6)]*=150.0;
-        param[Range(3,6)]+=15.0;
-        int[3] periodic;
-        for (int idim=0;idim<3;++idim){
-          periodic[idim]=(r.uniform!(bool)()?1:0);
-        }
-        auto x0=emptyR(3);
-        randomizeNArray(r.normalD(cast(Real)2.0),x0);
-        auto res=new typeof(this)();
-        res.cell=new Cell(cellParam2h(param),periodic,x0);
-        return res;
-    }
-    char[] toString(){
-        return cell.toString();
-    }
-}
-/// random cell
-class RandomCell{
-    Cell cell;
-    this(){}
-    static typeof(this) randomGenerate(Rand r){
-        scope param=emptyR([6]);
-        randomizeNArray(r.uniformD!(Real)(),param);
-        Trace.formatln("param pre:{}",param);
-        param[Range(0,3)]*=13.5;
-        param[Range(0,3)]+=1.5;
-        param[Range(3,6)]*=150.0;
-        param[Range(3,6)]+=15.0;
-        Trace.formatln("param:{}",param);
-        NArray!(Real,1) dir=emptyR([3]);
-        randomizeNArray(r.normalD(cast(Real)1.0),dir);
-        dir/=norm2(dir);
-        scope h=cellParam2h(param);
-        Trace.formatln("h pre:{}",h);
-        rotateVEi(dir,0,h);
-        Trace.formatln("h:{}",h);
-        int[3] periodic;
-        for (int idim=0;idim<3;++idim){
-          periodic[idim]=(r.uniform!(bool)()?1:0);
-        }
-        scope x0=emptyR(3);
-        randomizeNArray(r.normalD(cast(Real)2.0),x0);
-        auto res=new typeof(this)();
-        res.cell=new Cell(h,periodic,x0);
-        return res;
-    }
-    char[] toString(){
-        return cell.toString();
-    }
-}
 
 

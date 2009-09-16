@@ -1,4 +1,4 @@
-module testUtilRotate;
+module dchem.test.UtilTests;
 import blip.narray.NArray;
 import blip.rtest.RTest;
 import dchem.util.Rotate;
@@ -68,6 +68,7 @@ void addRotTstToCollection(T,int ndim)(TestCollection coll){
     __LINE__,__FILE__,coll);
 }
 
+/// rotation tests
 TestCollection rotateTests(TestCollection superColl){
     TestCollection coll=new TestCollection("rotV1V2",
         __LINE__,__FILE__,superColl);
@@ -77,7 +78,10 @@ TestCollection rotateTests(TestCollection superColl){
     return coll;
 }
 
-void main(char[][] args){
-    Stdout(rand.toString()).newline;
-    mainTestFun(args,rotateTests(null));
+/// collection of all the tests on the util modules
+TestCollection utilTests(TestCollection superColl){
+    TestCollection coll=new TestCollection("util",
+        __LINE__,__FILE__,superColl);
+    rotateTests(coll);
+    return coll;
 }
