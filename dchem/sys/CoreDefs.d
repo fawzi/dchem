@@ -120,7 +120,20 @@ struct DynamicsVars{
     
     // constraints
     SegmentedArray!(Constraints) constraints;
-    
+
+    void opSliceAssign(ref DynamicsVars d2){
+        this.cell[]=d2.cell;
+        this.spos[]=d2.spos;
+        this.pos[]=d2.pos;
+        this.dpos[]=d2.dpos;
+        this.ddpos[]=d2.ddpos;
+        this.orient[]=d2.orient;
+        this.dorient[]=d2.orient;
+        this.ddorient[]=d2.orient;
+        this.dof[]=d2.dof;
+        this.ddof[]=d2.ddof;
+        this.dddof[]=d2.dddof;
+    }
     DynamicsVars dup(PSCopyDepthLevel level){
         if (level>=PSCopyDepthLevel.DynamicsProperties){
             DynamicsVars res;

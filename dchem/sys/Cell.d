@@ -96,10 +96,17 @@ class Cell
         } else {
             this.hInv=hInv.dup;
         }
-        this.x0=x0.dup;
-        if (this.x0 is null){ // leave null?
+        if (x0 is null){ // leave null?
           this.x0=zerosR(3);
+        } else {
+            this.x0=x0.dup;
         }
+    }
+    void opSliceAssign(Cell c2){
+        periodic[]=c2.periodic;
+        h[]=c2.h;
+        hInv[]=c2.hInv;
+        x0=c2.x0;
     }
     Cell dup(){
         return new Cell(h,periodic,x0,hInv);

@@ -1,5 +1,6 @@
 /// particle indexes
 module dchem.sys.PIndexes;
+import blip.serialization.Serialization;
 
 version(LongIndexes){
     alias ulong idxType; /// type used for particle,... indexing
@@ -43,11 +44,12 @@ struct KindRange{
     int opApply(int delegate(KindIdx)loopOp){
         for (KindIdx k=kStart;k<kEnd;++k){
             auto res=loopOp(k);
-            ïf (res!=0) break;
+            if (res!=0) return res;
         }
+        return 0;
     }
     bool dummy(){
-        return kStart==KindIdx() && kEnd==KindIdx();
+        return kStart==KindIdx.init && kEnd==KindIdx.init;
     }
 }
 
@@ -91,8 +93,12 @@ struct PIndex{
         return metaI;
     }
     void serial(S)(S s){
-        s.field(metaI[0],cast(ushort)kind);
-        s.field(metaI[1],cast(uint)particle);
+        ushort us=kind;
+        s.field(metaI[0],us);
+        kind=cast(KindIdx)us;
+        uint ui=particle;
+        s.field(metaI[1],ui);
+        particle=cast(ParticleIdx)ui;
     }
     void serialize(Serializer s){
         serial(s);
@@ -114,23 +120,30 @@ struct PIndex{
     // equals_t    opEquals(Object o);
     
     /// increments the particle part
+    PIndex opAddAssign(int i){
+        assert((data & 0x0000_FFFF_FFFF_FFFFUL) != 0x0000_FFFF_FFFF_FFFFUL,"increment invalid particle");
+        data+=i;
+        return *this;
+    }
+    /// ditto
     PIndex opAddAssign(ulong i){
-        assert((data & 0x0000_FFFF_FFFF_FFFFUL) != 0x0000_FFFF_FFFF_FFFFUL),"increment invalid particle");
+        assert((data & 0x0000_FFFF_FFFF_FFFFUL) != 0x0000_FFFF_FFFF_FFFFUL,"increment invalid particle");
         data+=i;
         return *this;
     }
     /// ditto
     PIndex opAddAssign(ParticleIdx i){
-        assert((data & 0x0000_FFFF_FFFF_FFFFUL) != 0x0000_FFFF_FFFF_FFFFUL),"increment invalid particle");
+        assert((data & 0x0000_FFFF_FFFF_FFFFUL) != 0x0000_FFFF_FFFF_FFFFUL,"increment invalid particle");
         data+=i;
         return *this;
     }
     /// increments the kind part
     PIndex opAddAssign(KindIdx i){
-        assert((data & 0xFFFF_0000_0000_0000UL) != 0xFFFF_0000_0000_0000UL),"kind increment invalid particle kind");
+        assert((data & 0xFFFF_0000_0000_0000UL) != 0xFFFF_0000_0000_0000UL,"kind increment invalid particle kind");
         data+=(cast(ulong)i)<<48;
         return *this;
     }
 }
 
 typedef PIndex LocalPIndex; /// an index local to a subset of atoms (clearly not transferrable between different subsets)
+

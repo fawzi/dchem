@@ -14,11 +14,11 @@ void doTestRotV1V2(T,int ndim)(SizedRandomNArray!(T,ndim) v1,SizedRandomNArray!(
   auto rotM=rotateVV!(NArray!(T,1),NArray!(T,2))(n1,n2,eye!(T)(ndim));
   auto err=minFeqrel2(dot(rotM,n1),n2);
   auto err2=minFeqrel2(dot(rotM,rotM.T),eye!(T)(ndim));
-  if (err<T.mant_dig/4*3-10){
+  if (err<T.mant_dig/4*3-11){
     Trace.formatln("err: {}/{}",err,T.mant_dig);
     throw new Exception("incorrect rotation",__FILE__,__LINE__);
   }
-  if (err2<T.mant_dig/4*3-10){
+  if (err2<T.mant_dig/4*3-11){
     Trace.formatln("err2: {}/{}",err2,T.mant_dig);
     throw new Exception("incorrect rotation",__FILE__,__LINE__);
   }
@@ -33,11 +33,11 @@ void doTestRotV1J(T,int ndim)(SizedRandomNArray!(T,ndim) v1,size_t i){
   auto rotM_2=rotateEiV!(NArray!(T,1),NArray!(T,2))(idx,n1,eye!(T)(ndim));
   auto err_2=minFeqrel2(dot(rotM_2,n2),n1);
   auto err2_2=minFeqrel2(dot(rotM_2,rotM_2.T),eye!(T)(ndim));
-  if (err_2<T.mant_dig/4*3-10){
+  if (err_2<T.mant_dig/4*3-11){
     Trace.formatln("err: {}/{}",err_2,T.mant_dig);
     throw new Exception("incorrect rotation",__FILE__,__LINE__);
   }
-  if (err2_2<T.mant_dig/4*3-10){
+  if (err2_2<T.mant_dig/4*3-11){
     Trace.formatln("err2: {}/{}",err2_2,T.mant_dig);
     throw new Exception("incorrect rotation",__FILE__,__LINE__);
   }
@@ -45,17 +45,17 @@ void doTestRotV1J(T,int ndim)(SizedRandomNArray!(T,ndim) v1,size_t i){
   auto rotM=rotateVEi!(NArray!(T,1),NArray!(T,2))(n1,idx,eye!(T)(ndim));
   auto err=minFeqrel2(dot(rotM,n1),n2);
   auto err2=minFeqrel2(dot(rotM,rotM.T),eye!(T)(ndim));
-  if (err<T.mant_dig/4*3-10){
+  if (err<T.mant_dig/4*3-11){
     Trace.formatln("err: {}/{}",err,T.mant_dig);
     throw new Exception("incorrect rotation",__FILE__,__LINE__);
   }
-  if (err2<T.mant_dig/4*3-10){
+  if (err2<T.mant_dig/4*3-11){
     Trace.formatln("err2: {}/{}",err2,T.mant_dig);
     throw new Exception("incorrect rotation",__FILE__,__LINE__);
   }
   
   auto err_3=minFeqrel2(rotM.T,rotM_2);
-  if (err_3<T.mant_dig/4*3-10){
+  if (err_3<T.mant_dig/4*3-11){
     Trace.formatln("err: {}/{}",err_3,T.mant_dig);
     throw new Exception("inconsistent V1Ei EiV1",__FILE__,__LINE__);
   }
