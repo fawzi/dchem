@@ -1,6 +1,11 @@
 module dchem.sys.SubMapping;
-import dchem.sys.ParticleIndexes;
-import blip.containers.BulkArray;
+import dchem.sys.PIndexes;
+import blip.container.BulkArray;
+import dchem.Common:index_type;
+import tango.core.Array;
+import blip.serialization.Serialization;
+import blip.serialization.SerializationMixins;
+import blip.BasicModels;
 
 enum MappingKind:uint{
     Generic=0u,   /// generic mapping
@@ -11,25 +16,35 @@ enum MappingKind:uint{
 }
 /// mapping os a system to a subsystem, assumes that the subsystem is smaller
 /// (but only memory wastage occurs if this is not true)
-class SubMapping{
+/// this object is supposed to be immutable once used...
+class SubMapping: BasicObjectI{
     KindRange lKRange;
-    size_t[] kindStarts;
+    index_type[] kindStarts;
     BulkArray!(PIndex) sortedPIndex;
     BulkArray!(LocalPIndex) gSortedLocalPIndex;
     BulkArray!(PIndex) lSortedPIndex;
     MappingKind mappingKind;
 
+    mixin(serializeSome("dchem.sys.SubMapping","lKRange|kindStarts|sortedPIndex|gSortedLocalPIndex|lSortedPIndex"));
+    mixin printOut!();
+
+    ParticleIdx nLocalParticles(KindIdx k){
+        assert(k in lKRange);
+        auto ik=cast(size_t)(k-lKRange.kStart);
+        return cast(ParticleIdx)(kindStarts[ik+1]-kindStarts[ik]);
+    }
     /// lowlevel constructor
     static SubMapping opCall(BulkArray!(PIndex) sortedPIndex,
         BulkArray!(LocalPIndex) gSortedLocalPIndex,
-        BulkArray!(PIndex) lSortedPIndex,KindIdx kindStarts, KindRange lKRange){
+        BulkArray!(PIndex) lSortedPIndex,index_type[] kindStarts, KindRange lKRange)
     {
         return new SubMapping(sortedPIndex,gSortedLocalPIndex,lSortedPIndex,kindStarts,lKRange);
     }
     
     /// low level constructor, avoid its use, so that switching to struct would be easy
     this(BulkArray!(PIndex) sortedPIndex,BulkArray!(LocalPIndex) gSortedLocalPIndex,
-        BulkArray!(PIndex) lSortedPIndex,KindIdx kindStarts, KindRange lKRange){
+        BulkArray!(PIndex) lSortedPIndex,index_type[] kindStarts, KindRange lKRange)
+    {
         this.sortedPIndex=sortedPIndex;
         this.gSortedLocalPIndex=gSortedLocalPIndex;
         this.lSortedPIndex=lSortedPIndex;
@@ -43,33 +58,48 @@ class SubMapping{
         
     }
     
+    this(){ }
+    
     /// maps a global index to a local one
     LocalPIndex opIndex(PIndex p){
-        auto pos=sortedPIndex.data.lbound(p);
+        auto pos=lbound(sortedPIndex.data,p);
         if (sortedPIndex.length>pos && sortedPIndex[pos]==p){
-            return gSortedLocalIndex[pos];
+            return gSortedLocalPIndex[pos];
         }
-        return LocalPIndex();
+        return LocalPIndex.init;
     }
     
+    /// returns a pointer into the lSortedPIndex
+    PIndex *ptrI(LocalPIndex l){
+        assert(l.kind in lKRange,"indexing of a local particle not in range");
+        return &(lSortedPIndex[cast(size_t)kindStarts[cast(size_t)(l.kind-lKRange.kStart)]
+                             +cast(size_t)l.particle]);
+        
+    }
     /// maps a local index to a global one
     /// faster mapping, does not work if sortedLocalPIndex has gaps
     PIndex opIndex(LocalPIndex l){
-        assert(l in lKRange,"indexing of a local particle not in range");
+        assert(l.kind in lKRange,"indexing of a local particle not in range");
         return lSortedPIndex[cast(size_t)kindStarts[cast(size_t)(l.kind-lKRange.kStart)]
-                             +cast(size_t)l.position];
+                             +cast(size_t)l.particle];
     }
+    
+    /+
     // evaluate in parallel
-    class EvalOn{
-        static Pool!(EvalOn) pool;
-        static this(){
-            pool=newPool!(EvalOn)
-        }
+    class EvalOn(Visitor){
+        Pool!(EvalOn) pool;
         SubMapping s;
         LocalPIndex lPart;
         size_t lb,ub;
         Visitor v;
-        this(s,lb,ub,v);
+        this(){}
+        this(SubMapping s,LocalPIndex lb,LocalPIndex ub,Visitor v,Pool!(EvalOn) pool=null){
+            this.s=s;
+            this.lb=lb;
+            this.ub=ub;
+            this.v=v;
+            this.pool=pool;
+        }
         EvalOn clear(){
             s=null;
             lPart=LocalPIndex();
@@ -78,11 +108,21 @@ class SubMapping{
             v.clear();
             return this;
         }
+        reset(SubMapping s,LocalPIndex lb,LocalPIndex ub,Visitor v,Pool!(EvalOn) pool=null){
+            this.s=s;
+            this.lb=lb;
+            this.ub=ub;
+            this.v=v;
+            this.pool=pool;
+        }
         void evaluate(){
             if (ub-lb>maxIdealBlockSize){
                 auto mid=(ub+lb)/2;
-                EvalOn(s,lb,mid,v).spawn()
-                EvalOn(s,lb,mid,v).spawn()
+                if (pool is null){
+                    pool=new Pool!(EvalOn)();
+                }
+                Task(&(pool.getObj().reset(s,lb,mid,v,pool).evaluate)).autorelease.spawnYield();
+                Task(&(pool.getObj().reset(s,lb,mid,v,pool).evaluate)).autorelease.spawn();
             } else {
                 LocalPIndex lP=lPart
                 static if(is(typeof(visitor.visitParticle(size_t.init,LocalPIndex.init,PIndex.init)))){
@@ -102,6 +142,9 @@ class SubMapping{
                     visitor.localEnd();
                 }
             }
+            if (this.pool!is null){
+                pool.giveBack(this);
+            }
         }
     }
     // looping constructs
@@ -116,12 +159,29 @@ class SubMapping{
                 auto lb=kindStarts[ik];
                 auto ub=kindStarts[ik+1];
                 if (ub-lb>maxIdealBlockSize){
-                    auto mid=(ub+lb)/2;
-                    
-                    visitor.spawn();
+                    auto eval=EvalOn!(Visitor)(this,lb,ub,v);
+                    eval.evaluate()
+                } else {
+                    LocalPIndex lP=LocalPIndex(ik,lb);
+                    static if(is(typeof(visitor.visitParticle(size_t.init,LocalPIndex.init,PIndex.init)))){
+                        for (size_t i=lb;i<ub;++i){
+                            lP.data++;
+                            visitor.visitParticle(i,lP,s.lSortedPIndex[i]);
+                        }
+                    } else static if(is(typeof(visitor.visitParticle(size_t.init,LocalPIndex.init)))){
+                        for (size_t i=lb;i<ub;++i){
+                            lP.data++;
+                            visitor.visitParticle(i,lP);
+                        }
+                    } else {
+                        static assert(false,"no low looping construct found");
+                    }
+                    static if(is(typeof(visitor.localEnd()))){
+                        visitor.localEnd();
+                    }
                 }
             }
         }
     }
-    
+    +/
 }

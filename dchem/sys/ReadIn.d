@@ -4,6 +4,7 @@ import tango.core.Memory:GC;
 import Integer = tango.text.convert.Integer;
 import dchem.sys.PIndexes;
 import blip.serialization.Serialization;
+import blip.serialization.StringSerialize;
 import blip.serialization.SerializationMixins;
 import blip.text.TextParser;
 import dchem.Common;
@@ -23,13 +24,28 @@ struct Particle{
     char[16] chainName;
     real[3] pos;
     mixin(serializeSome("",`pIndex|resIndex|chainIndex|externalIdx|resNr|name|resName|chainName|pos`));
+    char[] toString(){
+        return serializeToString(*this);
+    }
 }
 
 /// represents a kind
 struct Kind{
-    char[] resName;
+    char[16] name;
     PIndex nextParticle;
-    mixin(serializeSome("",`resName|nextParticle`));
+    mixin(serializeSome("",`name|nextParticle`));
+    static Kind opCall(char[] name,PIndex nextParticle){
+        Kind res;
+        if (name.length>res.name.length){
+            throw new Exception("name too long",__FILE__,__LINE__);
+        }
+        res.name[0..name.length]=name;
+        for (size_t i=name.length;i<res.name.length;++i){
+            res.name[i]=' ';
+        }
+        res.nextParticle=nextParticle;
+        return res;
+    }
 }
 
 /// represents a read in system of particles
@@ -44,10 +60,10 @@ class ReadSystem{
     Kind[] pKinds; /// particle kinds
     Kind[] resKinds; /// residuum kinds
     Kind[] chainKinds; /// chain kinds
-    size_t[char[16]] pKindsIdx;     // is linear search more efficient? cache last?
-    size_t[char[16]] resKindsIdx;   // is linear search more efficient? cache last?
-    size_t[char[16]] chainKindsIdx; // is linear search more efficient? cache last?
-    
+    size_t[char[]] pKindsIdx;     // is linear search more efficient? cache last?
+    size_t[char[]] resKindsIdx;   // is linear search more efficient? cache last?
+    size_t[char[]] chainKindsIdx; // is linear search more efficient? cache last?
+
     static ClassMetaInfo metaI;
     static this(){
         metaI=ClassMetaInfo.createForType!(typeof(this))("dchem.sys.ReadSystem");
@@ -61,6 +77,7 @@ class ReadSystem{
         metaI.addFieldOfType!(Kind[])("resKinds","residuum kinds");
         metaI.addFieldOfType!(Kind[])("chainKinds","chain kinds");
     }
+    
     ClassMetaInfo getSerializationMetaInfo(){
         return metaI;
     }
@@ -78,10 +95,10 @@ class ReadSystem{
             periodic[]=p;
         }
         s.field(metaI[4],spaceGroup);
-        auto part=_particles[0..nParticles];
+        auto part=particles;
         s.field(metaI[5],part);
         if (part.ptr !is _particles.ptr){
-            _particles[0..nParticles]=part;
+            particles()[]=part;
         }
         s.field(metaI[6],pKinds);
         s.field(metaI[7],resKinds);
@@ -109,34 +126,34 @@ class ReadSystem{
     }
     
     void addParticle(ref Particle p){
-        auto idxAtt=p.name in pKindsIdx;
+        auto idxAtt=p.name[] in pKindsIdx;
         if (idxAtt !is null){
             p.pIndex=pKinds[*idxAtt].nextParticle;
             pKinds[*idxAtt].nextParticle +=1;
         } else {
             auto kPos=pKinds.length;
             pKinds~=Kind(p.name,PIndex(cast(KindIdx)kPos,1));
-            pKindsIdx[p.name]=kPos;
+            pKindsIdx[p.name[]]=kPos;
             p.pIndex=PIndex(cast(KindIdx)kPos,0);
         }
-        idxAtt=p.resName in resKindsIdx;
+        idxAtt=p.resName[] in resKindsIdx;
         if (idxAtt !is null){
             p.resIndex=resKinds[*idxAtt].nextParticle;
             pKinds[*idxAtt].nextParticle +=1;
         } else {
             auto kPos=resKinds.length;
             resKinds~=Kind(p.resName,PIndex(cast(KindIdx)kPos,1));
-            resKindsIdx[p.resName]=kPos;
+            resKindsIdx[p.resName[]]=kPos;
             p.resIndex=PIndex(cast(KindIdx)kPos,0);
         }
-        idxAtt=p.chainName in chainKindsIdx;
+        idxAtt=p.chainName[] in chainKindsIdx;
         if (idxAtt !is null){
             p.chainIndex=chainKinds[*idxAtt].nextParticle;
             pKinds[*idxAtt].nextParticle +=1;
         } else {
             auto kPos=chainKinds.length;
             chainKinds~=Kind(p.chainName,PIndex(cast(KindIdx)kPos,1));
-            chainKindsIdx[p.chainName]=kPos;
+            chainKindsIdx[p.chainName[]]=kPos;
             p.chainIndex=PIndex(cast(KindIdx)kPos,0);
         }
         if (nParticles==_particles.length){

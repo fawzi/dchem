@@ -1,7 +1,7 @@
 /// requested properties for the current evaluation
 module dchem.sys.Requests;
 import tango.core.Variant;
-import blip.serialization.SerializationMixins;
+import blip.serialization.Serialization;
 
 struct EnergyRequests{
     bool energy;
