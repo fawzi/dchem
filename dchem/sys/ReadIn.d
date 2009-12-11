@@ -24,9 +24,7 @@ struct Particle{
     char[16] chainName;
     real[3] pos;
     mixin(serializeSome("",`pIndex|resIndex|chainIndex|externalIdx|resNr|name|resName|chainName|pos`));
-    char[] toString(){
-        return serializeToString(*this);
-    }
+    mixin printOut!();
 }
 
 /// represents a kind

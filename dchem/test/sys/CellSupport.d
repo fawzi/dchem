@@ -1,5 +1,5 @@
 /// testing support to generate random cells
-module dchem.test.CellSupport;
+module dchem.test.sys.CellSupport;
 import dchem.Common;
 import blip.narray.NArray;
 import blip.rtest.RTest;
@@ -8,6 +8,7 @@ import tango.math.Math;
 import tango.util.log.Trace;
 import dchem.util.Rotate;
 import dchem.sys.Cell;
+import blip.io.BasicIO;
 
 /// random orthorombic cell
 class RandomOrthoCell{
@@ -28,8 +29,8 @@ class RandomOrthoCell{
         res.cell=new Cell(h,periodic,x0);
         return res;
     }
-    char[] toString(){
-        return cell.toString();
+    void desc(CharSink s){
+        cell.desc(s);
     }
 }
   
@@ -54,8 +55,8 @@ class RandomNromCell{
         res.cell=new Cell(cellParam2h(param),periodic,x0);
         return res;
     }
-    char[] toString(){
-        return cell.toString();
+    void desc(CharSink s){
+        cell.desc(s);
     }
 }
 /// random cell
@@ -88,7 +89,7 @@ class RandomCell{
         res.cell=new Cell(h,periodic,x0);
         return res;
     }
-    char[] toString(){
-        return cell.toString();
+    void desc(CharSink s){
+        cell.desc(s);
     }
 }

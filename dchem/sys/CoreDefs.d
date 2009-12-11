@@ -307,25 +307,25 @@ class ParticleSys: CopiableObjectI,Serializable
     /// system structure changed (particle added/removed, kinds added/removed)
     /// the segmented array structs should be initialized, positions,... are not yet valid
     void sysStructChanged(ParticleSys p){
-//        foreach(pKind;sysStruct.particleKinds){
-//            pKind.sysStructChanged(this);
-//        }
+        foreach(pKind;sysStruct.particleKinds.pLoop){
+            pKind.sysStructChanged(this);
+        }
         if (nCenter!is null)
             nCenter.notify("sysStructChanged",Variant(this));
     }
     /// position of particles changed, position,... are valid
     void positionsChanged(ParticleSys p){
-//        foreach(pKind;sysStruct.particleKinds){
-//            pKind.positionsChanged(this);
-//        }
+        foreach(pKind;sysStruct.particleKinds.pLoop){
+            pKind.positionsChanged(this);
+        }
         if (nCenter!is null)
             nCenter.notify("positionsChanged",Variant(this));
     }
     /// cell changed
     void cellChanged(ParticleSys p){
-//        foreach(pKind;sysStruct.particleKinds){
-//            pKind.cellChanged(this);
-//        }
+        foreach(pKind;sysStruct.particleKinds.pLoop){
+            pKind.cellChanged(this);
+        }
         if (nCenter!is null)
             nCenter.notify("cellChanged",Variant(this));
     }

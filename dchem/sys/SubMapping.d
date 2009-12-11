@@ -1,3 +1,6 @@
+/// submapping of a system, at the moment always explicit, but if Gapless
+/// one could spare quite some memory, but then other code would need an if 
+/// instead of always running on arrays
 module dchem.sys.SubMapping;
 import dchem.sys.PIndexes;
 import blip.container.BulkArray;
@@ -10,7 +13,7 @@ import blip.BasicModels;
 enum MappingKind:uint{
     Generic=0u,   /// generic mapping
     SameOrder=1u, /// order is manteined: sortedPIndex and lSortedPIndex are equal
-    Gapless=2u,   /// whole ranges are mapped
+    Gapless=2u,   /// whole ranges are mapped (if p1 and p2 are in then all p inbetween are in)
     Direct=3u,    /// there is only a subsetting
     Same=7u,      /// no mapping at all
 }

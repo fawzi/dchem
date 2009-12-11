@@ -112,12 +112,7 @@ class Cell
         return new Cell(h,periodic,x0,hInv);
     }
     mixin(serializeSome("","periodic|h|hInv|x0"));
-    char[] toString(){
-        return serializeToString(this);
-        /+char[] res;
-        mixin("res=serializeToString(this);");
-        return res;+/
-    }
+    mixin printOut!();
 }
 
 

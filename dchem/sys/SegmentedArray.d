@@ -9,6 +9,8 @@ import tango.core.Traits;
 import blip.serialization.Serialization;
 import blip.serialization.SerializationMixins;
 import tango.core.Variant;
+import blip.parallel.smp.WorkManager;
+import blip.container.AtomicSLink;
 
 /// structure of a segmented array, kindStarts is valid only after freezing
 final class SegmentedArrayStruct{
@@ -126,6 +128,8 @@ final class SegmentedArray(T){
     BulkArray!(T) _data;
     bool direct;
     alias T dtype;
+    
+    static size_t defaultOptimalBlockSize=32*1024/T.sizeof;
     
     mixin(serializeSome("dchem.sys.SegmentedArray","kRange|kindStarts|_data"));
     
@@ -283,6 +287,34 @@ final class SegmentedArray(T){
     SegmentedArray deepdup(){
         return new SegmentedArray(arrayStruct,_data.deepdup,kRange,kindStarts.dup);
     }
+    
+    struct PLoop{
+        size_t optimalBlockSize;
+        SegmentedArray array;
+        int opApply(int delegate(ref T)loopBody){
+            mixin(segArrayMonoLoop("iterContext",["array"],"int delegate(ref T) dlg;",
+                "mainContext.dlg=loopBody;","","","","if (auto res=dlg(*arrayPtr)) return res;",""));
+            return 0;
+        }
+        int opApply(int delegate(ref LocalPIndex lIdx,ref T)loopBody){
+            mixin(segArrayMonoLoop("iterContext",["array"],"int delegate(ref LocalPIndex,ref T) dlg;",
+                "mainContext.dlg=loopBody;","","","","if (auto res=dlg(localPIndex,*arrayPtr)) return res;",""));
+            return 0;
+        }
+        int opApply(int delegate(ref PIndex pIdx,ref LocalPIndex lIdx,ref T)loopBody){
+            mixin(segArrayMonoLoop("iterContext",["array"],"int delegate(ref PIndex, ref LocalPIndex, ref T) dlg;",
+                "mainContext.dlg=loopBody;","","","","if (auto res=dlg(*pIndexPtr,localPIndex,*arrayPtr)) return res;",""));
+            return 0;
+        }
+    }
+    
+    PLoop pLoop(size_t optSize=defaultOptimalBlockSize){
+        PLoop res;
+        res.optimalBlockSize=optSize;
+        res.array=this;
+        return res;
+    }
+    
 }
 
 char[] segArrayContextStr(char[] iterName, char[][]namesLocal,char[] contextExtra,
@@ -382,39 +414,43 @@ char[] segArrayKLoopStr(char[] iterName, char[][]namesLocal,
         mainContext`~uniq~`.optimalBlockSize=optimalBlockSize`~uniq~`;`;
     visitorStr~=startLoop;
     visitorStr~=`
-        for (KindIdx kIdx`~uniq~`=`~namesLocal[0]~`.kRange.kStart;kIdx`~uniq~`<kEnd`~uniq~`;++kIdx`~uniq~`){
-            bool visitKind`~uniq~`=true;
-            bool outOfRange`~uniq~`=false;
-            if (newK`~uniq~` is null){
-                newK`~uniq~`=mainContext`~uniq~`.alloc();
-            }
-            newK`~uniq~`.kind=kIdx`~uniq~`;
-            newK`~uniq~`.start=0;
-            newK`~uniq~`.end=`~namesLocal[0]~`.arrayStruct.submapping.nLocalParticles(kIdx`~uniq~`);
-            newK`~uniq~`.pIndexPtrStart=`~namesLocal[0]~`.arrayStruct.submapping.ptrI(LocalPIndex(kIdx`~uniq~`,cast(ParticleIdx)0));`;
+        Task("segArrayKLoop`~iterName~`",delegate void(){
+            for (KindIdx kIdx`~uniq~`=`~namesLocal[0]~`.kRange.kStart;kIdx`~uniq~`<kEnd`~uniq~`;++kIdx`~uniq~`){
+                bool visitKind`~uniq~`=true;
+                bool outOfRange`~uniq~`=false;
+                if (newK`~uniq~` is null){
+                    newK`~uniq~`=mainContext`~uniq~`.alloc();
+                }
+                newK`~uniq~`.kind=kIdx`~uniq~`;
+                newK`~uniq~`.start=0;
+                newK`~uniq~`.end=`~namesLocal[0]~`.arrayStruct.submapping.nLocalParticles(kIdx`~uniq~`);
+                newK`~uniq~`.pIndexPtrStart=`~namesLocal[0]~`.arrayStruct.submapping.ptrI(LocalPIndex(kIdx`~uniq~`,cast(ParticleIdx)0));`;
     foreach (name;namesLocal){
         visitorStr~=`
-            if (kIdx`~uniq~` in `~name~`.kRange){
-                auto ik`~uniq~`=cast(size_t)(kIdx`~uniq~`-`~name~`.kRange.kStart);
-                if (`~name~`.kindStarts[ik`~uniq~`]<`~name~`.kindStarts[ik`~uniq~`]){
-                    newK`~uniq~`.`~name~`PtrStart=`~name~`._data.ptr+`~name~`.kindStarts[ik`~uniq~`];
-                    newK`~uniq~`.`~name~`Nel=`~name~`.kindDim(kIdx`~uniq~`);
+                if (kIdx`~uniq~` in `~name~`.kRange){
+                    auto ik`~uniq~`=cast(size_t)(kIdx`~uniq~`-`~name~`.kRange.kStart);
+                    if (`~name~`.kindStarts[ik`~uniq~`]<`~name~`.kindStarts[ik`~uniq~`]){
+                        newK`~uniq~`.`~name~`PtrStart=`~name~`._data.ptr+`~name~`.kindStarts[ik`~uniq~`];
+                        newK`~uniq~`.`~name~`Nel=`~name~`.kindDim(kIdx`~uniq~`);
+                    } else {
+                        outOfRange`~uniq~`=true;
+                        newK`~uniq~`.`~name~`PtrStart=null;
+                        newK`~uniq~`.`~name~`Nel=0;
+                    }
                 } else {
                     outOfRange`~uniq~`=true;
                     newK`~uniq~`.`~name~`PtrStart=null;
                     newK`~uniq~`.`~name~`Nel=0;
-                }
-            } else {
-                outOfRange`~uniq~`=true;
-                newK`~uniq~`.`~name~`PtrStart=null;
-                newK`~uniq~`.`~name~`Nel=0;
-            }`;
+                }`;
     }
     visitorStr~="\n";
     visitorStr~=loopBody;
     visitorStr~="\n";
     visitorStr~=`
-        }`;
+            }`;
+    visitorStr~=`
+        }).autorelease.executeNow();`;
+    visitorStr~="\n";
     visitorStr~=endLoop;
     visitorStr~=`
     }`;
@@ -440,10 +476,11 @@ char[] segArrayMonoLoop(char[] iterName, char[][]namesLocal,
     return res;
 }
 
-/// loop 1 (external) needs optimalBlockSize_1
+/// needs optimalBlockSize_1, and optimalBlockSize_2 (for loop 1, loop 2)
+/// loop 1 (external)
 /// public vars in kindVisit1: struct iterName, "context_1", "kIdx_1", "outOfRange_1", "visitKind_1"
 /// public vars in pVisit1: name~"Ptr_1", "localPIndex_1", "pIndexPtr_1", "index_1"
-/// loop 1 (internal, the vaiables in loop1 and) needs optimalBlockSize_2
+/// loop 1 (internal, the vaiables in loop1 and)
 /// public vars in kindVisit2: struct iterName, "context_2", "kIdx_2", "outOfRange_2", "visitKind_2"
 /// public vars in pVisit2: name~"Ptr_2", "localPIndex_2", "pIndexPtr_2", "index_2"
 char[] segArrayBinLoop(char[] iterName, char[][]namesLocal1, char[] contextExtra1,
@@ -477,13 +514,15 @@ char[] segArrayBinLoop(char[] iterName, char[][]namesLocal1, char[] contextExtra
         newK_2.outerLoopContext=newK_1;
         auto tmpK1=mainContext_1.alloc();
         (*tmpK1)=(*newK_1);
-        Task("kindMainLoop`~iterName~`",&newK_1.exec2).autorelease.submitYield();
+        Task("kindIntLoop`~iterName~`",&newK_1.exec2).autorelease.submitYield();
         newK_1=tmpK1;
     }
     `,endLoop2,"_2");
     auto kLoopExt=segArrayKLoopStr(iterName~"_1", namesLocal1,startLoop1,kindVisit1~`
     if (visitKind_1){
+        Task("kindMainLoop`~iterName~`",delegate void(){
         `~kLoopInt~`
+        }).autorelease.submitYield();
     }
     `,endLoop1,"_1");
     
