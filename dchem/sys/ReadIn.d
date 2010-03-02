@@ -605,3 +605,48 @@ ReadSystem readCarFrame(TextParser!(char) tp,ReadSystem sys=null,bool clearSys=t
 ReadSystem readPdb(TextParser!(char) tp,ReadSystem sys=null,bool clearSys=true){
     assert(0,"pdb reading unimplemented");
 }
+
+ReadSystem readFrame(MultiReader data,char[] format,long frame=0,ReadSystem sys=null,bool clearSys=true){
+    switch(format){
+    case "xyz":
+        auto file=new TextParser!(char)(new DataFileInput(fileName));
+        file.newlineIsSpace=false;
+        for (long iframe=1;iframe<frame;++iframe){
+            size_t nat;
+            file(nat);
+            tp.skipLines(nat+2);
+        }
+        readSys=readXYZFrame(file);
+        if (frame==-1){
+            while (true){
+                auto readSys1=readXYZFrame(file,readSys,true);
+                if (readSys1 is null) break;
+                readSys=readSys1;
+            }
+        }
+        break;
+    case "car":
+        // fully disallow empty frames???
+        readSys=readCarHeader(file);
+        auto readSys1=readCarFrame(file,readSys,true);
+        if (readSys1 !is null) readSys=readSys1;
+        for (long iframe=1;iframe<frame;++iframe){
+            readSys1=readCarFrame(file,readSys,true);
+            if (readSys1 !is null) readSys=readSys1;
+        }
+        if (frame==-1){
+            while (true){
+                readSys1=readXYZFrame(file,readSys,true);
+                if (readSys1 is null) break;
+                readSys=readSys1;
+            }
+        }
+        break;
+    case "pdb":
+        if (frame!=0) throw new Exception("only single frame pdb are supported",__FILE__,__LINE__);
+        readSys=readPdb(file,readSys,true);
+        break;
+    default:
+        assert(0,"unexpected fromat "~format);
+    }
+}
