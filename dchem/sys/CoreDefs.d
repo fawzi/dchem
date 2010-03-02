@@ -10,7 +10,7 @@ import dchem.sys.Cell;
 import dchem.sys.SubMapping;
 import dchem.sys.SegmentedArray;
 import blip.util.NotificationCenter;
-import tango.core.Variant;
+import blip.t.core.Variant;
 
 /// various levels of duplication
 enum PSCopyDepthLevel{
@@ -145,6 +145,7 @@ class ParticleKind: CopiableObjectI,Serializable{
 /// variables that normally an integrator should care about
 // (put here mainly for tidiness reasons)
 struct DynamicsVars{
+    // index
     // cell
     Cell cell;
 
@@ -178,16 +179,26 @@ struct DynamicsVars{
     SegmentedArray!(Constraint) constraints;
 
     void opSliceAssign(ref DynamicsVars d2){
-        this.cell[]=d2.cell;
-        this.pos[]=d2.pos;
-        this.dpos[]=d2.dpos;
-        this.ddpos[]=d2.ddpos;
-        this.orient[]=d2.orient;
-        this.dorient[]=d2.orient;
-        this.ddorient[]=d2.orient;
-        this.dof[]=d2.dof;
-        this.ddof[]=d2.ddof;
-        this.dddof[]=d2.dddof;
+        if (this.cell!is null && d2.cell !is null)
+            this.cell[]=d2.cell;
+        if (this.pos!is null && d2.pos !is null)
+            d2.pos.dupTo(pos);
+        if (this.dpos!is null && d2.dpos !is null)
+            d2.dpos.dupTo(dpos);
+        if (this.ddpos!is null && d2.ddpos !is null)
+            d2.ddpos.dupTo(ddpos);
+        if (this.orient!is null && d2.orient !is null)
+            d2.orient.dupTo(orient);
+        if (this.dorient!is null && d2.dorient !is null)
+            d2.dorient.dupTo(dorient);
+        if (this.ddorient!is null && d2.ddorient !is null)
+            d2.ddorient.dupTo(ddorient);
+        if (this.dof!is null && d2.dof !is null)
+            d2.dof.dupTo(dof);
+        if (this.ddof!is null && d2.ddof !is null)
+            d2.ddof.dupTo(ddof);
+        if (this.dddof!is null && d2.dddof !is null)
+            d2.dddof.dupTo(dddof);
     }
     DynamicsVars dup(PSCopyDepthLevel level){
         if (level>=PSCopyDepthLevel.DynProperties){
@@ -269,7 +280,7 @@ class SysStruct: CopiableObjectI,Serializable
 class ParticleSys: CopiableObjectI,Serializable
 {
     char[] name; /// name of the particle system
-    
+    ulong iteration;
     NotificationCenter nCenter;
     
     SysStruct sysStruct;
@@ -279,7 +290,8 @@ class ParticleSys: CopiableObjectI,Serializable
     /// internal use
     this(){}
     /// constructor
-    this(char[] name,SysStruct sysStruct,DynamicsVars dynVars,NotificationCenter nCenter){
+    this(ulong iter,char[] name,SysStruct sysStruct,DynamicsVars dynVars,NotificationCenter nCenter){
+        this.iter=iter;
         this.name=name;
         this.sysStruct=sysStruct;
         this.dynVars=dynVars;
@@ -290,9 +302,9 @@ class ParticleSys: CopiableObjectI,Serializable
         if (l==PSCopyDepthLevel.None){
             return this;
         } else if (l==PSCopyDepthLevel.PSysLevel) {
-            return new ParticleSys(name,sysStruct.dup(l),dynVars.dup(l),new NotificationCenter());
+            return new ParticleSys(iter,name,sysStruct.dup(l),dynVars.dup(l),new NotificationCenter());
         } else if (cast(int)l>cast(int)PSCopyDepthLevel.PSysLevel) {
-            return new ParticleSys(name,sysStruct.dup(l),dynVars.dup(l),new NotificationCenter());
+            return new ParticleSys(iter,name,sysStruct.dup(l),dynVars.dup(l),new NotificationCenter());
         }
     }
     
@@ -306,7 +318,7 @@ class ParticleSys: CopiableObjectI,Serializable
     
     /// system structure changed (particle added/removed, kinds added/removed)
     /// the segmented array structs should be initialized, positions,... are not yet valid
-    void sysStructChanged(ParticleSys p){
+    void sysStructChanged(){
         foreach(pKind;sysStruct.particleKinds.pLoop){
             pKind.sysStructChanged(this);
         }
@@ -314,7 +326,7 @@ class ParticleSys: CopiableObjectI,Serializable
             nCenter.notify("sysStructChanged",Variant(this));
     }
     /// position of particles changed, position,... are valid
-    void positionsChanged(ParticleSys p){
+    void positionsChanged(){
         foreach(pKind;sysStruct.particleKinds.pLoop){
             pKind.positionsChanged(this);
         }
@@ -322,12 +334,18 @@ class ParticleSys: CopiableObjectI,Serializable
             nCenter.notify("positionsChanged",Variant(this));
     }
     /// cell changed
-    void cellChanged(ParticleSys p){
+    void cellChanged(){
         foreach(pKind;sysStruct.particleKinds.pLoop){
             pKind.cellChanged(this);
         }
         if (nCenter!is null)
             nCenter.notify("cellChanged",Variant(this));
+    }
+    /// copy op
+    void opSliceAssign(ParticleSys p){
+        iteration=p.iteration;
+        sysStruct=p.sysStruct;
+        dynVars=p.dynVars;
     }
     
     mixin(serializeSome("dchem.sys.ParticleSys",

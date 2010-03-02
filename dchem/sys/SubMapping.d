@@ -58,7 +58,6 @@ class SubMapping: BasicObjectI{
             assert(kindStarts[i]<=kindStarts[i+1]);
         }
         assert(kindStarts.length>0);
-        
     }
     
     this(){ }

@@ -5,7 +5,7 @@
 /// License: GPLv3
 module dchem.PeriodicTable;
 import blip.serialization.Serialization;
-import tango.text.Util:trim;
+import blip.text.Utils:trim;
 
 struct Atom{
   char[2] _symbol;

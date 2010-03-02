@@ -1,5 +1,5 @@
 /// calculator
-module dchem.sys.Calculator;
+module dchem.calculator.Calculator;
 import blip.util.NotificationCenter;
 
 interface RemoteTask:Serializable{
@@ -71,6 +71,62 @@ class CalcInstance{
     void destroy(){}
 }
 
+/// keeps a history of the previous steps
+class HistoryManager{
+    size_t nHistory; /// number of steps to keep
+    BitArray keepH; /// things to keep in history
+    enum bPos{ /// bit positions in keepH
+        cell=0,
+        pos=1,
+        dpos=2,
+        ddpos=3
+        orient=4,
+        dorient=5,
+        ddorient=6,
+        dof=7,
+        ddof=8,
+        dddof=9
+    }
+    Deque!(ParticleSys) history; /// place to keep the history
+    this(size_t nHistory=1,BitArray keepH=BitArray([true,true,false,false,true,false,false,true,false,false])){
+        this.nHistory=nHistory;
+        this.keepH=keepH;
+        history=new Deque!(ParticleSys)(nHistory);
+    }
+    void addToHistory(ParticleSys p){
+        if (history.length<nHistory){
+            DynamicsVars dVars;
+            if (keepH[bPos.cell])
+                dVars.cell=p.cell.dup;
+            if (keepH[bPos.pos])
+                dVars.pos=p.pos.dup;
+            if (keepH[bPos.dpos])
+                dVars.dpos=p.dpos.dup;
+            if (keepH[bPos.ddpos])
+                dVars.ddpos=p.ddpos.dup;
+            if (keepH[bPos.orient])
+                dVars.orient=p.orient.dup;
+            if (keepH[bPos.dorient])
+                dVars.dorient=p.dorient.dup;
+            if (keepH[bPos.ddorient])
+                dVars.ddorient=p.ddorient.dup;
+            if (keepH[bPos.dof])
+                dVars.dof=p.dof.dup;
+            if (keepH[bPos.ddof])
+                dVars.ddof=p.ddof.dup;
+            if (keepH[bPos.dddof])
+                dVars.dddof=p.dddof.dup;
+            ParticleSys n=new ParticleSys(collectAppender(delegate(CharSink s){
+                s("history-"); writeOut(history.length); }),
+                p.sysStruct,dVars,cast(NotificationCenter)null);
+            history.pushFront(n);
+        } else {
+            auto nO=history.popEnd();
+            nO[]=p;
+            history.pushFront(nO);
+        }
+    }
+}
 /// represent a calculation that has been aready partially setup, in particular the
 /// number of elements,... cannot change
 class CalcContext{
@@ -79,7 +135,7 @@ class CalcContext{
     NotificationCentral nCentral;
     CalcInstance cInstance;
     Real maxChange;
-    bool smooth;
+    int changeLevel; /// 0: first time, 1: all changed, 2: only pos changed, 3: small pos change, 4: extrapolable pos change
     
     this(char[] contextId,SysStruct sysStruct,CalcInstance cInstance){
         this.contextId=contextId;
@@ -114,11 +170,12 @@ class CalcContext{
         return pSys.dynVars;
     }
     
-    void ChangedDynVars(bool smoothly,Real diff){
+    void ChangedDynVars(int changeLevel,Real diff){
         
     }
     
-/+    // orientation (quaternions)
+/+  // use dynVars instead of these...
+    // orientation (quaternions)
     SegmentedArray!(Real[4]) orient(){
         return pSys.dynVars.orient;
     }
@@ -158,14 +215,14 @@ class CalcContext{
         pSys.dynVars.dddof[]=newVal;
     }
     +/
+    
     Real e_pot(){
         throw new Exception("to implement in subclasses",__FILE__,__LINE__);
     }
     
-    void updateEF(bool updateF){
+    void updateEF(bool updateE=true,bool updateF=true){
         throw new Exception("to implement in subclasses",__FILE__,__LINE__);
-        smoothly=true;
-        maxChange=0.0;
+        // maxChange=0.0; changeLevel=0;
     }
     
     void destroy(){}

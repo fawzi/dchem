@@ -3,9 +3,10 @@ import blip.narray.NArray;
 import blip.rtest.RTest;
 import dchem.test.AllTests: allTests;
 import tango.math.random.Random;
-import tango.util.log.Trace;
+import blip.io.Console;
 
 void main(char[][] args){
-    Trace.formatln("{}",rand.toString());
+    serr(rand.toString());
+    serr("\n");
     mainTestFun(args,allTests(null));
 }

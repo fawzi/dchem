@@ -4,11 +4,11 @@ import blip.container.BulkArray;
 import dchem.sys.SubMapping;
 import dchem.Common;
 import blip.narray.NArray;
-import tango.core.sync.Atomic;
-import tango.core.Traits;
+import blip.sync.Atomic;
+import blip.t.core.Traits;
 import blip.serialization.Serialization;
 import blip.serialization.SerializationMixins;
-import tango.core.Variant;
+import blip.t.core.Variant;
 import blip.parallel.smp.WorkManager;
 import blip.container.AtomicSLink;
 
@@ -278,6 +278,19 @@ final class SegmentedArray(T){
         assert(kRange==val.kRange,"different kRanges");
         assert(kindStarts==val.kindStarts,"different kindStarts");
         _data[]=val._data;
+    }
+    /// copies this array to the given SegmentedArray, tryig to reuse its memory allocations
+    void dupTo(SegmentedArray val){
+        val.arrayStruct=arrayStruct;
+        val.kRange=kRange;
+        val.kindStarts=kindStarts;
+        val.direct=direct;
+        if (_data.length!=val._data.length){
+            val._data.release;
+            val._data=_data.dup();
+        } else {
+            val._data[]=_data;
+        }
     }
     /// returns a copy of the segmented array
     SegmentedArray dup(){

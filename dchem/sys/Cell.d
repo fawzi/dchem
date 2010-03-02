@@ -5,7 +5,6 @@ import blip.serialization.Serialization;
 import blip.narray.NArray;
 import blip.serialization.StringSerialize;
 import tango.math.Math;
-import tango.util.log.Trace;
 
 /// conversion of a,b,c,alpha,beta,gamma to h
 NArray!(Real,2) cellParam2h(Real a,Real b,Real c,Real alpha,Real beta,Real gamma){
@@ -31,7 +30,6 @@ NArray!(Real,2) cellParam2h(Real a,Real b,Real c,Real alpha,Real beta,Real gamma
         if (d>0){
             Cz=sqrt(d);
         } else {
-            Trace.formatln("Cx {} Cy {}",Cx,Cy);
             Cz=0.0;
         }
     } else {

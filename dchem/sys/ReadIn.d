@@ -9,7 +9,7 @@ import blip.serialization.SerializationMixins;
 import blip.text.TextParser;
 import dchem.Common;
 import tango.text.Regex;
-import tango.text.Util: trim, contains;
+import blip.text.Utils:trim, contains;
 import tango.math.Math: min,max;
 
 /// represents a read in particle
@@ -23,15 +23,18 @@ struct Particle{
     char[16] resName;
     char[16] chainName;
     real[3] pos;
-    mixin(serializeSome("",`pIndex|resIndex|chainIndex|externalIdx|resNr|name|resName|chainName|pos`));
+    real charge=0.0; // add occupancy & temperature?
+    mixin(serializeSome("",`pIndex|resIndex|chainIndex|externalIdx|resNr|name|resName|chainName|pos|charge`));
     mixin printOut!();
 }
 
 /// represents a kind
 struct Kind{
-    char[16] name;
+    char[16] name; // name of the kind (should be unique)
+    char[16] potential=' '; // name of the potential used for the particles
+    char[2] symbol="  ";
     PIndex nextParticle;
-    mixin(serializeSome("",`name|nextParticle`));
+    mixin(serializeSome("",`name|nextParticle|potential|symbol`));
     static Kind opCall(char[] name,PIndex nextParticle){
         Kind res;
         if (name.length>res.name.length){
@@ -161,6 +164,20 @@ class ReadSystem{
         ++nParticles;
     }
     
+    /// deletes the last particle
+    void dropLastParticle(){
+        if (nParticles==0){
+            throw new Exception("dropLastParticle called on empty system",__FILE__,__LINE__);
+        }
+        --nParticles;
+        auto k=&(pKinds[cast(idxType)particles[nParticles].pIndex.kind]);
+        if (k.nextParticle==1 && (cast(idxType)particles[nParticles].pIndex.kind)+1==pKinds.length){
+            pKinds=pKinds[0..pKinds.length-1];
+        } else {
+            --k.nextParticle;
+        }
+    }
+    
     /// clears the particles, but does not dealloc the memory, and the kinds stored, cell,...
     void clearParticles(){
         nParticles=0;
@@ -194,11 +211,16 @@ char[] splitEndNr(char[] name,out size_t nr){
 }
 
 /// reads an xyz frame
-ReadSystem readXYZFrame(TextParser!(char) tp,ReadSystem sys=null){
+ReadSystem readXYZFrame(TextParser!(char) tp,ReadSystem sys=null,bool clearSys=true){
     if (sys is null) sys=new ReadSystem();
     size_t nat;
-    tp(nat);
+    try{
+        tp(nat);
+    } catch(Exception e){
+        return null;
+    }
     tp.skipLines(1);
+    if (clearSys) sys.clearParticles();
     sys.comments=tp.nextLine.dup;
     for (size_t iat=0;iat<nat;++iat){
         Particle p;
@@ -213,6 +235,7 @@ ReadSystem readXYZFrame(TextParser!(char) tp,ReadSystem sys=null){
         tp.skipWhitespace();
         if (tp.next(&tp.scanString)){
             resName=splitEndNr(tp.get,resNr);
+            p.resNr=cast(idxType)resNr;
             if(resName.length>p.resName.length)
                 throw new Exception("residuum name too long '"~resName~"'",__FILE__,__LINE__);
             p.resName[0..resName.length]=resName;
@@ -480,47 +503,105 @@ ReadSystem readCarHeader(TextParser!(char) tp,ReadSystem sys=null){
 }
 
 /// reads an a car frame
-ReadSystem readCarFrame(TextParser!(char) tp,ReadSystem sys=null){
+ReadSystem readCarFrame(TextParser!(char) tp,ReadSystem sys=null,bool clearSys=true){
     if (sys is null) sys=new ReadSystem();
     size_t iat=0;
-    bool fixedFormat=true;
     while (1){
-        auto line=tp.nextLine();
+// it should be like this, but assuming no section is empty then a simple sequential read should work and support
+// also different layouts, change? residue or potential might be just spaces??
+//         1-5     atom name        
+//         7-20    x Cartesian coordinate of atom      in angstroms  
+//         22-35       y Cartesian coordinate of atom      in angstroms  
+//         37-50       z Cartesian coordinate of atom      in angstroms  
+//         52-55       type of residue containing atom      
+//         57-63       residue sequence name       relative to beginning of current molecule, left justified  
+//         64-70       potential type of atom      left justified  
+//         72-73       element symbol       
+//         75-80       partial charge on atom
+        // auto line=file.peek(&file.scanLine,true,false); // could be used to perform some checks and maybe use a fixed format
         Particle p;
         char[] atName,resName,chainName;
         size_t resNr;
         tp.readValue(atName,false);
+        if (line.length>=3 && line[0..3]=="end") break;
+        if (iat==0 && clearSys) sys.clearParticles();
         if(atName.length>p.name.length)
             throw new Exception("particle name too long '"~atName~"'",__FILE__,__LINE__);
         p.name[0..atName.length]=atName;
         p.name[atName.length..$]=' ';
         tp(p.pos[0])(p.pos[1])(p.pos[2]);
         tp.skipWhitespace();
-        if (tp.next(&tp.scanString)){
-            resName=splitEndNr(tp.get(),resNr);
-            if(resName.length>p.resName.length)
-                throw new Exception("residuum name too long '"~resName~"'",__FILE__,__LINE__);
-            p.resName[0..resName.length]=resName;
-            p.resName[resName.length..$]=' ';
-            tp.skipWhitespace();
-            if (tp.next(&tp.scanString)){
-                chainName=tp.get().dup;
-                if(chainName.length>p.chainName.length)
-                    throw new Exception("chain name too long '"~chainName~"'",__FILE__,__LINE__);
-                p.chainName[0..chainName.length]=chainName;
-                p.chainName[chainName.length..$]=' ';
-            } else {
-                p.chainName[]=' ';
-            }
-        } else {
-            p.resName[]=' ';
-            p.chainName[]=' ';
+        potString="";
+        char[2] symbol=' ';
+        tp(resName);
+        resName=splitEndNr(resName,resNr);
+        if(resName.length>p.resName.length)
+            throw new Exception("residuum name too long '"~resName~"'",__FILE__,__LINE__);
+        p.resName[0..resName.length]=resName;
+        p.resName[resName.length..$]=' ';
+        char[] potString1;
+        typeof(Kind.init.potential) potString;
+        tp(potString1);
+        if(potString1.length>potString.length)
+            throw new Exception("potential name too long '"~potString1~"'",__FILE__,__LINE__);
+        potString[0..potString1.length]=potString;
+        potString[potString.length..$]=' ';
+        char[] symb1;
+        char[2] symb;
+        tp.(symb1);
+        switch (symb1.length){
+            case 1:
+                symb[0]=symb1[0];
+                break;
+            case 2:
+                symb[]=symb1;
+                break;
+            default:
+            throw new Exception("symbol name of invalid length '"~symb1~"'",__FILE__,__LINE__);
         }
+        tp(p.charge);
+        p.chainName[]=' ';
         tp.skipLines(1);
         p.externalIdx=cast(idxType)iat;
-        sys.addParticle(p);
+        while(true){
+            sys.addParticle(p);
+            auto pp=&(sys.particles()[sys.nParticles-1]);
+            auto kind=&(sys.pKinds[cast(idxType)pp.pIndex.kind()]);
+            if (kind.nextParticle==1){
+                kind.symbol=symb;
+                kind.potential=potString;
+                break;
+            } else {
+                if (kind.symbol!=symb){
+                    throw Exception("atom name "~p.name~" has two symbols: "~kind.symbol~" and "~symb,
+                        __FILE__,__LINE__);
+                }
+                if (kind.potential != potString){
+                    sys.dropLastParticle();
+                    size_t ic=0;
+                    while(ic<p.name.length && p.name[ic]!=' '){ ++ic; }
+                    if (ic<p.name.length) {
+                        p.name[ic]='_';
+                    } else {
+                        throw new Exception("could not generate unique names for atom name "~p.name~" with different potentials "~kind.potential~" and "~potString,
+                            __FILE__,__LINE__);
+                    }
+                    for (ip=0;ip<potString.length;++ip){
+                        ++ic;
+                        if (ic>=p.name.length) break; // hope for the best if potential is truncated..., might fail in recursive call
+                        p.name[ic]=potString[ip];
+                    }
+                } else {
+                    break;
+                }
+            }
+        }
     }
+    if (iat==0) return null;
     return sys;
 }
 
-/// read pdb
+/// read a file in pdb format
+ReadSystem readPdb(TextParser!(char) tp,ReadSystem sys=null,bool clearSys=true){
+    assert(0,"pdb reading unimplemented");
+}

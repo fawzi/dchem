@@ -5,10 +5,11 @@ import blip.narray.NArray;
 import blip.rtest.RTest;
 import blip.narray.TestSupport;
 import tango.math.Math;
-import tango.util.log.Trace;
 import dchem.util.Rotate;
 import dchem.sys.Cell;
+import blip.io.Console;
 import blip.io.BasicIO;
+import blip.container.GrowableArray;
 
 /// random orthorombic cell
 class RandomOrthoCell{
@@ -66,19 +67,19 @@ class RandomCell{
     static typeof(this) randomGenerate(Rand r){
         scope param=emptyR([6]);
         randomizeNArray(r.uniformD!(Real)(),param);
-        Trace.formatln("param pre:{}",param);
+        serr(collectAppender(delegate void(CharSink s){ s("param pre:");writeOut(s,param); s("\n");}));
         param[Range(0,3)]*=13.5;
         param[Range(0,3)]+=1.5;
         param[Range(3,6)]*=150.0;
         param[Range(3,6)]+=15.0;
-        Trace.formatln("param:{}",param);
+        serr(collectAppender(delegate void(CharSink s){ s("param:");writeOut(s,param); s("\n");}));
         NArray!(Real,1) dir=emptyR([3]);
         randomizeNArray(r.normalD(cast(Real)1.0),dir);
         dir/=norm2(dir);
         scope h=cellParam2h(param);
-        Trace.formatln("h pre:{}",h);
+        serr(collectAppender(delegate void(CharSink s){ s("h pre:");writeOut(s,h); s("\n");}));
         rotateVEi(dir,0,h);
-        Trace.formatln("h:{}",h);
+        serr(collectAppender(delegate void(CharSink s){ s("h:");writeOut(s,h); s("\n");}));
         int[3] periodic;
         for (int idim=0;idim<3;++idim){
           periodic[idim]=(r.uniform!(bool)()?1:0);
