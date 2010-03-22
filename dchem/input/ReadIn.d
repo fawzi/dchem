@@ -1,5 +1,5 @@
 /// structures to read in external file formats
-module dchem.sys.ReadIn;
+module dchem.input.ReadIn;
 import tango.core.Memory:GC;
 import Integer = tango.text.convert.Integer;
 import dchem.sys.PIndexes;
@@ -11,6 +11,42 @@ import dchem.Common;
 import tango.text.Regex;
 import blip.text.Utils:trim, contains;
 import tango.math.Math: min,max;
+import blip.io.BasicIO;
+
+/// a residuum particle
+struct ResiduumP{
+    char[] resName;
+    idxType resNr;
+    equals_t equals(ResiduumP o){
+        return resName==o.resName && resNr==o.resNr;
+    }
+    hash_t toHash(){
+        return getHash(resName,cast(hash_t)resNr);
+    }
+    int opCmp(ResiduumP o){
+        auto r=cmp(resName,o.resName);
+        if (r==0) return cmp(resNr,o.resNr);
+        return r;
+    }
+    mixin(serializeSome("","resName|resNr"));
+}
+/// a chain particle
+struct ChainP{
+    char[] chainName;
+    idxType chainNr;
+    equals_t equals(ChainP o){
+        return chainName==o.chainName && chainNr==o.chainNr;
+    }
+    hash_t toHash(){
+        return getHash(chainName,cast(hash_t)chainNr);
+    }
+    int opCmp(ChainP o){
+        auto r=cmp(chainName,o.chainName);
+        if (r==0) return cmp(chainNr,o.chainNr);
+        return r;
+    }
+    mixin(serializeSome("","chainName|chainNr"));
+}
 
 /// represents a read in particle
 struct Particle{
@@ -19,31 +55,80 @@ struct Particle{
     PIndex chainIndex;
     idxType externalIdx;
     idxType resNr;
-    char[16] name;
-    char[16] resName;
-    char[16] chainName;
+    idxType chainNr;
+    char[16] _name;
+    char[16] _resName;
+    char[16] _chainName;
     real[3] pos;
     real charge=0.0; // add occupancy & temperature?
-    mixin(serializeSome("",`pIndex|resIndex|chainIndex|externalIdx|resNr|name|resName|chainName|pos|charge`));
+    char[] name(){
+        size_t i=_name.length-1;
+        while(i!=0 && _name[i]==' ') --i;
+        return _name[0..i+1];
+    }
+    void name(char[]val){
+        if (val.length>_name.length){
+            throw new Exception("name too long",__FILE__,__LINE__);
+        }
+        _name[0..val.length]=val;
+        for (size_t i=val.length;i<_name.length;++i){
+            _name[i]=' ';
+        }
+    }
+    char[] resName(){
+        size_t i=name.length-1;
+        while(i!=0 && name[i]==' ') --i;
+        return name[0..i+1];
+    }
+    ResiduumP resP(){
+        ResiduumP res;
+        res.resName=resName;
+        res.resNr=resNr;
+        return res;
+    }
+    ChainP chainP(){
+        ChainP res;
+        res.chainName=chainName;
+        res.chainNr=chainNr;
+        return res;
+    }
+    void resName(char[]val){
+        if (val.length>_resName.length){
+            throw new Exception("resName too long",__FILE__,__LINE__);
+        }
+        _resName[0..val.length]=val;
+        for (size_t i=val.length;i<_resName.length;++i){
+            _resName[i]=' ';
+        }
+    }
+    char[] chainName(){
+        size_t i=name.length-1;
+        while(i!=0 && name[i]==' ') --i;
+        return name[0..i+1];
+    }
+    void chainName(char[]val){
+        if (val.length>_chainName.length){
+            throw new Exception("chainName too long",__FILE__,__LINE__);
+        }
+        _chainName[0..val.length]=val;
+        for (size_t i=val.length;i<_chainName.length;++i){
+            _chainName[i]=' ';
+        }
+    }
+    mixin(serializeSome("",`pIndex|resIndex|chainIndex|externalIdx|resNr|name|resName|chainNr|chainName|pos|charge`));
     mixin printOut!();
 }
 
 /// represents a kind
 struct Kind{
-    char[16] name; // name of the kind (should be unique)
-    char[16] potential=' '; // name of the potential used for the particles
-    char[2] symbol="  ";
+    char[] name; // name of the kind (should be unique)
+    char[] potential; // name of the potential used for the particles
+    char[] symbol;
     PIndex nextParticle;
     mixin(serializeSome("",`name|nextParticle|potential|symbol`));
     static Kind opCall(char[] name,PIndex nextParticle){
         Kind res;
-        if (name.length>res.name.length){
-            throw new Exception("name too long",__FILE__,__LINE__);
-        }
-        res.name[0..name.length]=name;
-        for (size_t i=name.length;i<res.name.length;++i){
-            res.name[i]=' ';
-        }
+        res.name=name;
         res.nextParticle=nextParticle;
         return res;
     }
@@ -54,6 +139,7 @@ class ReadSystem{
     char[] name; // name of the system
     char[] comments; // comments
     Real[3][3] cell; /// cell info
+    Real[3] x0=[0.0,0.0,0.0]; /// lower left pos of the cell
     int[3] periodic; /// periodic directions
     char[] spaceGroup; /// space group
     size_t nParticles; /// number of particles
@@ -61,9 +147,12 @@ class ReadSystem{
     Kind[] pKinds; /// particle kinds
     Kind[] resKinds; /// residuum kinds
     Kind[] chainKinds; /// chain kinds
+    // the following arrays don't use static arrays because it was not supported...
     size_t[char[]] pKindsIdx;     // is linear search more efficient? cache last?
     size_t[char[]] resKindsIdx;   // is linear search more efficient? cache last?
     size_t[char[]] chainKindsIdx; // is linear search more efficient? cache last?
+    PIndex[ResiduumP] residui;    /// the residuums particles
+    PIndex[ChainP] chains;        /// the chain particles
 
     static ClassMetaInfo metaI;
     static this(){
@@ -72,6 +161,7 @@ class ReadSystem{
         metaI.addFieldOfType!(char[])("comments","comments");
         metaI.addFieldOfType!(Real[])("cell","cell matrix");
         metaI.addFieldOfType!(int[])("periodic","which directions are periodic");
+        metaI.addFieldOfType!(Real[])("x0","lower left corner of the cell");
         metaI.addFieldOfType!(char[])("spaceGroup","spaceGroup");
         metaI.addFieldOfType!(Particle[])("particles","the particles");
         metaI.addFieldOfType!(Kind[])("pKinds","particle kinds");
@@ -95,15 +185,20 @@ class ReadSystem{
         if (p.ptr !is periodic.ptr){
             periodic[]=p;
         }
-        s.field(metaI[4],spaceGroup);
+        auto a=x0[];
+        s.field(metaI[4],a);
+        if (a.ptr !is x0.ptr){
+            x0[]=a;
+        }
+        s.field(metaI[5],spaceGroup);
         auto part=particles;
-        s.field(metaI[5],part);
+        s.field(metaI[6],part);
         if (part.ptr !is _particles.ptr){
             particles()[]=part;
         }
-        s.field(metaI[6],pKinds);
-        s.field(metaI[7],resKinds);
-        s.field(metaI[8],chainKinds);
+        s.field(metaI[7],pKinds);
+        s.field(metaI[8],resKinds);
+        s.field(metaI[9],chainKinds);
     }
     void serialize(Serializer s){
         serial(s);
@@ -126,57 +221,77 @@ class ReadSystem{
         return _particles[0..nParticles];
     }
     
-    void addParticle(ref Particle p){
-        auto idxAtt=p.name[] in pKindsIdx;
+    Particle *addParticle(ref Particle p){
+        auto idxAtt=p.name in pKindsIdx;
         if (idxAtt !is null){
             p.pIndex=pKinds[*idxAtt].nextParticle;
             pKinds[*idxAtt].nextParticle +=1;
         } else {
             auto kPos=pKinds.length;
-            pKinds~=Kind(p.name,PIndex(cast(KindIdx)kPos,1));
-            pKindsIdx[p.name[]]=kPos;
+            pKinds~=Kind(p.name.dup,PIndex(cast(KindIdx)kPos,1));
+            pKindsIdx[p.name]=kPos;
             p.pIndex=PIndex(cast(KindIdx)kPos,0);
         }
-        idxAtt=p.resName[] in resKindsIdx;
+        idxAtt=p.resName in resKindsIdx;
         if (idxAtt !is null){
-            p.resIndex=resKinds[*idxAtt].nextParticle;
-            pKinds[*idxAtt].nextParticle +=1;
+            auto rp=p.resP;
+            auto rIdx=rp in residui;
+            if (rIdx is null){
+                p.resIndex=resKinds[*idxAtt].nextParticle;
+                residui[rp]=p.resIndex;
+                pKinds[*idxAtt].nextParticle +=1;
+            } else {
+                p.resIndex=*rIdx;
+            }
         } else {
             auto kPos=resKinds.length;
             resKinds~=Kind(p.resName,PIndex(cast(KindIdx)kPos,1));
-            resKindsIdx[p.resName[]]=kPos;
+            resKindsIdx[p.resName]=kPos;
             p.resIndex=PIndex(cast(KindIdx)kPos,0);
+            residui[p.resP]=p.resIndex;
         }
-        idxAtt=p.chainName[] in chainKindsIdx;
+        idxAtt=p.chainName in chainKindsIdx;
         if (idxAtt !is null){
-            p.chainIndex=chainKinds[*idxAtt].nextParticle;
-            pKinds[*idxAtt].nextParticle +=1;
+            auto cp=p.chainP;
+            auto cIdx=cp in chains;
+            if (cIdx is null){
+                p.chainIndex=chainKinds[*idxAtt].nextParticle;
+                chains[cp]=p.chainIndex;
+                pKinds[*idxAtt].nextParticle +=1;
+            } else {
+                p.chainIndex=*cIdx;
+            }
         } else {
             auto kPos=chainKinds.length;
             chainKinds~=Kind(p.chainName,PIndex(cast(KindIdx)kPos,1));
-            chainKindsIdx[p.chainName[]]=kPos;
+            chainKindsIdx[p.chainName]=kPos;
             p.chainIndex=PIndex(cast(KindIdx)kPos,0);
+            chains[p.chainP]=p.chainIndex;
         }
         if (nParticles==_particles.length){
             _particles.length=GC.growLength(nParticles+1,Particle.sizeof)/Particle.sizeof;
         }
         _particles[nParticles]=p;
         ++nParticles;
+        return &(_particles[nParticles-1]);
     }
-    
-    /// deletes the last particle
+    /// reorders the residuals and chains so that they have the same order as given by resNr, chainNr
+    void reorderKinds(){
+        // to do
+    }
+/+    /// deletes the last particle
     void dropLastParticle(){
         if (nParticles==0){
             throw new Exception("dropLastParticle called on empty system",__FILE__,__LINE__);
         }
         --nParticles;
         auto k=&(pKinds[cast(idxType)particles[nParticles].pIndex.kind]);
-        if (k.nextParticle==1 && (cast(idxType)particles[nParticles].pIndex.kind)+1==pKinds.length){
+        if (cast(long)k.nextParticle.particle==1 && (cast(idxType)particles[nParticles].pIndex.kind)+1==pKinds.length){
             pKinds=pKinds[0..pKinds.length-1];
         } else {
-            --k.nextParticle;
+            k.nextParticle+=-1;
         }
-    }
+    }+/
     
     /// clears the particles, but does not dealloc the memory, and the kinds stored, cell,...
     void clearParticles(){
@@ -227,32 +342,23 @@ ReadSystem readXYZFrame(TextParser!(char) tp,ReadSystem sys=null,bool clearSys=t
         char[] atName,resName,chainName;
         size_t resNr;
         tp.readValue(atName,false);
-        if(atName.length>p.name.length)
-            throw new Exception("particle name too long '"~atName~"'",__FILE__,__LINE__);
-        p.name[0..atName.length]=atName;
-        p.name[atName.length..$]=' ';
+        p.name=atName;
         tp(p.pos[0])(p.pos[1])(p.pos[2]);
         tp.skipWhitespace();
         if (tp.next(&tp.scanString)){
             resName=splitEndNr(tp.get,resNr);
             p.resNr=cast(idxType)resNr;
-            if(resName.length>p.resName.length)
-                throw new Exception("residuum name too long '"~resName~"'",__FILE__,__LINE__);
-            p.resName[0..resName.length]=resName;
-            p.resName[resName.length..$]=' ';
+            p.resName=resName;
             tp.skipWhitespace();
             if (tp.next(&tp.scanString)){
-                chainName=tp.get  .dup;
-                if(chainName.length>p.chainName.length)
-                    throw new Exception("chain name too long '"~chainName~"'",__FILE__,__LINE__);
-                p.chainName[0..chainName.length]=chainName;
-                p.chainName[chainName.length..$]=' ';
+                chainName=tp.get.dup;
+                p.chainName=chainName; // should try to split a number out?
             } else {
-                p.chainName[]=' ';
+                p.chainName="";
             }
         } else {
-            p.resName[]=' ';
-            p.chainName[]=' ';
+            p.resName="";
+            p.chainName="";
         }
         tp.skipLines(1);
         p.externalIdx=cast(idxType)iat;
@@ -523,79 +629,51 @@ ReadSystem readCarFrame(TextParser!(char) tp,ReadSystem sys=null,bool clearSys=t
         char[] atName,resName,chainName;
         size_t resNr;
         tp.readValue(atName,false);
-        if (line.length>=3 && line[0..3]=="end") break;
+        if (atName=="end") break;
         if (iat==0 && clearSys) sys.clearParticles();
-        if(atName.length>p.name.length)
-            throw new Exception("particle name too long '"~atName~"'",__FILE__,__LINE__);
-        p.name[0..atName.length]=atName;
-        p.name[atName.length..$]=' ';
+        p.name=atName;
         tp(p.pos[0])(p.pos[1])(p.pos[2]);
         tp.skipWhitespace();
-        potString="";
-        char[2] symbol=' ';
+        char[]potString;
+        char[] symbol;
         tp(resName);
         resName=splitEndNr(resName,resNr);
-        if(resName.length>p.resName.length)
-            throw new Exception("residuum name too long '"~resName~"'",__FILE__,__LINE__);
-        p.resName[0..resName.length]=resName;
-        p.resName[resName.length..$]=' ';
-        char[] potString1;
-        typeof(Kind.init.potential) potString;
-        tp(potString1);
-        if(potString1.length>potString.length)
-            throw new Exception("potential name too long '"~potString1~"'",__FILE__,__LINE__);
-        potString[0..potString1.length]=potString;
-        potString[potString.length..$]=' ';
-        char[] symb1;
-        char[2] symb;
-        tp.(symb1);
-        switch (symb1.length){
-            case 1:
-                symb[0]=symb1[0];
-                break;
-            case 2:
-                symb[]=symb1;
-                break;
-            default:
-            throw new Exception("symbol name of invalid length '"~symb1~"'",__FILE__,__LINE__);
-        }
+        p.resName=resName;
+        tp(potString);
+        tp(symbol);
         tp(p.charge);
-        p.chainName[]=' ';
         tp.skipLines(1);
         p.externalIdx=cast(idxType)iat;
         while(true){
-            sys.addParticle(p);
-            auto pp=&(sys.particles()[sys.nParticles-1]);
-            auto kind=&(sys.pKinds[cast(idxType)pp.pIndex.kind()]);
-            if (kind.nextParticle==1){
-                kind.symbol=symb;
-                kind.potential=potString;
-                break;
+            auto kindIdx=p.resName in sys.resKindsIdx;
+            if (kindIdx is null) break;
+            auto kind=sys.pKinds[*kindIdx];
+            if (kind.symbol==symbol && kind.potential==potString) break;
+            if (kind.symbol!=symbol){
+                throw new Exception("atom name "~p.name~" has two symbols: '"~kind.symbol~"' and '"~symbol~"'",
+                    __FILE__,__LINE__);
+            }
+            // kind.potential != potString
+            size_t ic=p.name.length;
+            if (ic<p._name.length) {
+                p._name[ic]='_';
             } else {
-                if (kind.symbol!=symb){
-                    throw Exception("atom name "~p.name~" has two symbols: "~kind.symbol~" and "~symb,
-                        __FILE__,__LINE__);
-                }
-                if (kind.potential != potString){
-                    sys.dropLastParticle();
-                    size_t ic=0;
-                    while(ic<p.name.length && p.name[ic]!=' '){ ++ic; }
-                    if (ic<p.name.length) {
-                        p.name[ic]='_';
-                    } else {
-                        throw new Exception("could not generate unique names for atom name "~p.name~" with different potentials "~kind.potential~" and "~potString,
-                            __FILE__,__LINE__);
-                    }
-                    for (ip=0;ip<potString.length;++ip){
-                        ++ic;
-                        if (ic>=p.name.length) break; // hope for the best if potential is truncated..., might fail in recursive call
-                        p.name[ic]=potString[ip];
-                    }
-                } else {
-                    break;
-                }
+                throw new Exception("could not generate unique names for atom name "~p.name~" with different potentials "~kind.potential~" and "~potString,
+                    __FILE__,__LINE__);
+            }
+            for (size_t ip=0;ip<potString.length;++ip){
+                ++ic;
+                if (ic>=p.name.length) break; // hope for the best if potential is truncated..., might fail in the next iteration
+                p.name[ic]=potString[ip];
             }
         }
+        auto pp=sys.addParticle(p);
+        auto kind=&(sys.pKinds[cast(size_t)pp.pIndex.kind]);
+        if (kind.nextParticle.particle==cast(ParticleIdx)1){
+            kind.symbol=symbol;
+            kind.potential=potString;
+        }
+        ++iat;
     }
     if (iat==0) return null;
     return sys;
@@ -605,18 +683,18 @@ ReadSystem readCarFrame(TextParser!(char) tp,ReadSystem sys=null,bool clearSys=t
 ReadSystem readPdb(TextParser!(char) tp,ReadSystem sys=null,bool clearSys=true){
     assert(0,"pdb reading unimplemented");
 }
-
-ReadSystem readFrame(MultiReader data,char[] format,long frame=0,ReadSystem sys=null,bool clearSys=true){
+/// reads a frame from the given input
+ReadSystem readFrame(MultiReader data,char[] format,long frame=0,ReadSystem readSys=null){
     switch(format){
     case "xyz":
-        auto file=new TextParser!(char)(new DataFileInput(fileName));
+        auto file=new TextParser!(char)(data.readerChar());
         file.newlineIsSpace=false;
         for (long iframe=1;iframe<frame;++iframe){
             size_t nat;
             file(nat);
-            tp.skipLines(nat+2);
+            file.skipLines(nat+2);
         }
-        readSys=readXYZFrame(file);
+        readSys=readXYZFrame(file,readSys,true);
         if (frame==-1){
             while (true){
                 auto readSys1=readXYZFrame(file,readSys,true);
@@ -627,7 +705,9 @@ ReadSystem readFrame(MultiReader data,char[] format,long frame=0,ReadSystem sys=
         break;
     case "car":
         // fully disallow empty frames???
-        readSys=readCarHeader(file);
+        auto file=new TextParser!(char)(data.readerChar());
+        file.newlineIsSpace=false;
+        readSys=readCarHeader(file,readSys);
         auto readSys1=readCarFrame(file,readSys,true);
         if (readSys1 !is null) readSys=readSys1;
         for (long iframe=1;iframe<frame;++iframe){
@@ -643,10 +723,13 @@ ReadSystem readFrame(MultiReader data,char[] format,long frame=0,ReadSystem sys=
         }
         break;
     case "pdb":
+        auto file=new TextParser!(char)(data.readerChar());
+        file.newlineIsSpace=false;
         if (frame!=0) throw new Exception("only single frame pdb are supported",__FILE__,__LINE__);
         readSys=readPdb(file,readSys,true);
         break;
     default:
         assert(0,"unexpected fromat "~format);
     }
+    return readSys;
 }

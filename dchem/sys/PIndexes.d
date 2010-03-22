@@ -75,7 +75,7 @@ struct KindRange{
     }
     KindRange intersect(KindRange kr){
         KindRange res;
-        res.kStart=((kStart>kr.kStart)?kStart:kEnd);
+        res.kStart=((kStart>kr.kStart)?kStart:kr.kStart);
         res.kEnd=((kEnd<kr.kEnd)?kEnd:kr.kEnd);
         if (res.kEnd<res.kStart){
             res.kEnd=res.kStart; // avoid?
@@ -99,6 +99,9 @@ struct KindRange{
         return kStart==KindIdx.init && kEnd==KindIdx.init;
     }
     mixin printOut!();
+    bool valid(){
+        return kStart<=kEnd && kEnd<KindIdx.init;
+    }
 }
 
 /// particle index, stores particle level,particle kind and particle position in one single long
@@ -107,13 +110,34 @@ struct KindRange{
 struct PIndex{
     ulong data=0xFFFF_FF00_FFFF_FFFFUL;
     
-    static PIndex opCall(){
+    static PIndex opCall()(){
         PIndex res;
         return res;
     }
-    static PIndex opCall(KindIdx k, ParticleIdx p){
+    static PIndex opCall(T,U)(T k, U p){
         PIndex res;
+        static if (!is(T==KindIdx)){
+            static assert(!(is(T==ParticleIdx)||is(T==LevelIdx)),"invalid type "~T.stringof);
+            assert((cast(ulong)k)<=0xFFFF,"kind out of range");
+        }
+        static if (!is(U==ParticleIdx)){
+            static assert(!(is(U==KindIdx)||is(U==LevelIdx)),"invalid type "~U.stringof);
+            assert((cast(ulong)p)<=cast(ulong)ParticleIdx.init,"particle out of range");
+        }
         res.data=((cast(ulong)k)<<48)|(cast(ulong)p);
+        return res;
+    }
+    static PIndex opCall(T)(T p){
+        PIndex res;
+        static if (is(T==ulong)){
+            res.data=p;
+        } else static if (is(T==PIndex)){
+            return p;
+        } else static if (is(T==LocalPIndex)){
+            res.data=p.data;
+        } else {
+            static assert(0,"unsupported type "~T.stringof~" in PIndex.opCall");
+        }
         return res;
     }
     /// returns the kind of the particle
@@ -122,15 +146,33 @@ struct PIndex{
         return cast(KindIdx)((data>>48)&0xFFFFUL);
     }
     /// sets the kind of the particle
-    void kind(KindIdx newK){
+    void kindT(T)(T newK){
+        static if (!is(T==KindIdx)){
+            static assert(!(is(T==ParticleIdx)||is(T==LevelIdx)),"invalid type "~T.stringof);
+            assert((cast(ulong)newK)<=0xFFFF,"kind out of range");
+        }
         data=(data & 0x0000_FFFF_FFFF_FFFFUL)|((cast(ulong)newK)<<40);
     }
+    alias kindT!(KindIdx) kind;
+    alias kindT!(int) kind;
+    alias kindT!(uint) kind;
+    alias kindT!(long) kind;
+    alias kindT!(ulong) kind;
     ParticleIdx particle(){
         return cast(ParticleIdx)(data & 0xFFFF_FFFF_FFFFUL);
     }
-    void particle(ParticleIdx pNew){
+    void particleT(T)(T pNew){
+        static if (!is(T==ParticleIdx)){
+            static assert(!(is(T==KindIdx)||is(T==LevelIdx)),"invalid type "~T.stringof);
+            assert((cast(ulong)pNew)<=cast(ulong)ParticleIdx.init,"particle out of range");
+        }
         data=(data & 0xFFFF_0000_0000_0000UL)|(cast(ulong) pNew);
     }
+    alias particleT!(ParticleIdx) particle;
+    alias particleT!(int) particle;
+    alias particleT!(uint) particle;
+    alias particleT!(long) particle;
+    alias particleT!(ulong) particle;
     static ClassMetaInfo metaI;
     static this(){
         metaI=ClassMetaInfo.createForType!(typeof(*this))("dchem.sys.PIndexes.PIndex");
@@ -203,13 +245,34 @@ struct PIndex{
 struct LocalPIndex{
     ulong data=0xFFFF_FF00_FFFF_FFFFUL;
     
-    static LocalPIndex opCall(){
+    static LocalPIndex opCall()(){
         LocalPIndex res;
         return res;
     }
-    static LocalPIndex opCall(KindIdx k, ParticleIdx p){
+    static LocalPIndex opCall(T,U)(T k, U p){
         LocalPIndex res;
+        static if (!is(T==KindIdx)){
+            static assert(!(is(T==ParticleIdx)||is(T==LevelIdx)),"invalid type "~T.stringof);
+            assert((cast(ulong)k)<=0xFFFF,"kind out of range");
+        }
+        static if (!is(U==ParticleIdx)){
+            static assert(!(is(U==KindIdx)||is(U==LevelIdx)),"invalid type "~U.stringof);
+            assert((cast(ulong)p)<=cast(ulong)ParticleIdx.init,"particle out of range");
+        }
         res.data=((cast(ulong)k)<<48)|(cast(ulong)p);
+        return res;
+    }
+    static LocalPIndex opCall(T)(T p){
+        LocalPIndex res;
+        static if (is(T==ulong)){
+            res.data=p;
+        } else static if (is(T==LocalPIndex)){
+            return p;
+        } else static if (is(T==PIndex)){
+            res.data=p.data;
+        } else {
+            static assert(0,"unsupported type "~T.stringof~" in PIndex.opCall");
+        }
         return res;
     }
     /// returns the kind of the particle
@@ -218,15 +281,33 @@ struct LocalPIndex{
         return cast(KindIdx)((data>>48)&0xFFFFUL);
     }
     /// sets the kind of the particle
-    void kind(KindIdx newK){
+    void kindT(T)(T newK){
+        static if (!is(T==KindIdx)){
+            static assert(!(is(T==ParticleIdx)||is(T==LevelIdx)),"invalid type"~T.stringof);
+            assert((cast(ulong)newK)<=0xFFFF,"kind out of range"); // remove check?
+        }
         data=(data & 0x0000_FFFF_FFFF_FFFFUL)|((cast(ulong)newK)<<40);
     }
+    alias kindT!(KindIdx) kind;
+    alias kindT!(int) kind;
+    alias kindT!(uint) kind;
+    alias kindT!(long) kind;
+    alias kindT!(ulong) kind;
     ParticleIdx particle(){
         return cast(ParticleIdx)(data & 0xFFFF_FFFF_FFFFUL);
     }
-    void particle(ParticleIdx pNew){
+    void particleT(T)(T pNew){
+        static if (!is(T==ParticleIdx)){
+            static assert(!(is(T==KindIdx)||is(T==LevelIdx)),"invalid type "~T.stringof);
+            assert((cast(ulong)pNew)<=cast(ulong)ParticleIdx.init,"particle out of range"); // remove check?
+        }
         data=(data & 0xFFFF_0000_0000_0000UL)|(cast(ulong) pNew);
     }
+    alias particleT!(ParticleIdx) particle;
+    alias particleT!(int) particle;
+    alias particleT!(uint) particle;
+    alias particleT!(long) particle;
+    alias particleT!(ulong) particle;
     static ClassMetaInfo metaI;
     static this(){
         metaI=ClassMetaInfo.createForType!(typeof(*this))("dchem.sys.PIndexes.LocalPIndex");

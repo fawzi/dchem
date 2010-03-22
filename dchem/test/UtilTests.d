@@ -4,7 +4,7 @@ import blip.rtest.RTest;
 import dchem.util.Rotate;
 import tango.math.random.Random;
 import tango.util.log.Trace;
-import blip.narray.TestSupport;
+import blip.test.narray.NArraySupport;
 
 // tests rotation routine v1 v2 in 3D
 void doTestRotV1V2(T,int ndim)(SizedRandomNArray!(T,ndim) v1,SizedRandomNArray!(T,ndim) v2){

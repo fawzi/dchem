@@ -9,6 +9,7 @@ import tango.core.Array;
 import blip.serialization.Serialization;
 import blip.serialization.SerializationMixins;
 import blip.BasicModels;
+import blip.io.Console; // pippo
 
 enum MappingKind:uint{
     Generic=0u,   /// generic mapping
@@ -39,23 +40,25 @@ class SubMapping: BasicObjectI{
     /// lowlevel constructor
     static SubMapping opCall(BulkArray!(PIndex) sortedPIndex,
         BulkArray!(LocalPIndex) gSortedLocalPIndex,
-        BulkArray!(PIndex) lSortedPIndex,index_type[] kindStarts, KindRange lKRange)
+        BulkArray!(PIndex) lSortedPIndex,index_type[] kindStarts, KindRange lKRange,MappingKind mappingKind)
     {
-        return new SubMapping(sortedPIndex,gSortedLocalPIndex,lSortedPIndex,kindStarts,lKRange);
+        return new SubMapping(sortedPIndex,gSortedLocalPIndex,lSortedPIndex,kindStarts,lKRange,mappingKind);
     }
     
     /// low level constructor, avoid its use, so that switching to struct would be easy
     this(BulkArray!(PIndex) sortedPIndex,BulkArray!(LocalPIndex) gSortedLocalPIndex,
-        BulkArray!(PIndex) lSortedPIndex,index_type[] kindStarts, KindRange lKRange)
+        BulkArray!(PIndex) lSortedPIndex,index_type[] kindStarts, KindRange lKRange,MappingKind mappingKind)
     {
         this.sortedPIndex=sortedPIndex;
         this.gSortedLocalPIndex=gSortedLocalPIndex;
         this.lSortedPIndex=lSortedPIndex;
         this.lKRange=lKRange;
         this.kindStarts=kindStarts;
+        this.mappingKind=mappingKind;
+        sout("pippo kindStarts:")(kindStarts.length)(" vs ")(1+cast(size_t)(lKRange.kEnd-lKRange.kStart))("\n");
         assert(kindStarts.length==1+cast(size_t)(lKRange.kEnd-lKRange.kStart));
         for (size_t i=1;i<kindStarts.length;++i){
-            assert(kindStarts[i]<=kindStarts[i+1]);
+            assert(kindStarts[i-1]<=kindStarts[i]);
         }
         assert(kindStarts.length>0);
     }

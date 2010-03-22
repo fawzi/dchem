@@ -1,4 +1,4 @@
-/// cell of a system (testing part should probably be moved away)
+/// cell of a system
 module dchem.sys.Cell;
 import dchem.Common;
 import blip.serialization.Serialization;
@@ -7,7 +7,7 @@ import blip.serialization.StringSerialize;
 import tango.math.Math;
 
 /// conversion of a,b,c,alpha,beta,gamma to h
-NArray!(Real,2) cellParam2h(Real a,Real b,Real c,Real alpha,Real beta,Real gamma){
+Matrix!(T, 3, 3) cellParam2h(T)(T a,T b,T c,T alpha,T beta,T gamma){
     auto deg2rad=PI/180.0;
     auto cosBC=cos(deg2rad*alpha);
     auto sinBC=sin(deg2rad*alpha);
@@ -19,7 +19,7 @@ NArray!(Real,2) cellParam2h(Real a,Real b,Real c,Real alpha,Real beta,Real gamma
     auto Bx=b*cosAB;
     auto By=b*sinAB;
     
-    Real Cx,Cy,Cz;
+    T Cx,Cy,Cz;
     
     // If sinAB is zero, then we can't determine C uniquely since it's defined
     // in terms of the angle between A and B.
@@ -38,23 +38,18 @@ NArray!(Real,2) cellParam2h(Real a,Real b,Real c,Real alpha,Real beta,Real gamma
         Cz=0.0;
     }
     
-    return a2NA([[Ax,Bx,c*Cx],
-        [0.0,By,c*Cy],
-        [0.0,0.0,c*Cz]]);
+    return Matrix!(T,3,3)([Ax,Bx,c*Cx,0,By,c*Cy,0,0,c*Cz]);
 }
-
-/// conversion of a,b,c,alpha,beta,gamma to h
-NArray!(Real,2) cellParam2h(NArray!(Real,1) params){
+/// ditto
+Matrix!(T,3,3) cellParamNArr2h(T)(NArray!(T,1) params){
     assert(params.shape[0]==6,"you should give 6 parameters");
     return cellParam2h(params[0],params[1],params[2],params[3],params[4],params[5]);
 }
-
-/// conversion of a,b,c,alpha,beta,gamma to h
-NArray!(Real,2) cellParam2h(Real[] params){
+/// ditto
+Matrix!(T,3,3) cellParamArr2h(T)(T[] params){
     assert(params.length==6,"you should give 6 parameters");
     return cellParam2h(params[0],params[1],params[2],params[3],params[4],params[5]);
 }
-
 
 /// finds the cell parameters (same units as h, angles in degrees) for a given cell
 Real[] h2CellParam(NArray!(Real,2)h,Real[] params=null){
@@ -70,6 +65,50 @@ Real[] h2CellParam(NArray!(Real,2)h,Real[] params=null){
     return params;
 }
 
+/// finds the cell parameters (same units as h, angles in degrees) for a given cell
+Real[] h2CellParam(Matrix!(Real,3,3)m,Real[] params=null){
+    return h2CellParam(m2NA(&m),params);
+}
+
+
+/// implicitly assumes changes only in a
+char[] cellLoopMixin(char[][] names,char[]op){
+    char[] res=`
+    {
+        void doVOp(`;
+    foreach (i,n;names){
+        if (i!=0) res~=",";
+        res~="typeof("~n~".x0)"~n;
+    }
+    res~=`){`;
+    res~=op;
+    res~=`
+        }
+        doVOp(`;
+    foreach (i,n;names){
+        if (i!=0) res~=",";
+        res~=n~".x0";
+    }
+    res~=`);
+        void doMOp(`;
+    foreach (i,n;names){
+        if (i!=0) res~=",";
+        res~="typeof("~n~".h)"~n;
+    }
+    res~=`){`;
+    res~=op;
+    res~=`
+        }
+        doMOp(`;
+    foreach (i,n;names){
+        if (i!=0) res~=",";
+        res~=n~".h";
+    }
+    res~=`);
+    }`;
+    return res;
+}
+
 /++
  +  description of the simulation cell
  +   - periodicity: an array with 1 if that dimension is periodic, 0 if it isn't
@@ -78,40 +117,60 @@ Real[] h2CellParam(NArray!(Real,2)h,Real[] params=null){
  +   - x0: shift of the origin (the mapping reduced points -> real points is
  +     r_real=dot(h,r_red)+x0
  +/
-class Cell
+class Cell(T)
 {
+    alias T dtype;
     int[3] periodic;
-    NArray!(Real,2) h,hInv;
-    NArray!(Real,1) x0;
+    Matrix!(T,3,3) h,hInv;
+    Vector!(T,3) x0;
 
     this(){} // just for serialization
     
-    this(NArray!(Real,2)h,int[3] periodic,NArray!(Real,1) x0=null,NArray!(Real,2)hInv=null){
-        this.h=h.dup;
+    this(ref Matrix!(T,3,3) h,int[3] periodic){
+        this(h,periodic,Vector!(T,3).zero,h.inverse);
+    }
+    this(ref Matrix!(T,3,3) h,int[3] periodic,Vector!(T,3) x0){
+        this(h,periodic,x0,h.inverse);
+    }
+    this(ref Matrix!(T,3,3) h,int[3] periodic,Vector!(T,3) x0,ref Matrix!(T,3,3)h_inv){
+        this.h=h;
         this.periodic[]=periodic;
-        if (hInv is null){
-            this.hInv=inv(h);
-        } else {
-            this.hInv=hInv.dup;
-        }
-        if (x0 is null){ // leave null?
-          this.x0=zerosR(3);
-        } else {
-            this.x0=x0.dup;
-        }
+        this.hInv=hInv;
+        this.x0=x0;
     }
-    void opSliceAssign(Cell c2){
+    
+    /// y.axpby(x,a,b): y = ax+by
+    void axpby(V)(Cell!(V) x,V scaleC=cscalar!(V,1),T scaleRes=cscalar!(T,1)){
+        auto y=this;
+        mixin(cellLoopMixin(["y","x"],"y.axpby(x,a,b);"));
+    }
+    
+    void opMulAssign()(T scale){
+        auto x=this;
+        mixin(cellLoopMixin(["x"],"x*=scale;"));
+    }
+    void opMulAssign(V)(Cell!(V) y){
+        auto x=this;
+        mixin(cellLoopMixin(["x","y"],"x *= y;"));
+    }
+    
+    void opSliceAssign(V)(ref Cell!(V) c2){
         periodic[]=c2.periodic;
-        h[]=c2.h;
-        hInv[]=c2.hInv;
-        x0=c2.x0;
+        h.set(c2.h);
+        hInv.set(c2.hInv);// recalculate inverse in case the precision of T> precision of V?
+        x0.set(c2.x0);
     }
-    Cell dup(){
-        return new Cell(h,periodic,x0,hInv);
+    void opSliceAssign()(T val){
+        h[]=val;
+        hInv[]=T.init;
+        x0[]=val;
+    }
+    Cell!(V) dup(V=T)(){
+        Cell!(V) res=void;
+        res[]=this;
+        return res;
     }
     mixin(serializeSome("","periodic|h|hInv|x0"));
     mixin printOut!();
 }
-
-
 
