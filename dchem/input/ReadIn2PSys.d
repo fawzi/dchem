@@ -111,7 +111,7 @@ ParticleSys!(T) readIn2PSys(T)(ReadSystem rIn,
     ++ii;
     kindStarts[cast(size_t)levels[2].kEnd+1]=ii;
     auto fullRange=KindRange(levels[0].kStart,levels[3].kEnd);
-    auto fullSystem=new SubMapping(sortedPIndex,*cast(BulkArray!(LocalPIndex)*)cast(void*)&sortedPIndex,
+    auto fullSystem=new SubMapping("fullSystem",sortedPIndex,*cast(BulkArray!(LocalPIndex)*)cast(void*)&sortedPIndex,
         sortedPIndex,kindStarts,
         fullRange,MappingKind.Same);
     
@@ -123,7 +123,7 @@ ParticleSys!(T) readIn2PSys(T)(ReadSystem rIn,
         gSortedLocalPIndex[kindStarts[cast(size_t)p.pIndex.kind]+cast(size_t)p.pIndex.particle]=LocalPIndex(cast(ulong)p.externalIdx);
         lSortedPIndex[p.externalIdx]=p.pIndex;
     }
-    auto externalOrder=new SubMapping(sortedPIndex[0..kindStarts[levels[0].kEnd]],
+    auto externalOrder=new SubMapping("externalOrder",sortedPIndex[0..kindStarts[levels[0].kEnd]],
         gSortedLocalPIndex,lSortedPIndex,kindStarts[0..1+levels[0].kEnd],KindRange(levels[0].kStart,levels[0].kEnd),
         MappingKind.Gapless);
     

@@ -34,6 +34,7 @@ final class SegmentedArrayStruct{
     index_type[]   kindStarts;
     Flags flags;
     mixin(serializeSome("dchem.sys.SegmentedArrayStruct","submapping|kRange|_kindDims|kindStarts"));
+    mixin printOut!();
     /// allocates a new SegmentedArray with the given kind dimensions
     /// if the Min1 flag is set (default) then at least one value per kind is stored 
     this(char[]name,SubMapping submapping,KindRange kRange,index_type[]kindDims=null,Flags f=Flags.Min1){
@@ -150,6 +151,7 @@ final class SegmentedArray(T){
     static size_t defaultOptimalBlockSize=32*1024/T.sizeof;
     
     mixin(serializeSome("dchem.sys.SegmentedArray","kRange|kindStarts|_data"));
+    mixin printOut!();
     
     BulkArray!(T) data(){
         return _data[kindStarts[0],kindStarts[$-1]];
@@ -527,19 +529,23 @@ final class SegmentedArray(T){
 char[] segArrayContextExecStr(int pFlags,char[] iterName, char[][]namesLocal,char[] contextExtra,char[] uniq,char[] execN,
     char[]pVisitLocalStart,char[]pVisit,char[]pVisitLocalEnd){
     char[]visitorStr=`
-        void exec`~execN~`(){`;
+        void exec`~execN~`(){
+            if (context.exception !is null) return;`;
     visitorStr~="\n";
     visitorStr~=pVisitLocalStart;
     visitorStr~="\n";
     if (pFlags==ParaFlags.FullPara){
         visitorStr~=`
             if (end-start>optimalBlockSize*3/2){
-                auto mid=(start+end)/cast(ParticleIdx)2;
+                auto mid=cast(ParticleIdx)((end-start)/2);
+                if (mid>optimalBlockSize){ // tries to make optimalBlockSize a possible fast path
+                    mid=cast(ParticleIdx)(((mid+optimalBlockSize-1)/optimalBlockSize)*optimalBlockSize);
+                }
                 auto firstHalf=alloc();
-                firstHalf.end=mid;
-                Task("SegArrLoop1`~iterName~`",&firstHalf.exec`~execN~`).appendOnFinish(&firstHalf.giveBack).autorelease.submitYield;
+                firstHalf.end=start+mid;
+                Task("SegArrLoop1`~iterName~`",&firstHalf.exec`~execN~`).appendOnFinish(&firstHalf.giveBack).autorelease.submit; // would submitYield be better (less suspended tasks, but more suspensions)??? 
                 auto secondHalf=alloc();
-                secondHalf.start=mid;`;
+                secondHalf.start=start+mid;`;
         foreach (name;namesLocal){
             visitorStr~=`
                 secondHalf.`~name~`PtrStart+=`~name~`Nel*mid;`;
@@ -552,23 +558,27 @@ char[] segArrayContextExecStr(int pFlags,char[] iterName, char[][]namesLocal,cha
             {`;
     }
     visitorStr~=`
-        LocalPIndex localPIndex`~uniq~`=LocalPIndex(kind,start);
-        PIndex * pIndexPtr`~uniq~`=pIndexPtrStart;`;
+                try{
+                    LocalPIndex localPIndex`~uniq~`=LocalPIndex(kind,start);
+                    PIndex * pIndexPtr`~uniq~`=pIndexPtrStart;`;
     foreach (name;namesLocal){
         visitorStr~=`
-                `~name~`.dtype* `~name~`Ptr`~uniq~`;`;
+                    `~name~`.dtype* `~name~`Ptr`~uniq~`=`~name~`PtrStart;`;
     }
     visitorStr~=`
-                for (ParticleIdx index`~uniq~`=start;index`~uniq~`<end;++index`~uniq~`){
-                    lIndex=index`~uniq~`;
-                    `~pVisit~`
-                    ++localPIndex`~uniq~`;
-                    ++pIndexPtr`~uniq~`;`;
+                    for (ParticleIdx index`~uniq~`=start;index`~uniq~`<end;++index`~uniq~`){
+                        lIndex=index`~uniq~`;
+                        `~pVisit~`
+                        ++localPIndex`~uniq~`;
+                        ++pIndexPtr`~uniq~`;`;
     foreach (name;namesLocal){
         visitorStr~=`
-                    `~name~`Ptr`~uniq~`+=`~name~`Nel;`;
+                        `~name~`Ptr`~uniq~`+=`~name~`Nel;`;
     }
     visitorStr~=`
+                    }
+                } catch (Exception e){
+                    context.exception=e;
                 }
             }
             `~pVisitLocalEnd~`
@@ -598,6 +608,7 @@ char[] segArrayContextStr(int pFlags,char[] iterName, char[][]namesLocal,char[] 
         ParticleIdx end;
         PIndex *pIndexPtrStart;
         size_t maxInnerDim;
+        Exception exception;
         `~iterName~`* context;
         `~iterName~`* next;`;
     visitorStr~="\n";
@@ -610,8 +621,6 @@ char[] segArrayContextStr(int pFlags,char[] iterName, char[][]namesLocal,char[] 
             }
             *res=*this;
             res.next=this;
-            if (context is null)
-                res.context=this;
             return res;
         }`;
     for(int i=0;i<pVisitors.length;i+=3){
@@ -636,7 +645,8 @@ char[] segArrayKLoopStr(int pFlags,char[] iterName, char[][]namesLocal,
         `~iterName~` mainContext`~uniq~`;
         auto kEnd`~uniq~`=`~namesLocal[0]~`.kRange.kEnd;
         `~iterName~`* newK`~uniq~`;
-        mainContext`~uniq~`.optimalBlockSize=optimalBlockSize`~uniq~`;`;
+        mainContext`~uniq~`.optimalBlockSize=optimalBlockSize`~uniq~`;
+        mainContext`~uniq~`.context=&mainContext`~uniq~`;`;
     visitorStr~=startLoop;
     if (pFlags!=ParaFlags.Sequential){
         visitorStr~=`
@@ -644,6 +654,7 @@ char[] segArrayKLoopStr(int pFlags,char[] iterName, char[][]namesLocal,
     }
     visitorStr~=`
             for (KindIdx kIdx`~uniq~`=`~namesLocal[0]~`.kRange.kStart;kIdx`~uniq~`<kEnd`~uniq~`;++kIdx`~uniq~`){
+                if (mainContext.exception !is null) break;
                 bool visitKind`~uniq~`=true;
                 bool outOfRange`~uniq~`=false;
                 if (newK`~uniq~` is null){
@@ -651,13 +662,15 @@ char[] segArrayKLoopStr(int pFlags,char[] iterName, char[][]namesLocal,
                 }
                 newK`~uniq~`.kind=kIdx`~uniq~`;
                 newK`~uniq~`.start=0;
-                newK`~uniq~`.end=`~namesLocal[0]~`.arrayStruct.submapping.nLocalParticles(kIdx`~uniq~`);
-                newK`~uniq~`.pIndexPtrStart=`~namesLocal[0]~`.arrayStruct.submapping.ptrI(LocalPIndex(kIdx`~uniq~`,cast(ParticleIdx)0));`;
+                newK`~uniq~`.end=
+                    `~namesLocal[0]~`.arrayStruct.submapping.nLocalParticles(kIdx`~uniq~`);
+                newK`~uniq~`.pIndexPtrStart=`~namesLocal[0]~`.arrayStruct.submapping.ptrI(
+                    LocalPIndex(newK`~uniq~`.kind,newK`~uniq~`.start));`;
     foreach (name;namesLocal){
         visitorStr~=`
                 if (kIdx`~uniq~` in `~name~`.kRange){
                     auto ik`~uniq~`=cast(size_t)(kIdx`~uniq~`-`~name~`.kRange.kStart);
-                    if (`~name~`.kindStarts[ik`~uniq~`]<`~name~`.kindStarts[ik`~uniq~`]){
+                    if (`~name~`.kindStarts[ik`~uniq~`]<`~name~`.kindStarts[ik`~uniq~`+1]){
                         newK`~uniq~`.`~name~`PtrStart=`~name~`._data.ptr+`~name~`.kindStarts[ik`~uniq~`];
                         newK`~uniq~`.`~name~`Nel=`~name~`.kindDim(kIdx`~uniq~`);
                     } else {
@@ -681,10 +694,10 @@ char[] segArrayKLoopStr(int pFlags,char[] iterName, char[][]namesLocal,
         }).autorelease.executeNow();`;
     }
     visitorStr~=`
+        if (mainContext.exception !is null) throw new Exception("exception in SegmentedArray loop",__FILE__,__LINE__,mainContext.exception);
         auto freeL=mainContext`~uniq~`.next;
         while (freeL!is null){
             auto cNext=freeL.next;
-            freeL.next=null;
             delete freeL;
             freeL=cNext;
         }

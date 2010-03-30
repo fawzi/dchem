@@ -5,6 +5,7 @@ import blip.serialization.Serialization;
 import blip.narray.NArray;
 import blip.serialization.StringSerialize;
 import tango.math.Math;
+import blip.io.Console;
 
 /// conversion of a,b,c,alpha,beta,gamma to h
 Matrix!(T, 3, 3) cellParam2h(T)(T a,T b,T c,T alpha,T beta,T gamma){
@@ -38,7 +39,7 @@ Matrix!(T, 3, 3) cellParam2h(T)(T a,T b,T c,T alpha,T beta,T gamma){
         Cz=0.0;
     }
     
-    return Matrix!(T,3,3)([Ax,Bx,c*Cx,0,By,c*Cy,0,0,c*Cz]);
+    return Matrix!(T,3,3)([Ax,0,0,Bx,By,0,c*Cx,c*Cy,c*Cz]);
 }
 /// ditto
 Matrix!(T,3,3) cellParamNArr2h(T)(NArray!(T,1) params){
@@ -55,13 +56,13 @@ Matrix!(T,3,3) cellParamArr2h(T)(T[] params){
 Real[] h2CellParam(NArray!(Real,2)h,Real[] params=null){
     auto rad2deg=180.0/PI;
     params.length=6;
-    auto ang=dot(h,h.T);
+    auto ang=dot(h.T,h);
     params[0]=sqrt(ang[0,0]);
     params[1]=sqrt(ang[1,1]);
     params[2]=sqrt(ang[2,2]);
-    params[3]=atan2(ang[1,2],params[1]*params[2])*rad2deg;
-    params[4]=atan2(ang[0,1],params[0]*params[1])*rad2deg;
-    params[5]=atan2(ang[0,1],params[0]*params[1])*rad2deg;
+    params[3]=acos(ang[1,2])*rad2deg;
+    params[4]=acos(ang[0,2])*rad2deg;
+    params[5]=acos(ang[0,1])*rad2deg;
     return params;
 }
 
@@ -126,13 +127,13 @@ class Cell(T)
 
     this(){} // just for serialization
     
-    this(ref Matrix!(T,3,3) h,int[3] periodic){
+    this(Matrix!(T,3,3) h,int[3] periodic){
         this(h,periodic,Vector!(T,3).zero,h.inverse);
     }
-    this(ref Matrix!(T,3,3) h,int[3] periodic,Vector!(T,3) x0){
+    this(Matrix!(T,3,3) h,int[3] periodic,Vector!(T,3) x0){
         this(h,periodic,x0,h.inverse);
     }
-    this(ref Matrix!(T,3,3) h,int[3] periodic,Vector!(T,3) x0,ref Matrix!(T,3,3)h_inv){
+    this(Matrix!(T,3,3) h,int[3] periodic,Vector!(T,3) x0,Matrix!(T,3,3)hInv){
         this.h=h;
         this.periodic[]=periodic;
         this.hInv=hInv;

@@ -22,7 +22,7 @@ NArray!(T,1) v2NAC(T,int dim_)(Vector!(T,dim_) v){
     return res;
 }
 /// converts a matrix to a NArray (copy)
-NArray!(T,2) m2NAC(T,int rows_, int cols_)(ref Matrix!(T,rows_,cols_) m){
+NArray!(T,2) m2NAC(T,int rows_, int cols_)(Matrix!(T,rows_,cols_) m){
     auto res=empty!(T)([rows_,cols_],true);
     (cast(T*)res.startPtrArray)[0..rows_*cols_]=m.cell;
     //*cast(typeof(m.tuple)*)res.startPtrArray=m.tuple;
@@ -56,3 +56,12 @@ NArray!(T,1) q2NA(T)(Quaternion!(T) *q){
     return res;
 }
 
+Matrix!(T,3,3) na2m33(T)(NArray!(T,2) m){
+    assert(m.shape[0]==3 && m.shape[1]==3,"invalid matrix shape to convert to 3x3 matrix");
+    return Matrix!(T,3,3)(m.data);
+}
+
+Vector!(T,3) na2v3(T)(NArray!(T,1) v){
+    assert(v.shape[0]==3,"invalid vector shape to convert to Vector 3");
+    return Vector!(T,3)(v[0],v[1],v[2]);
+}
