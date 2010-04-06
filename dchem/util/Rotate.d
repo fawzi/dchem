@@ -40,15 +40,15 @@ in{
 body{
     scope c=v2[i];
     alias typeof(c) S;
-    scope s2=cast(S)1-c*c;
     scope v1m=m[i];
     static if(is(typeof(v1m.dup()))){
       v1m=v1m.dup();
     }
     scope v2Ortho=v2.dup;
-    scope v2OrthoM=dot(v2,m);
-    v2OrthoM[i]=cast(S)0;
-    v2Ortho[i]=v2Ortho[i]-cast(S)1;
+    auto v2Val=v2Ortho[i];
+    v2Ortho[i]=cast(S)0;
+    scope v2OrthoM=dot(v2Ortho,m);
+    v2Ortho[i]=v2Val-cast(S)1;
     outer(v2Ortho,v1m,m,cast(S)1,cast(S)1);
     if (c<0){
         S vOrtC=-1/(-c+cast(S)1);
@@ -74,26 +74,32 @@ in{
 body{
     scope c=v2[i];
     alias typeof(c) S;
-    scope s2=cast(S)1-c*c;
+    
     scope v1m=m[i];
     static if(is(typeof(v1m.dup()))){
       v1m=v1m.dup();
     }
     scope v2Ortho=v2.dup;
-    scope v2OrthoM=dot(v2,m);
-    v2OrthoM[i]=cast(S)0;
+    auto v2Val=v2[i];
     v2Ortho[i]=v2Ortho[i]-cast(S)1;
-    outer(v1m,v2Ortho,m,cast(S)1,cast(S)1);
+    scope v2M=dot(v2Ortho,m);
+    static if(is(typeof(m[i]+=v2M))){
+        m[i]+=v2M;
+    } else {
+        m[i]=m[i]+v2M;
+    }
     if (c<0){
         S vOrtC=-1/(-c+cast(S)1);
-        v2Ortho*=vOrtC;
-        v2Ortho[i]=cast(S)1;
-        outer(v2OrthoM,v2Ortho,m,cast(S)1,cast(S)1);
+        v2M*=vOrtC;
+        v2Ortho[i]=cast(S)0;
+        v2M.axpby(v1m,vOrtC*(-v2Val+1)+1);
+        outer(v2Ortho,v2M,m,cast(S)1,cast(S)1);
     } else {
         S vOrtC=-1/(c+cast(S)1);
-        v2Ortho*=vOrtC;
-        v2Ortho[i]=cast(S)-1;
-        outer(v2OrthoM,v2Ortho,m,cast(S)1,cast(S)1);
+        v2M*=vOrtC;
+        v2Ortho[i]=cast(S)0;
+        v2M.axpby(v1m,vOrtC*(-v2Val+1)-1);
+        outer(v2Ortho,v2M,m,cast(S)1,cast(S)1);
     }
     return m;
 }

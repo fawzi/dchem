@@ -46,7 +46,7 @@ struct RandomCellParams(T){
         param[Range(3,5)]*=150.0;
         param[Range(3,5)]+=15.0;
         auto minA=abs(param[3]-param[4])+14.99;
-        auto maxA=min(165.0,min(360.0-15.0-param[3]+param[4],param[3]+param[4]-14.99));
+        auto maxA=min(165.0,min(360.0-15.0-param[3]-param[4],param[3]+param[4]-14.99));
         param[5]=cast(T)(minA+(maxA-minA)*param[5]);
         res.param=param;
         return res;

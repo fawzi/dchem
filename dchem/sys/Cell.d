@@ -5,7 +5,6 @@ import blip.serialization.Serialization;
 import blip.narray.NArray;
 import blip.serialization.StringSerialize;
 import tango.math.Math;
-import blip.io.Console;
 
 /// conversion of a,b,c,alpha,beta,gamma to h
 Matrix!(T, 3, 3) cellParam2h(T)(T a,T b,T c,T alpha,T beta,T gamma){
@@ -60,15 +59,15 @@ Real[] h2CellParam(NArray!(Real,2)h,Real[] params=null){
     params[0]=sqrt(ang[0,0]);
     params[1]=sqrt(ang[1,1]);
     params[2]=sqrt(ang[2,2]);
-    params[3]=acos(ang[1,2])*rad2deg;
-    params[4]=acos(ang[0,2])*rad2deg;
-    params[5]=acos(ang[0,1])*rad2deg;
+    params[3]=acos(ang[1,2]/(params[1]*params[2]))*rad2deg;
+    params[4]=acos(ang[0,2]/(params[0]*params[2]))*rad2deg;
+    params[5]=acos(ang[0,1]/(params[0]*params[1]))*rad2deg;
     return params;
 }
 
 /// finds the cell parameters (same units as h, angles in degrees) for a given cell
 Real[] h2CellParam(Matrix!(Real,3,3)m,Real[] params=null){
-    return h2CellParam(m2NA(&m),params);
+    return h2CellParam(m2NAC(m),params);
 }
 
 
