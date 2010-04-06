@@ -1,5 +1,5 @@
 /// testing support to generate random cells
-module dchem.test.sys.CellSupport;
+module dchem.test.sys.CellTests;
 import dchem.Common;
 import blip.narray.NArray;
 import blip.rtest.RTest;

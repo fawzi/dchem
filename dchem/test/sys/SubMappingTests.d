@@ -1,5 +1,5 @@
 /// generation of random submappings
-module dchem.test.sys.SubMappingSupport;
+module dchem.test.sys.SubMappingTests;
 import dchem.sys.SubMapping;
 import tango.math.random.Random;
 import blip.rtest.RTest;
@@ -25,10 +25,8 @@ SubMapping identitySubmapping(char[] name,uint[] nParticlesPerKind){
     }
     auto gSortedLocalPIndex=BulkArray!(LocalPIndex)(res.kindStarts[$-1]);
     for (int i=0;i<nKinds;++i){
-        auto nP=res.kindStarts[i+1]-res.kindStarts[i];
         auto kind=cast(KindIdx)i;
         auto lidx=LocalPIndex(kind,cast(ParticleIdx)0);
-        auto pidx=PIndex(lidx);
         for (size_t p=res.kindStarts[i];p<res.kindStarts[i+1];++p){
             gSortedLocalPIndex[p]=lidx;
             lidx+=1;
@@ -98,11 +96,11 @@ SubMapping randomSubmapping(char[] baseName,Random r,SubMapping mainSubmap,Mappi
                 auto kind=res.lKRange.kStart+cast(KindIdx)i;
                 auto pidx=PIndex(kind,cast(ParticleIdx)rStart);
                 auto lidx=LocalPIndex(kind,cast(ParticleIdx)0);
-                for (size_t p=0;p<nP;++p){
+                for (size_t p=res.kindStarts[i];p<res.kindStarts[i+1];++p){
                     sortedPIndex[p]=pidx;
                     pidx+=1;
                 }
-                for (size_t p=0;p<nP;++p){
+                for (size_t p=res.kindStarts[i];p<res.kindStarts[i+1];++p){
                     gSortedLocalPIndex[p]=lidx;
                     lidx+=1;
                 }

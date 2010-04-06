@@ -95,7 +95,7 @@ struct KindRange{
         }
         return 0;
     }
-    bool dummy(){
+    bool isDummy(){
         return kStart==KindIdx.init && kEnd==KindIdx.init;
     }
     mixin printOut!();
@@ -108,7 +108,12 @@ struct KindRange{
 /// at the moment there is one unused byte that is always 0, it could be used to increase the range
 /// of the particles (for example)
 struct PIndex{
-    ulong data=0xFFFF_FF00_FFFF_FFFFUL;
+    ulong data=0xFFFF_FFFF_FFFF_FFFFUL;
+    static if(ParticleIdx.sizeof==4){
+        enum:ulong{ ParticleMask=0x0000_0000_FFFF_FFFFUL }
+    } else {
+        enum:ulong{ ParticleMask=0x0000_FFFF_FFFF_FFFFUL }
+    }
     
     static PIndex opCall()(){
         PIndex res;
@@ -151,9 +156,11 @@ struct PIndex{
             static assert(!(is(T==ParticleIdx)||is(T==LevelIdx)),"invalid type "~T.stringof);
             assert((cast(ulong)newK)<=0xFFFF,"kind out of range");
         }
-        data=(data & 0x0000_FFFF_FFFF_FFFFUL)|((cast(ulong)newK)<<40);
+        data=(data & 0x0000_FFFF_FFFF_FFFFUL)|((cast(ulong)newK)<<48);
     }
     alias kindT!(KindIdx) kind;
+    alias kindT!(short) kind;
+    alias kindT!(ushort) kind;
     alias kindT!(int) kind;
     alias kindT!(uint) kind;
     alias kindT!(long) kind;
@@ -182,7 +189,13 @@ struct PIndex{
     ClassMetaInfo getSerializationMetaInfo(){
         return metaI;
     }
-    void serial(S)(S s){
+    void serialize(Serializer s){
+        ushort us=kind;
+        s.field(metaI[0],us);
+        uint ui=particle;
+        s.field(metaI[1],ui);
+    }
+    void unserialize(Unserializer s){
         ushort us=kind;
         s.field(metaI[0],us);
         kind=cast(KindIdx)us;
@@ -190,19 +203,13 @@ struct PIndex{
         s.field(metaI[1],ui);
         particle=cast(ParticleIdx)ui;
     }
-    void serialize(Serializer s){
-        serial(s);
-    }
-    void unserialize(Unserializer s){
-        serial(s);
-    }
     /// quick check to see if the particle is a dummy particle
     bool dummy(){
         return data==0xFFFF_FFFF_FFFF_FFFFUL;
     }
     /// slower check that looks if any component is invalid
     bool valid(){
-        return ((data & 0x0000_FFFF_FFFF_FFFFUL) != 0x0000_FFFF_FFFF_FFFFUL) &&
+        return ((data & ParticleMask) != ParticleMask) &&
             ((data & 0xFFFF_0000_0000_0000UL) != 0xFFFF_0000_0000_0000UL);
     }
     // default implementations are ok
@@ -211,19 +218,19 @@ struct PIndex{
     
     /// increments the particle part
     PIndex opAddAssign(int i){
-        assert((data & 0x0000_FFFF_FFFF_FFFFUL) != 0x0000_FFFF_FFFF_FFFFUL,"increment invalid particle");
+        assert((data & ParticleMask) != ParticleMask,"increment invalid particle");
         data+=i;
         return *this;
     }
     /// ditto
     PIndex opAddAssign(ulong i){
-        assert((data & 0x0000_FFFF_FFFF_FFFFUL) != 0x0000_FFFF_FFFF_FFFFUL,"increment invalid particle");
+        assert((data & ParticleMask) != ParticleMask,"increment invalid particle");
         data+=i;
         return *this;
     }
     /// ditto
     PIndex opAddAssign(ParticleIdx i){
-        assert((data & 0x0000_FFFF_FFFF_FFFFUL) != 0x0000_FFFF_FFFF_FFFFUL,"increment invalid particle");
+        assert((data & ParticleMask) != ParticleMask,"increment invalid particle");
         data+=i;
         return *this;
     }
@@ -232,6 +239,11 @@ struct PIndex{
         assert((data & 0xFFFF_0000_0000_0000UL) != 0xFFFF_0000_0000_0000UL,"kind increment invalid particle kind");
         data+=(cast(ulong)i)<<48;
         return *this;
+    }
+    /// adds a value (only on the right side, add also the left??)
+    PIndex opAdd(T)(T v){
+        PIndex res=*this;
+        return (res+=v);
     }
     /// compares two PIndex
     int opCmp(PIndex p2){
@@ -243,7 +255,12 @@ struct PIndex{
 /// an index local to a subset of atoms (clearly not transferrable between different subsets)
 // typedef is too limited
 struct LocalPIndex{
-    ulong data=0xFFFF_FF00_FFFF_FFFFUL;
+    ulong data=0xFFFF_FFFF_FFFF_FFFFUL;
+    static if(ParticleIdx.sizeof==4){
+        enum:ulong{ ParticleMask=0x0000_0000_FFFF_FFFFUL }
+    } else {
+        enum:ulong{ ParticleMask=0x0000_FFFF_FFFF_FFFFUL }
+    }
     
     static LocalPIndex opCall()(){
         LocalPIndex res;
@@ -286,15 +303,17 @@ struct LocalPIndex{
             static assert(!(is(T==ParticleIdx)||is(T==LevelIdx)),"invalid type"~T.stringof);
             assert((cast(ulong)newK)<=0xFFFF,"kind out of range"); // remove check?
         }
-        data=(data & 0x0000_FFFF_FFFF_FFFFUL)|((cast(ulong)newK)<<40);
+        data=(data & 0x0000_FFFF_FFFF_FFFFUL)|((cast(ulong)newK)<<48);
     }
     alias kindT!(KindIdx) kind;
+    alias kindT!(short) kind;
+    alias kindT!(ushort) kind;
     alias kindT!(int) kind;
     alias kindT!(uint) kind;
     alias kindT!(long) kind;
     alias kindT!(ulong) kind;
     ParticleIdx particle(){
-        return cast(ParticleIdx)(data & 0xFFFF_FFFF_FFFFUL);
+        return cast(ParticleIdx)(data & ParticleMask);
     }
     void particleT(T)(T pNew){
         static if (!is(T==ParticleIdx)){
@@ -317,7 +336,13 @@ struct LocalPIndex{
     ClassMetaInfo getSerializationMetaInfo(){
         return metaI;
     }
-    void serial(S)(S s){
+    void serialize(Serializer s){
+        ushort us=kind;
+        s.field(metaI[0],us);
+        uint ui=particle;
+        s.field(metaI[1],ui);
+    }
+    void unserialize(Unserializer s){
         ushort us=kind;
         s.field(metaI[0],us);
         kind=cast(KindIdx)us;
@@ -325,19 +350,13 @@ struct LocalPIndex{
         s.field(metaI[1],ui);
         particle=cast(ParticleIdx)ui;
     }
-    void serialize(Serializer s){
-        serial(s);
-    }
-    void unserialize(Unserializer s){
-        serial(s);
-    }
     /// quick check to see if the particle is a dummy particle
     bool dummy(){
         return data==0xFFFF_FFFF_FFFF_FFFFUL;
     }
     /// slower check that looks if any component is invalid
     bool valid(){
-        return ((data & 0x0000_FFFF_FFFF_FFFFUL) != 0x0000_FFFF_FFFF_FFFFUL) &&
+        return ((data & ParticleMask) != ParticleMask) &&
             ((data & 0xFFFF_0000_0000_0000UL) != 0xFFFF_0000_0000_0000UL);
     }
     // default implementations are ok
@@ -346,19 +365,19 @@ struct LocalPIndex{
     
     /// increments the particle part
     LocalPIndex opAddAssign(int i){
-        assert((data & 0x0000_FFFF_FFFF_FFFFUL) != 0x0000_FFFF_FFFF_FFFFUL,"increment invalid particle");
+        assert((data & ParticleMask) != ParticleMask,"increment invalid particle");
         data+=i;
         return *this;
     }
     /// ditto
     LocalPIndex opAddAssign(ulong i){
-        assert((data & 0x0000_FFFF_FFFF_FFFFUL) != 0x0000_FFFF_FFFF_FFFFUL,"increment invalid particle");
+        assert((data & ParticleMask) != ParticleMask,"increment invalid particle");
         data+=i;
         return *this;
     }
     /// ditto
     LocalPIndex opAddAssign(ParticleIdx i){
-        assert((data & 0x0000_FFFF_FFFF_FFFFUL) != 0x0000_FFFF_FFFF_FFFFUL,"increment invalid particle");
+        assert((data & ParticleMask) != ParticleMask,"increment invalid particle");
         data+=i;
         return *this;
     }
@@ -367,6 +386,11 @@ struct LocalPIndex{
         assert((data & 0xFFFF_0000_0000_0000UL) != 0xFFFF_0000_0000_0000UL,"kind increment invalid particle kind");
         data+=(cast(ulong)i)<<48;
         return *this;
+    }
+    /// adds a value (only on the right side, add also the left??)
+    LocalPIndex opAdd(T)(T v){
+        LocalPIndex res=*this;
+        return (res+=v);
     }
     /// compares two LocalPIndex
     int opCmp(LocalPIndex p2){

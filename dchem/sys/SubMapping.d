@@ -81,8 +81,8 @@ class SubMapping: BasicObjectI{
     /// returns a pointer into the lSortedPIndex
     PIndex *ptrI(LocalPIndex l){
         assert(l.kind in lKRange,"indexing of a local particle not in range");
-        return &(lSortedPIndex[cast(size_t)kindStarts[cast(size_t)(l.kind-lKRange.kStart)]
-                             +cast(size_t)l.particle]);
+        return lSortedPIndex.ptrI(cast(size_t)kindStarts[cast(size_t)(l.kind-lKRange.kStart)]
+                             +cast(size_t)l.particle);
     }
     /// maps a local index to a global one
     /// faster mapping, does not work if sortedLocalPIndex has gaps

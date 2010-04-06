@@ -1,4 +1,4 @@
-module dchem.test.sys.SegmentedArraySupport;
+module dchem.test.sys.SegmentedArrayTests;
 import dchem.Common;
 import blip.narray.NArray;
 import blip.rtest.RTest;
@@ -6,7 +6,7 @@ import blip.test.narray.NArraySupport;
 import blip.io.Console;
 import blip.io.BasicIO;
 import blip.container.GrowableArray;
-import dchem.test.sys.SubMappingSupport;
+import dchem.test.sys.SubMappingTests;
 import dchem.sys.SegmentedArray;
 import dchem.sys.PIndexes;
 import dchem.sys.SubMapping;
@@ -28,7 +28,8 @@ struct RandomSegmentedArrayStruct(SegmentedArrayStruct.Flags flags=SegmentedArra
         if (r.uniform!(bool)()){
             kRange.kStart=submap.map.lKRange.kStart;
         } else{
-            kRange.kStart=cast(KindIdx)r.uniformR(cast(int)submap.map.lKRange.kEnd);
+            kRange.kStart=cast(KindIdx)r.uniformR2(cast(int)submap.map.lKRange.kStart,
+                cast(int)submap.map.lKRange.kEnd+1);
         }
         if (r.uniform!(bool)()){
             kRange.kEnd=submap.map.lKRange.kEnd;
@@ -99,27 +100,37 @@ struct RandomSegmentedArray(T,SegmentedArrayStruct.Flags flags=SegmentedArrayStr
 }
 
 void testLoop(RandomSegmentedArrayStruct!() aStruct,SizeLikeNumber!(3,1) s){
+    sout("aStruct.arrayStruct.gSortedLocalPIndex.ptr:")(aStruct.arrayStruct.submapping.gSortedLocalPIndex.ptr)
+        ("aStruct.arrayStruct.sortedPIndex.ptr:")(aStruct.arrayStruct.submapping.sortedPIndex.ptr)("\n");
     sout("loopTests start\n");
     auto sarr=new SegmentedArray!(LocalPIndex)(aStruct.arrayStruct);
-    size_t ii=0;
     pragma(msg,segArrayMonoLoop(ParaFlags.Sequential,"iterContext",["array"],
-    "int delegate(ref LocalPIndex,ref T) dlg; int* finalRes;","",
-    "sout(\"mainLoopStart\\n\"); mainContext.dlg=loopBody;mainContext.finalRes=&result;","sout(\"mainIter\\n\"); ","sout(\"mainLoopEnd\\n\"); ",
-    ["sout(\"localLoopIn\\n\"); if ((*finalRes)!=0) return; sout(\"localLoopStart\\n\");","sout(\"localLoopIter{\\n\"); if (auto res=dlg(localPIndex,*arrayPtr)){ *finalRes=res; return; } sout(\"localLoopIter}\\n\");","sout(\"localLoopEnd\\n\"); ",
-    
-    "sout(\"local2LoopIn\\n\"); if ((*finalRes)!=0) return; sout(\"localLoop2Start\\n\"); ",`
-    sout("localLoop2Iter{\n"); 
-    for (size_t ii=0;ii<arrayNel;++ii){
-        if (auto res=dlg(localPIndex,arrayPtr[ii])){ *finalRes=res; return; }
-    }
-    sout("localLoop2Iter}\n"); 
-    `,"sout(\"localLoop2End\\n\");"]));
+        "int delegate(ref size_t i,ref PIndex, ref LocalPIndex, ref T) dlg; int* finalRes;","",
+        "mainContext.dlg=loopBody;mainContext.finalRes=&result;","visitKind=visitKind&&(newK.pIndexPtr !is null);","",
+        [`
+        sout("localLoopIn\n");
+        if ((*finalRes)!=0) return;
+        sout("localLoopStart\n");
+        `,"sout(\"localLoopIter{\\n\"); size_t ii=0; if (auto returnV=dlg(ii,*pIndexPtr,localPIndex,*arrayPtr)){ *finalRes=returnV; return; } sout(\"localLoopIter}\\n\");","sout(\"localLoopEnd\\n\");",
+        
+        "sout(\"localLoop2In\\n\");if ((*finalRes)!=0) return;sout(\"localLoop2Start\\n\");",`
+        sout("localLoop2Iter{\n");
+        for (size_t ii=0;ii<arrayNel;++ii){
+            if (auto returnV=dlg(ii,*pIndexPtr,localPIndex,arrayPtr[ii])){ *finalRes=returnV; return; }
+        }
+        sout("localLoop2Iter}\n");
+        `,"sout(\"localLoop2End\\n\");"]));
     
     sout("inline sLoop\n");
     {
-        auto loopBody=delegate int(ref LocalPIndex i,ref LocalPIndex v){
-            v=i;
-            ++ii;
+        auto loopBody=delegate int(ref size_t i,ref PIndex pk, ref LocalPIndex lk,ref LocalPIndex v){
+            sout("lpkIndexing\n");
+            assert(sarr[lk,i]==v,"invalid indexing in sLoop2");
+            sout("submap check\n");
+            assert(sarr.arrayStruct.submapping[lk]==pk,"incorrect pk value");
+            sout("pkIndexing\n");
+            assert(sarr[pk][i]==v,"invalid indexing in sLoop3");
+            sout("pkIndexingDone\n");
             return 0;
         };
         alias LocalPIndex T;
@@ -142,7 +153,7 @@ void testLoop(RandomSegmentedArrayStruct!() aStruct,SizeLikeNumber!(3,1) s){
                 Exception exception;
                 iterContext* context;
                 iterContext* next;
-        int delegate(ref LocalPIndex,ref T) dlg; int* finalRes;
+        int delegate(ref size_t i,ref PIndex, ref LocalPIndex, ref T) dlg; int* finalRes;
                 typeof(this) alloc(){
                     auto res=popFrom(context.next);
                     if (res is null){
@@ -154,7 +165,11 @@ void testLoop(RandomSegmentedArrayStruct!() aStruct,SizeLikeNumber!(3,1) s){
                 }
                 void exec0(){
                     if (context.exception !is null) return;
-        sout("localLoopIn\n"); if ((*finalRes)!=0) return; sout("localLoopStart\n");
+
+                sout("localLoopIn\n");
+                if ((*finalRes)!=0) return;
+                sout("localLoopStart\n");
+
 
                     {
                         try{
@@ -163,9 +178,7 @@ void testLoop(RandomSegmentedArrayStruct!() aStruct,SizeLikeNumber!(3,1) s){
                             array.dtype* arrayPtr=arrayPtrStart;
                             for (ParticleIdx index=start;index<end;++index){
                                 lIndex=index;
-                                sout("localLoopIter{\n");
-                                assert(arrayPtr!is null,"arrayPtr is null");
-                                if (auto res=dlg(localPIndex,*arrayPtr)){ *finalRes=res; return; } sout("localLoopIter}\n");
+                                sout("localLoopIter{\n"); size_t ii=0; if (auto returnV=dlg(ii,*pIndexPtr,localPIndex,*arrayPtr)){ *finalRes=returnV; return; } sout("localLoopIter}\n");
                                 ++localPIndex;
                                 ++pIndexPtr;
                                 arrayPtr+=arrayNel;
@@ -174,11 +187,11 @@ void testLoop(RandomSegmentedArrayStruct!() aStruct,SizeLikeNumber!(3,1) s){
                             context.exception=e;
                         }
                     }
-                    sout("localLoopEnd\n"); 
+                    sout("localLoopEnd\n");
                 }
                 void exec1(){
                     if (context.exception !is null) return;
-        sout("local2LoopIn\n"); if ((*finalRes)!=0) return; sout("localLoop2Start\n"); 
+        sout("localLoop2In\n");if ((*finalRes)!=0) return;sout("localLoop2Start\n");
 
                     {
                         try{
@@ -188,11 +201,11 @@ void testLoop(RandomSegmentedArrayStruct!() aStruct,SizeLikeNumber!(3,1) s){
                             for (ParticleIdx index=start;index<end;++index){
                                 lIndex=index;
 
-            sout("localLoop2Iter{\n"); 
-            for (size_t ii=0;ii<arrayNel;++ii){
-                if (auto res=dlg(localPIndex,arrayPtr[ii])){ *finalRes=res; return; }
-            }
-            sout("localLoop2Iter}\n"); 
+                sout("localLoop2Iter{\n");
+                for (size_t ii=0;ii<arrayNel;++ii){
+                    if (auto returnV=dlg(ii,*pIndexPtr,localPIndex,arrayPtr[ii])){ *finalRes=returnV; return; }
+                }
+                sout("localLoop2Iter}\n");
 
                                 ++localPIndex;
                                 ++pIndexPtr;
@@ -213,8 +226,9 @@ void testLoop(RandomSegmentedArrayStruct!() aStruct,SizeLikeNumber!(3,1) s){
                 iterContext mainContext;
                 auto kEnd=array.kRange.kEnd;
                 iterContext* newK;
+                PIndex dummyP;
                 mainContext.optimalBlockSize=optimalBlockSize;
-                mainContext.context=&mainContext;sout("mainLoopStart\n"); mainContext.dlg=loopBody;mainContext.finalRes=&result;
+                mainContext.context=&mainContext;mainContext.dlg=loopBody;mainContext.finalRes=&result;
                     for (KindIdx kIdx=array.kRange.kStart;kIdx<kEnd;++kIdx){
                         if (mainContext.exception !is null) break;
                         bool visitKind=true;
@@ -226,13 +240,20 @@ void testLoop(RandomSegmentedArrayStruct!() aStruct,SizeLikeNumber!(3,1) s){
                         newK.start=0;
                         newK.end=
                             array.arrayStruct.submapping.nLocalParticles(kIdx);
-                        newK.pIndexPtrStart=array.arrayStruct.submapping.ptrI(
-                            LocalPIndex(newK.kind,newK.start));
+                        auto submap=array.arrayStruct.submapping;
+                        if (submap.kindStarts[kIdx-submap.lKRange.kStart]<
+                            submap.kindStarts[kIdx-submap.lKRange.kStart+1])
+                        {
+                            newK.pIndexPtrStart=submap.ptrI(
+                                LocalPIndex(newK.kind,newK.start));
+                        } else {
+                            newK.pIndexPtrStart=null;
+                        }
                         if (kIdx in array.kRange){
                             auto ik=cast(size_t)(kIdx-array.kRange.kStart);
                             if (array.kindStarts[ik]<array.kindStarts[ik+1]){
                                 newK.arrayPtrStart=array._data.ptr+array.kindStarts[ik];
-                                newK.arrayNel=array.kindDim(kIdx);
+                                newK.arrayNel=array.arrayStruct.kindDim(kIdx);
                             } else {
                                 outOfRange=true;
                                 newK.arrayPtrStart=null;
@@ -243,7 +264,7 @@ void testLoop(RandomSegmentedArrayStruct!() aStruct,SizeLikeNumber!(3,1) s){
                             newK.arrayPtrStart=null;
                             newK.arrayNel=0;
                         }
-        sout("mainIter\n"); 
+        visitKind=visitKind&&(newK.pIndexPtrStart !is null);
                     if (visitKind){
                         newK.maxInnerDim=1;
                         bool multiDim=false;
@@ -270,22 +291,30 @@ void testLoop(RandomSegmentedArrayStruct!() aStruct,SizeLikeNumber!(3,1) s){
                     delete freeL;
                     freeL=cNext;
                 }
-            sout("mainLoopEnd\n"); 
+
             }
         }
     }
-    
+    sout("calcRef\n");
+    size_t iterRef=sarr.data.length;
+    auto submap=sarr.arrayStruct.submapping;
+    for (auto k=sarr.kRange.kStart;k<sarr.kRange.kEnd;++k){
+        if (sarr.arrayStruct.kindDim(k)==0){
+            iterRef-=1;
+            iterRef+=submap.kindStarts[k-submap.lKRange.kStart+1]-submap.kindStarts[k-submap.lKRange.kStart];
+        }
+    }
+    size_t ii=0;
     sout("sLoop\n");
-    assert(ii==sarr.data.length,"incorrect number of iterations in sLoop");
     ii=0;
     foreach(i,ref v;sarr.sLoop){
         v=i;
         ++ii;
     }
-    assert(ii==sarr.data.length,"incorrect number of iterations in sLoop");
+    assert(ii==iterRef,"incorrect number of iterations in pLoop");
     sout("sLoop2\n");
     foreach(i,v;sarr.sLoop){
-        assert(v==i,"invalid value in sLoop");
+        assert(v==i||(sarr.arrayStruct.kindDim(i.kind)==0 && v.kind==i.kind),"invalid value in sLoop");
         assert(sarr[i,0]==v,"invalid indexing in sLoop");
     }
     sout("sLoop3\n");
@@ -296,7 +325,7 @@ void testLoop(RandomSegmentedArrayStruct!() aStruct,SizeLikeNumber!(3,1) s){
     }
     sout("sLoop4\n");
     foreach(pk,lk,v;sarr.sLoop){
-        assert(lk==v,"value in sLoop");
+        assert(lk==v||(sarr.arrayStruct.kindDim(lk.kind)==0 && v.kind==lk.kind),"value in sLoop");
         assert(sarr.arrayStruct.submapping[lk]==pk,"incorrect pk value");
     }
     sout("sLoop5\n");
@@ -310,40 +339,40 @@ void testLoop(RandomSegmentedArrayStruct!() aStruct,SizeLikeNumber!(3,1) s){
     }
     sout("sLoop7\n");
     foreach(i,v;sarr.sLoop){
-        assert(v.data==i.data+1,"invalid value in sLoop");
+        assert(v.data==i.data+1||(sarr.arrayStruct.kindDim(i.kind)==0 && v.kind==i.kind),"invalid value in sLoop");
     }
     
     sout("pLoop\n");
     ii=0;
     foreach(i,v;sarr.pLoop(s.val)){
-        assert(v.data==i.data+1,"incorrect value in pLoop");
+        assert(v.data==i.data+1||(sarr.arrayStruct.kindDim(i.kind)==0 && v.kind==i.kind),"incorrect value in pLoop");
         atomicAdd!(size_t)(ii,1);
     }
-    assert(ii==sarr.data.length,"incorrect number of iterations in pLoop");
+    assert(ii==iterRef,"incorrect number of iterations in pLoop");
     sout("pLoop1\n");
     ii=0;
     foreach(i,pk,lk,v;sarr.pLoop(s.val)){
         assert(sarr[lk,i]==v,"invalid indexing in pLoop2");
         atomicAdd!(size_t)(ii,1);
     }
-    assert(ii==sarr.data.length,"incorrect number of iterations in pLoop");
+    assert(ii==iterRef,"incorrect number of iterations in pLoop");
     sout("pLoop2\n");
     ii=0;
     foreach(pk,lk,v;sarr.pLoop(s.val)){
-        assert(lk.data+1==v.data,"incorrect value in pLoop");
+        assert(lk.data+1==v.data||(sarr.arrayStruct.kindDim(lk.kind)==0 && v.kind==lk.kind),"incorrect value in pLoop");
         atomicAdd!(size_t)(ii,1);
     }
-    assert(ii==sarr.data.length,"incorrect number of iterations in pLoop");
+    assert(ii==iterRef,"incorrect number of iterations in pLoop");
     sout("pLoop3\n");
     ii=0;
     foreach(ref v;sarr.pLoop(s.val)){
         v+=1;
         atomicAdd!(size_t)(ii,1);
     }
-    assert(ii==sarr.data.length,"incorrect number of iterations in pLoop");
+    assert(ii==iterRef,"incorrect number of iterations in pLoop");
     sout("pLoop4\n");
     foreach(i,v;sarr.pLoop(s.val)){
-        assert(i.data+2==v.data,"incorrect value in pLoop");
+        assert(i.data+2==v.data||(sarr.arrayStruct.kindDim(i.kind)==0 && v.kind==i.kind),"incorrect value in pLoop");
     }
     sout("loopTests end\n");
 }

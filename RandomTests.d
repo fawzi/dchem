@@ -9,5 +9,5 @@ version(NoTrace){} else { import tango.core.stacktrace.TraceExceptions; import b
 void main(char[][] args){
     serr(rand.toString());
     serr("\n");
-    mainTestFun(args,allTests!()(null));
+    mainTestFun(args,allTests!()());
 }
