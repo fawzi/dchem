@@ -1,0 +1,42 @@
+{
+startConfig:{
+    class:"dchem.FileConfig",
+    fileName:"config.xyz",
+    format:"xyz",
+    cell:[[8.45,0,0],
+        [0,24.0,0],
+        [0,0,8.45]]
+}
+
+sampler:{
+    class:dchem.SinglePoint,
+    calcE:1,
+    calcF:1,
+    method:{ class:Ref, name:poorM}
+}
+
+localExe:{
+    class:dchem.LocalExecuter,
+    baseDir:"bla",
+    maxInstances:1,
+    addToCache:1
+}
+
+poorM:{
+    class:"dchem.TemplateExecuter",
+    templateDir:"templates/cp2k1",
+    subs:{
+        cutoff:"800",
+        projName:"test1",
+    },
+    maxContexts:1,
+    methodClass:poorman,
+    executeDefaultE:"echo 1",
+    executeDefaultEF:"echo 2"
+    startConfig:{ class:Ref name:startConfig}
+    executer:{ class:Ref, name: localExe }
+}
+
+main:{class:Ref, name:sampler}
+
+}

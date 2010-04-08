@@ -1,0 +1,7 @@
+=== coord ===
+[coord.xyz]
+=== end ===
+targetDir: [targetDir]
+[bla]
+templateDir: [templateDir]
+cutoff: [cutoff]
