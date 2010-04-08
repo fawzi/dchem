@@ -9,6 +9,7 @@ import blip.container.BulkArray;
 import blip.io.BasicIO;
 import blip.container.GrowableArray;
 import blip.io.Console;
+import dchem.Common;
 
 /// an identity mapping on the kinds 0..nParticlesPerKind.length, with each nParticlesPerKind[i]
 /// particles
