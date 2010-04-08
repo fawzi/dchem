@@ -165,11 +165,12 @@ class Cell(T)
         hInv[]=T.init;
         x0[]=val;
     }
-    Cell!(V) dup(V=T)(){
+    Cell!(V) dupT(V=T)(){
         Cell!(V) res=void;
         res[]=this;
         return res;
     }
+    alias dupT!(T) dup;
     mixin(serializeSome("","periodic|h|hInv|x0"));
     mixin printOut!();
 }

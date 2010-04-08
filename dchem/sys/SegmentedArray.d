@@ -11,6 +11,7 @@ import blip.serialization.SerializationMixins;
 import blip.t.core.Variant;
 import blip.parallel.smp.WorkManager;
 import blip.container.AtomicSLink;
+import blip.container.Pool;
 import blip.io.Console;
 
 enum ParaFlags{
@@ -148,6 +149,7 @@ final class SegmentedArray(T){
     bool direct;
     alias T dtype;
     static size_t defaultOptimalBlockSize=32*1024/T.sizeof;
+    PoolI!(SegmentedArray) pool;
     
     mixin(serializeSome("dchem.sys.SegmentedArray","kRange|kindStarts|_data"));
     mixin printOut!();
@@ -344,14 +346,39 @@ final class SegmentedArray(T){
     }
     /// returns a copy of the segmented array
     SegmentedArray!(V) dupT(V=T)(){
-        return new SegmentedArray!(V)(arrayStruct,_data.dupT!(V),kRange,kindStarts.dup);
+        static if (is(V==T)){
+            if (pool!is null){
+                auto res=pool.getObj();
+                dupTo(res);
+                return res;
+            } else {
+                return new SegmentedArray(arrayStruct,_data.dup,kRange,kindStarts.dup);
+            }
+        } else {
+            return new SegmentedArray!(V)(arrayStruct,_data.dupT!(V),kRange,kindStarts.dup);
+        }
     }
     SegmentedArray dup(){
-        return new SegmentedArray(arrayStruct,_data.dup,kRange,kindStarts.dup);
+        return dupT!()();
     }
     /// returns a copy of the segmented array
     SegmentedArray deepdup(){
         return new SegmentedArray(arrayStruct,_data.deepdup,kRange,kindStarts.dup);
+    }
+    
+    /// length of a particle based loop on this (i.e skipping kinds without particles, and counting
+    /// the number of particles for dimension of size 0 if Min1, i.e. a single value per kind)
+    /// this is the size of sLoop and pLoop. The real storage size is .data.length
+    size_t length(){
+        size_t iterRef=this.data.length;
+        auto submap=this.arrayStruct.submapping;
+        for (auto k=this.kRange.kStart;k<this.kRange.kEnd;++k){
+            if (this.arrayStruct.kindDim(k)==0){
+                iterRef-=1;
+                iterRef+=submap.kindStarts[k-submap.lKRange.kStart+1]-submap.kindStarts[k-submap.lKRange.kStart];
+            }
+        }
+        return iterRef;
     }
     
     /// loops on the particles and each element of a multivaluated segmented array.
@@ -543,7 +570,19 @@ final class SegmentedArray(T){
             }
         }
     }
-    
+    /// an array just like this, but with unitialized values
+    SegmentedArray emptyCopy(){
+        if (pool){
+            return pool.getObj();
+        }
+        return new SegmentedArray(arrayStruct,BulkArray!(T).dummy,kRange,kindStarts.dup);
+    }
+    /// gives back the current array, its use after this call is an error
+    void giveBack(){
+        if (pool){
+            pool.giveBack(this);
+        }
+    }
 }
 
 /// inner loop variant (exec* method)
@@ -906,4 +945,20 @@ char[] segArrayBinLoop(int pFlags,char[] iterName, char[][]namesLocal1, char[] c
     res~=kLoopExt;
     res~="\n}\n";
     return res;
+}
+
+/// a pool for segmented arrays
+class SegArrPool(T):Pool!(SegmentedArray!(T)){
+    SegmentedArrayStruct aStruct;
+    
+    this(SegmentedArrayStruct s,size_t bufferSpace=8*batchSize, size_t maxEl=16*batchSize){
+        super(bufferSpace,maxEl);
+        assert(s!is null,"arrayStruct must be non null");
+        aStruct=s;
+    }
+    SegmentedArray!(T) allocateNew(){
+        auto res=new SegmentedArray!(T)(aStruct);
+        res.pool=this;
+        return res;
+    }
 }

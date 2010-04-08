@@ -381,16 +381,16 @@ class CalcContext:CalculationContext{
         mixin(withPSys("return pSys.dynVars.potentialEnergy;"));
     }
     void pos(SegmentedArray!(Vector!(Real,3)) newPos){
-        mixin(withPSys("pSys.dynVars.pos[]=newPos;"));
+        mixin(withPSys("pSys.dynVars.x.pos[]=newPos;"));
     }
     SegmentedArray!(Vector!(Real,3)) pos(){
         if (pSysReal!is null) {
-            return pSysReal.dynVars.pos;
+            return pSysReal.dynVars.x.pos;
         } else if (pSysLowP!is null) {
             if (posArr is null){
-                posArr=pSysLowP.dynVars.pos.dupT!(Vector!(Real,3))();
+                posArr=pSysLowP.dynVars.x.pos.dupT!(Vector!(Real,3))();
             } else {
-                pSysLowP.dynVars.pos.dupTo(posArr);
+                pSysLowP.dynVars.x.pos.dupTo(posArr);
             }
             return posArr;
         } else {
@@ -398,16 +398,16 @@ class CalcContext:CalculationContext{
         }
     }
     void dpos(SegmentedArray!(Vector!(Real,3)) newDpos){
-        mixin(withPSys("pSys.dynVars.dpos[]=newDpos;"));
+        mixin(withPSys("pSys.dynVars.dx.pos[]=newDpos;"));
     }
     SegmentedArray!(Vector!(Real,3)) dpos(){
         if (pSysReal!is null) {
-            return pSysReal.dynVars.dpos;
+            return pSysReal.dynVars.dx.pos;
         } else if (pSysLowP!is null) {
             if (posArr is null){
-                posArr=pSysLowP.dynVars.dpos.dupT!(Vector!(Real,3))();
+                posArr=pSysLowP.dynVars.dx.pos.dupT!(Vector!(Real,3))();
             } else {
-                pSysLowP.dynVars.dpos.dupTo(posArr);
+                pSysLowP.dynVars.dx.pos.dupTo(posArr);
             }
             return posArr;
         } else {
@@ -415,16 +415,16 @@ class CalcContext:CalculationContext{
         }
     }
     void mddpos(SegmentedArray!(Vector!(Real,3)) newMddpos){
-        mixin(withPSys("pSys.dynVars.pos[]=newMddpos;"));
+        mixin(withPSys("pSys.dynVars.mddx.pos[]=newMddpos;"));
     }
     SegmentedArray!(Vector!(Real,3)) mddpos(){
         if (pSysReal!is null) {
-            return pSysReal.dynVars.mddpos;
+            return pSysReal.dynVars.mddx.pos;
         } else if (pSysLowP!is null) {
             if (posArr is null){
-                posArr=pSysLowP.dynVars.mddpos.dupT!(Vector!(Real,3))();
+                posArr=pSysLowP.dynVars.mddx.pos.dupT!(Vector!(Real,3))();
             } else {
-                pSysLowP.dynVars.mddpos.dupTo(posArr);
+                pSysLowP.dynVars.mddx.pos.dupTo(posArr);
             }
             return posArr;
         } else {

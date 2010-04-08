@@ -99,14 +99,7 @@ struct RandomSegmentedArray(T,SegmentedArrayStruct.Flags flags=SegmentedArrayStr
 void testLoop(RandomSegmentedArrayStruct!() aStruct,SizeLikeNumber!(3,1) s){
     auto sarr=new SegmentedArray!(LocalPIndex)(aStruct.arrayStruct);
     
-    size_t iterRef=sarr.data.length;
-    auto submap=sarr.arrayStruct.submapping;
-    for (auto k=sarr.kRange.kStart;k<sarr.kRange.kEnd;++k){
-        if (sarr.arrayStruct.kindDim(k)==0){
-            iterRef-=1;
-            iterRef+=submap.kindStarts[k-submap.lKRange.kStart+1]-submap.kindStarts[k-submap.lKRange.kStart];
-        }
-    }
+    size_t iterRef=sarr.length;
     size_t ii=0;
     ii=0;
     foreach(i,ref v;sarr.sLoop){

@@ -234,8 +234,6 @@ ParticleSys!(T) readIn2PSys(T)(ReadSystem rIn,
          particlesStruct, particles, superParticle, subParticlesStruct,
          subParticleIdxs, kindsStruct, particleKinds);
     
-    DynamicsVars!(T) dynVars;
-    
     if (nCenter is null) nCenter=new NotificationCenter();
     
     sout("particleSystem\n");
@@ -252,10 +250,10 @@ ParticleSys!(T) readIn2PSys(T)(ReadSystem rIn,
             h[i,j]=scalar!(T)(rIn.cell[i][j]);
         }
     }
-    pSys.dynVars.cell=new Cell!(T)(h,rIn.periodic,Vector!(T,3)(rIn.x0[0],rIn.x0[1],rIn.x0[2]));
+    pSys.dynVars.x.cell=new Cell!(T)(h,rIn.periodic,Vector!(T,3)(rIn.x0[0],rIn.x0[1],rIn.x0[2]));
     
     sout("setPos\n");
-    auto posV=pSys.dynVars.pos;
+    auto posV=pSys.dynVars.x.pos;
     foreach (p;rIn.particles){
         posV[LocalPIndex(p.pIndex),0]=Vector!(T,3)(p.pos[0],p.pos[1],p.pos[2]);
     }

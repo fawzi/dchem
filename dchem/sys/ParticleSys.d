@@ -14,6 +14,8 @@ import blip.t.core.Variant;
 import blip.container.BitArray;
 import blip.container.Deque;
 import blip.container.BulkArray;
+import blip.parallel.smp.WorkManager;
+import blip.t.math.Math:sqrt;
 
 /// various levels of duplication
 enum PSCopyDepthLevel{
@@ -176,7 +178,7 @@ class SysKind: ParticleKind{
 /// assumes the existence of a boolean variable named "weak" that if true suppress the exception
 /// when some of the arrays are null and other aren't
 /// if cell is false does the operation only on the SegmentedArray.
-/// if nonEq is true checks tat the first variable (namesLocal[0].*) is different from all the others
+/// if nonEq is true checks that the first variable (namesLocal[0].*) is different from all the others
 char[] dynPVectorOp(char[][]namesLocal,char[] op,bool cell=true,bool nonEq=false)
 {
     char[] res;
@@ -238,8 +240,43 @@ char[] dynPVectorOp(char[][]namesLocal,char[] op,bool cell=true,bool nonEq=false
     return res;
 }
 
+/// a pool for dynamical properties
+class DynPPool(T){
+    this(SegmentedArrayStruct posStruct,SegmentedArrayStruct orientStruct,SegmentedArrayStruct dofStruct){
+        poolPos=new SegArrPool!(Vector!(T,3))(posStruct);
+        poolOrient=new SegArrPool!(Quaternion!(T))(orientStruct);
+        poolDof=new SegArrPool!(T)(dofStruct);
+    }
+    
+    SegArrPool!(Vector!(T,3)) poolPos;
+    SegArrPool!(Quaternion!(T)) poolOrient;
+    SegArrPool!(T) poolDof;
+    /// returns a postition like array
+    SegmentedArray!(Vector!(T,3)) newPos(){
+        return poolPos.getObj();
+    }
+    /// returns an orientation like array
+    SegmentedArray!(Quaternion!(T)) newOrient(){
+        return poolOrient.getObj();
+    }
+    /// returns a dof like array
+    SegmentedArray!(T) newDof(){
+        return poolDof.getObj();
+    }
+    void flush(){
+        poolPos.flush();
+        poolOrient.flush();
+        poolDof.flush();
+    }
+    void stopCaching(){
+        poolPos.stopCaching();
+        poolOrient.stopCaching();
+        poolDof.stopCaching();
+    }
+}
+
 /// a vector representing a state,dstate or mddstate, implements vector ops
-/// the basic type to represent a state is DynamicsVars, so that forces dependent on the velocity,...
+/// the basic type to represent a state is DynamicsVars, so that forces dependent on the velocity, forces,...
 /// can be represented cleanly, but for normal conservative systems DynPVector is a useful abstraction.
 struct DynPVector(T){
     Cell!(T) cell;
@@ -250,6 +287,32 @@ struct DynPVector(T){
     // other degrees of freedom to be integrated (internal coords, extended lagrangian,...)
     SegmentedArray!(T) dof;
     
+    /// returns a copy with a nullified cell
+    DynPVector nullCell(){
+        auto res=*this;
+        res.cell=null;
+        return res;
+    }
+    /// returns a copy with a duplicated cell
+    DynPVector dupCell(bool shouldThrow=true){
+        auto res=*this;
+        if (cell!is null){
+            res.cell=cell.dup;
+        } else if (shouldThrow){
+            throw new Exception("cannot duplicate null cell",__FILE__,__LINE__);
+        }
+        return res;
+    }
+    DynPVector *mkNullCell(){
+        cell=null;
+        return this;
+    }
+    void clear(){
+        cell=null;
+        pos=null;
+        orient=null;
+        dof=null;
+    }
     void axpby(V)(DynPVector!(V)x,V a,T y){
         if ((cell is x.cell) && cell !is null){
             throw new Exception("identical cells in axpby",__FILE__,__LINE__);
@@ -257,7 +320,6 @@ struct DynPVector(T){
         auto y=this;
         mixin(dynPVectorOp(["x","y"],"y.axpby(x,a,b);",true,false));
     }
-    
     void opMulAssign()(T scale){
         auto x=this;
         mixin(dynPVectorOp(["x"],"x*=scale;",true,false));
@@ -273,192 +335,353 @@ struct DynPVector(T){
     }
     void opSliceAssign()(T val){
         if (cell!is null)   cell[]=val;
-        if (pos!is null)    pos[] =Vector!(T,3)(val);
-        if (orient!is null) orient[]=Quaternion!(T).identity;
+        if (pos!is null)    pos[] =Vector!(T,3)(val,val,val);
+        if (orient!is null) orient[]=Quaternion!(T).identity; // not really possible, not a vector...
         if (dof!is null)    dof[]=val;
     }
+    
+    T opIndex(size_t idx){
+        if (pos!is null){
+            auto len=3*pos.data.length;
+            if (idx<len){
+                return pos.data[idx/3][idx%3];
+            }
+            idx-=len;
+        }
+        if (cell!is null){
+            if (idx<9){
+                return cell.h.cell[idx];
+            }
+            idx-=9;
+        }
+        if (dof!is null){
+            auto len=dof.data.length;
+            if (idx<len){
+                return dof.data[idx];
+            }
+            idx-=len;
+        }
+        if (orient!is null){
+            auto len=3*orient.data.length;
+            if (idx<len){
+                return orient.data[idx/3].xyzw.cell[idx%3];
+            }
+        }
+        throw new Exception("index out of bounds",__FILE__,__LINE__);
+    }
+
+    void opIndexAssign(T val,size_t idx){
+        if (pos!is null){
+            auto len=3*pos.data.length;
+            if (idx<len){
+                auto v=pos.data.ptrI(idx/3);
+                v.opIndexAssign(val,idx%3);
+                return;
+            }
+            idx-=len;
+        }
+        if (cell!is null){
+            if (idx<9){
+                cell.h.cell[idx]=val;
+                return;
+            }
+            idx-=9;
+        }
+        if (dof!is null){
+            auto len=dof.data.length;
+            if (idx<len){
+                dof.data.opIndexAssign(val,idx);
+                return;
+            }
+            idx-=len;
+        }
+        if (orient!is null){
+            auto len=3*orient.data.length;
+            if (idx<len){
+                auto p=orient.data.ptrI(idx/3);
+                p.xyzw.cell[idx%3]=val;
+                auto n=p.xyzw.x*p.xyzw.x+p.xyzw.y*p.xyzw.y+p.xyzw.z*p.xyzw.z;
+                if (n>1){
+                    p.xyzw/=sqrt(n);
+                    p.xyzw.w=0;
+                } else {
+                    p.xyzw.w=sqrt(1-n);
+                }
+                return;
+            }
+        }
+        throw new Exception("index out of bounds",__FILE__,__LINE__);
+    }
+    
+    size_t length(){
+        size_t len=0;
+        if (pos!is null){
+            len+=3*pos.data.length;
+        }
+        if (cell!is null){
+            len+=9;
+        }
+        if (dof!is null){
+            len+=dof.data.length;
+        }
+        if (orient!is null){
+            len+=3*orient.data.length;
+        }
+        return len;
+    }
+    
+    U dot(V,U=typeof(T.init+V.init))(DynPVector!(V) v2){ // could overlap the various loops...
+        U res=0;
+        Exception e=null;
+        void doPosLoop(){
+            try{
+                if (e!is null) return;
+                assert(v2.pos!is null,"Different vectors in dot");
+                assert(v2.pos.arrayStruct is pos.arrayStruct,"Different array structs in dot");
+                auto d1=a2NA2((cast(T*)pos.data.ptr)[3*pos.data.length]);
+                auto d2=a2NA2((cast(T*)v2.pos.data.ptr)[3*v2.pos.data.length]);
+                auto rAtt=dot(d1,d2);
+                atomicAdd(res,cast(U)rAtt);
+            } catch (Exception eTmp){
+                e=new Exception("exception in doPosLoop",__FILE__,__LINE__,eTmp);
+            }
+        }
+        void doDofLoop(){
+            try{
+                if (e!is null) return;
+                assert(v2.dof!is null,"Different vectors in dot");
+                assert(v2.dof.arrayStruct is dof.arrayStruct,"Different array structs in dot");
+                if (dof.length==0) return;
+                auto d1=a2NA2(dof.data.data);
+                auto d2=a2NA2(v2.dof.data);
+                auto rAtt=dot(d1,d2);
+                atomicAdd(res,cast(U)rAtt);
+            } catch(Exception eTmp){
+                e=new Exception("exception in doDofLoop",__FILE__,__LINE__,eTmp);
+            }
+        }
+        void doOrientLoop(){
+            try{
+                if (e!is null) return;
+                assert(v2.orient!is null,"Different vectors in dot");
+                assert(v2.orient.arrayStruct is orient.arrayStruct,"Different array structs in dot");
+                if (orient.length==0) return;
+                auto d1=NArray!(T,2)([cast(index_type)4*T.sizeof,T.sizeof],[cast(index_type)orient.data.length,3],
+                    cast(index_type)0,(cast(T*)orient.data.ptr)[4*orient.data.length],0);
+                auto d2=NArray!(T,2)([cast(index_type)4*T.sizeof,T.sizeof],[cast(index_type)v2.orient.data.length,3],
+                    cast(index_type)0,(cast(T*)v2.orient.data.ptr)[4*v2.orient.data.length],0);
+                auto rAtt=dot(d1,d2);
+                atomicAdd(res,cast(U)rAtt);
+            } catch(Exception eTmp){
+                e=new Exception("exception in doOrientLoop",__FILE__,__LINE__,eTmp);
+                res=-1;
+            }
+        }
+        Task("DynPVectorDot",
+            delegate void(){
+                if (pos!is null){
+                    Task("DynPVectorDotPos",&doPosLoop).autorelease.submitYield();
+                } else {
+                    assert(v2.pos is null,"different vectors in dot");
+                }
+                if (cell!is null){
+                    U resTmp=0;
+                    auto c1=cell.h.cell[];
+                    auto c2=v2.cell.h.cell[];
+                    for(int i=0;i<9;++i){
+                        resTmp+=c1[i]*c2[i];
+                    }
+                    atomicAdd(res,resTmp);
+                } else {
+                    assert(v2.cell is null,"different vectors in dot");
+                }
+                if (dof!is null){
+                    Task("DynPVectorDotDof",&doDofLoop).autorelease.submitYield();
+                } else {
+                    assert(v2.dof is null,"different vectors in dot");
+                }
+                if (orient!is null){
+                    Task("DynPVectorDotOrient",&doOrientLoop).autorelease.submit();
+                } else {
+                    assert(v2.orient is null,"different vectors in dot");
+                }
+            }
+        ).autorelease.executeNow();
+        if (e!is null) throw e;
+    }
+    
+    int opApply(int delegate(ref T)loopBody){
+        int res=0;
+        Exception e=null;
+        void doPosLoop(){
+            if (res!=0) return;
+            try{
+                auto resTmp=pos.pLoop.opApply(delegate int(ref Vector!(T,3) v){ // could be flattened using a NArray on pos.data like the dot...
+                    if (auto res=loopBody(v.x)) return res;
+                    if (auto res=loopBody(v.y)) return res;
+                    if (auto res=loopBody(v.z)) return res;
+                    return 0;
+                });
+            } catch (Exception eTmp){
+                e=new Exception("exception in doPosLoop",__FILE__,__LINE__,eTmp);
+                res=-1;
+            }
+        }
+        void doDofLoop(){
+            try{
+                auto resTmp=dof.data.opApply(loopBody);
+                if (resTmp!=0) res=resTmp;
+            } catch(Exception eTmp){
+                e=new Exception("exception in doDofLoop",__FILE__,__LINE__,eTmp);
+                res=-1;
+            }
+        }
+        void doOrientLoop(){
+            try{
+                auto resTmp=orient.data.opApply(delegate int(ref Quaternion!(T) q){ // could be flattened using a NArray on pos.data...
+                    if(auto r=loopBody(q.xyzw.x)) return r;
+                    if(auto r=loopBody(q.xyzw.y)) return r;
+                    if(auto r=loopBody(q.xyzw.z)) return r;
+                });
+                if (resTmp!=0) res=resTmp;
+            } catch(Exception eTmp){
+                e=new Exception("exception in doOrientLoop",__FILE__,__LINE__,eTmp);
+                res=-1;
+            }
+        }
+        Task("DynPVectorOpApply",
+            delegate void(){
+                if (pos!is null){
+                    Task("DynPVectorOpApplyPos",&doPosLoop).autorelease.submitYield();
+                }
+                if (cell!is null){
+                    auto resTmp=cell.h.opApply(loopBody);
+                    if (resTmp!=0) res=resTmp;
+                }
+                if (dof!is null){
+                    Task("DynPVectorOpApplyDof",&doDofLoop).autorelease.submitYield();
+                }
+                if (orient!is null){
+                    Task("DynPVectorOpApplyOrient",&doOrientLoop).autorelease.submit();
+                }
+            }
+        ).autorelease.executeNow();
+        if (e) throw e;
+        return res;
+    }
+    
+    DynPVector emptyCopy(){
+        DynPVector res;
+        if (cell!is null) res.cell=cell.dup();
+        if (pos!is null) res.pos=pos.emptyCopy();
+        if (orient!is null) res.orient=orient.emptyCopy();
+        if (dof!is null) res.dof=dof.emptyCopy();
+        return res;
+    }
+    void giveBack(){
+        cell=null;
+        if (pos!is null) pos.giveBack();
+        pos=null;
+        if (orient!is null) orient.giveBack();
+        orient=null;
+        if (dof!is null) dof.giveBack();
+        dof=null;
+    }
+    DynPVector dup(){
+        DynPVector res;
+        if (cell!is null) res.cell=cell.dup();
+        if (pos!is null) res.pos=pos.dup();
+        if (orient!is null) res.orient=orient.dup();
+        if (dof!is null) res.dof=dof.dup();
+        return res;
+    }
+    DynPVector!(V) dupT(V)(){
+        DynPVector!(V) res;
+        if (cell!is null) res.cell=cell.dupT!(V);
+        if (pos!is null) res.pos=pos.dupT!(Vector!(V,3));
+        if (orient!is null) res.orient=orient.dupT!(Quaternion!(V));
+        if (dof!is null) res.dof=dof.dupT!(V);
+        return res;
+    }
+    mixin(serializeSome("dchem.sys.DynamicsVars("~T.stringof~")","cell|pos|orient|dof"));
+    mixin printOut!();
 }
 
 /// variables that normally an integrator should care about
 // (put here mainly for tidiness reasons)
 struct DynamicsVars(T){
+    DynPPool!(T) pool;
     alias T dtype;
     Real potentialEnergy; /// potential energy of the system (NAN if unknown)
 
-    // index
-    // cell
-    Cell!(T) cell;    /// the current cell
-    Cell!(T) dcell;   /// normally not used
-    Cell!(T) mddcell; /// stress tensor (often not propagated)
-
     /// structure of all position based arrays
     SegmentedArrayStruct posStruct;
-    
-    // position in 3D space
-    SegmentedArray!(Vector!(T, 3)) pos;
-    SegmentedArray!(Vector!(T, 3)) dpos;
-    SegmentedArray!(Vector!(T, 3)) mddpos;
-
     /// structure of all orientation based arrays
     SegmentedArrayStruct orientStruct;
-
-    // orientation (quaternions)
-    SegmentedArray!(Quaternion!(T)) orient;
-    SegmentedArray!(Quaternion!(T)) dorient;
-    SegmentedArray!(Quaternion!(T)) mddorient;
-
     /// structure of all dof (degrees of freedom) arrays
     SegmentedArrayStruct dofStruct;
-
-    // other degrees of freedom to be integrated (internal coords, extended lagrangian,...)
-    SegmentedArray!(T) dof;
-    SegmentedArray!(T) ddof;
-    SegmentedArray!(T) mdddof;
+    
+    /// position vector
+    DynPVector!(T) x;
+    /// velocities vector
+    DynPVector!(T) dx;
+    /// forces vector
+    DynPVector!(T) mddx;
     
     /// reallocates the segmented array structures, invalidates everything
     void reallocStructs(SysStruct sys){
         posStruct=new SegmentedArrayStruct("posStruct",sys.fullSystem,KindRange(sys.levels[0].kStart,sys.levels[$-1].kEnd));
         orientStruct=new SegmentedArrayStruct("orientStruct",sys.fullSystem,KindRange(sys.levels[0].kStart,sys.levels[$-1].kEnd));
         dofStruct=new SegmentedArrayStruct("dofStruct",sys.fullSystem,KindRange(sys.levels[0].kStart,sys.levels[$-1].kEnd));
-        
-           pos=null;
-          dpos=null;
-        mddpos=null;
-           orient=null;
-          dorient=null;
-        mddorient=null;
-           dof=null;
-          ddof=null;
-        mdddof=null;
+        if (pool!is null){
+            pool.flush(); // call stopCaching???
+        }
+        pool=new DynPPool!(T)(posStruct,orientStruct,dofStruct);
+        x.clear();
+        dx.clear();
+        mddx.clear();
     }
     
-    enum DynPVCreation{
-        NormalPtrCopy,
-        DuplicateCell,
-        NullCell,
-    }
-    /// position vector
-    DynPVector!(T) x(DynPVCreation how=DynPVCreation.NormalPtrCopy){
-        DynPVector!(T) res;
-        switch(how){
-        case DynPVCreation.NormalPtrCopy:
-            res.cell=cell;
-            break;
-        case DynPVCreation.DuplicateCell:
-            res.cell=cell.dup();
-            break;
-        case DynPVCreation.NullCell:
-            res.cell=null;
-        }
-        res.pos=pos;
-        res.orient=orient;
-        res.dof=dof;
-        return res;
-    }
-    /// velocities vector
-    DynPVector!(T) dx(DynPVCreation how=DynPVCreation.NormalPtrCopy){
-        DynPVector!(T) res;
-        switch(how){
-        case DynPVCreation.NormalPtrCopy:
-            res.cell=dcell;
-            break;
-        case DynPVCreation.DuplicateCell:
-            res.cell=dcell.dup();
-            break;
-        case DynPVCreation.NullCell:
-            res.cell=null;
-        }
-        res.pos=dpos;
-        res.orient=dorient;
-        res.dof=ddof;
-        return res;
-    }
-    /// forces vector
-    DynPVector!(T) mddx(DynPVCreation how=DynPVCreation.NormalPtrCopy){
-        DynPVector!(T) res;
-        switch(how){
-        case DynPVCreation.NormalPtrCopy:
-            res.cell=mddcell;
-            break;
-        case DynPVCreation.DuplicateCell:
-            res.cell=mddcell.dup();
-            break;
-        case DynPVCreation.NullCell:
-            res.cell=null;
-        }
-        res.pos=mddpos;
-        res.orient=mddorient;
-        res.dof=mdddof;
-        return res;
-    }
-    /// ensures that the positions are allocated
-    void checkX(){
+    /// checks that the given vector is allocated
+    void checkAllocDynPVect(V)(DynPVector!(V)* v){
         assert(posStruct!is null);
         assert(orientStruct!is null);
         assert(dofStruct!is null);
-        if (pos is null)    pos=new SegmentedArray!(Vector!(T,3))(posStruct);
-        if (orient is null) orient=new SegmentedArray!(Quaternion!(T))(orientStruct);
-        if (dof is null)    dof=new SegmentedArray!(T)(dofStruct);
+        static if (is(V==T)){
+            if (v.pos is null)    v.pos=pool.newPos();
+            if (v.orient is null) v.orient=pool.newOrient();
+            if (v.dof is null)    v.dof=pool.newDof();
+        } else {
+            if (v.pos is null)    v.pos=new SegmentedArray!(Vector!(V,3))(posStruct);
+            if (v.orient is null) v.orient=new SegmentedArray!(Quaternion!(V))(orientStruct);
+            if (v.dof is null)    v.dof=new SegmentedArray!(V)(dofStruct);
+        }
+    }
+    
+    /// ensures that the positions are allocated
+    void checkX(){
+        checkAllocDynPVect(&x);
     }
     /// ensures that the velocities are allocated
     void checkDx(){
-        assert(posStruct!is null);
-        assert(orientStruct!is null);
-        assert(dofStruct!is null);
-        if (dpos is null)    dpos=new SegmentedArray!(Vector!(T,3))(posStruct);
-        if (dorient is null) dorient=new SegmentedArray!(Quaternion!(T))(orientStruct);
-        if (ddof is null)    ddof=new SegmentedArray!(T)(dofStruct);
+        checkAllocDynPVect(&dx);
     }
     /// ensures that the forces are allocated
     void checkMddx(){
-        assert(posStruct!is null);
-        assert(orientStruct!is null);
-        assert(dofStruct!is null);
-        if (mddpos is null)    mddpos=new SegmentedArray!(Vector!(T,3))(posStruct);
-        if (mddorient is null) mddorient=new SegmentedArray!(Quaternion!(T))(orientStruct);
-        if (mdddof is null)    mdddof=new SegmentedArray!(T)(dofStruct);
+        checkAllocDynPVect(&mddx);
     }
     
     void opSliceAssign(V)(ref DynamicsVars!(V) d2){
         potentialEnergy=d2.potentialEnergy;
-        if (this.cell!is null && d2.cell !is null)
-            this.cell[]=d2.cell;
-        if (this.dcell!is null && d2.dcell !is null)
-            this.dcell[]=d2.dcell;
-        if (this.mddcell!is null && d2.mddcell !is null)
-            this.mddcell[]=d2.mddcell;
-        if (this.pos!is null && d2.pos !is null)
-            d2.pos.dupTo(pos);
-        if (this.dpos!is null && d2.dpos !is null)
-            d2.dpos.dupTo(dpos);
-        if (this.mddpos!is null && d2.mddpos !is null)
-            d2.mddpos.dupTo(mddpos);
-        if (this.orient!is null && d2.orient !is null)
-            d2.orient.dupTo(orient);
-        if (this.dorient!is null && d2.dorient !is null)
-            d2.dorient.dupTo(dorient);
-        if (this.mddorient!is null && d2.mddorient !is null)
-            d2.mddorient.dupTo(mddorient);
-        if (this.dof!is null && d2.dof !is null)
-            d2.dof.dupTo(dof);
-        if (this.ddof!is null && d2.ddof !is null)
-            d2.ddof.dupTo(ddof);
-        if (this.mdddof!is null && d2.mdddof !is null)
-            d2.mdddof.dupTo(mdddof);
+        x[]=d2.x;
+        dx[]=d2.dx;
+        mddx[]=d2.mddx;
     }
     void opSliceAssign()(T val){
-        if (cell!is null)       cell[]=val;
-        if (dcell!is null)      dcell[]=val;
-        if (mddcell!is null)    mddcell[]=val;
-        if (pos!is null)        pos[]=val;
-        if (dpos!is null)       dpos[]=val;
-        if (mddpos!is null)     mddpos[]=val;
-        if (orient!is null)     orient[]=val;
-        if (dorient!is null)    dorient[]=val;
-        if (mddorient!is null)  mddorient[]=val;
-        if (dof!is null)        dof[]=val;
-        if (ddof!is null)       ddof[]=val;
-        if (mdddof!is null)     mdddof[]=val;
+        potentialEnergy=0;
+        x[]=val;
+        dx[]=val;
+        mddx[]=val;
     }
     void axpby(V)(DynamicsVars!(V) v,V a,T b){
         x.axpby!(V)(v.x,a,b);
@@ -479,18 +702,9 @@ struct DynamicsVars(T){
         if (level>=PSCopyDepthLevel.DynProperties){
             DynamicsVars!(V) res;
             res.potentialEnergy=potentialEnergy;
-            res.cell=cell.dup!(V);
-            res.dcell=dcell.dup!(V);
-            res.mddcell=mddcell.dup!(V);
-            res.pos=pos.dupT!(Vector!(V, 3))();
-            res.dpos=dpos.dupT!(Vector!(V, 3))();
-            res.mddpos=mddpos.dupT!(Vector!(V, 3))();
-            res.orient=orient.dupT!(Quaternion!(V))();
-            res.dorient=orient.dupT!(Quaternion!(V))();
-            res.mddorient=orient.dupT!(Quaternion!(V))();
-            res.dof=dof.dupT!(V)();
-            res.ddof=ddof.dupT!(V)();
-            res.mdddof=mdddof.dupT!(V)();
+            res.x=x.dupT!(V);
+            res.dx=dx.dupT!(V);
+            res.mddx=mddx.dupT!(V);
             return res;
         }
         return *this;
@@ -499,7 +713,40 @@ struct DynamicsVars(T){
         return dupT!(T)(level);
     }
     
-    mixin(serializeSome("dchem.sys.DynamicsVars("~T.stringof~")","potentialEnergy|cell|pos|dpos|mddpos|orient|dorient|mddorient|dof|ddof|mdddof"));
+    size_t length(){
+        return x.length+dx.length+mddx.length;
+    }
+    /// flat indexing of the contents
+    T opIndex(size_t i){
+        auto len=x.length;
+        if (i<len){
+            return x[i];
+        }
+        i-=len;
+        len=dx.length;
+        if (i<len){
+            return dx[i];
+        }
+        i-=len;
+        assert(i<mddx.length,"index out of bounds");
+        return mddx[i];
+    }
+    /// flat indexing of the contents
+    T opIndexAssign(T val,size_t i){
+        auto len=x.length;
+        if (i<len){
+            return x[i];
+        }
+        i-=len;
+        len=dx.length;
+        if (i<len){
+            return dx[i];
+        }
+        i-=len;
+        assert(i<mddx.length,"index out of bounds");
+        return mddx[i];
+    }
+    mixin(serializeSome("dchem.sys.DynamicsVars("~T.stringof~")","potentialEnergy|x|dx|mddx"));
     mixin printOut!();
 }
 
@@ -686,7 +933,7 @@ class ParticleSys(T): CopiableObjectI,Serializable
     
     mixin(serializeSome("dchem.sys.ParticleSys",
         `sysStruct: structure of the system (particle, particle kinds,...)
-        dynVars: dynamic variables (position,cell,velocities)`));
+        dynVars: dynamic variables (position,cell,velocities,forces,...)`));
     mixin printOut!();
 }
 

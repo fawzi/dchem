@@ -279,11 +279,11 @@ class ExecuterContext:CalcContext{
     }
     
     void writeXyz(CharSink s){
-        mixin(withPSys("WriteOut.writeXyz(s,pSys.sysStruct,pSys.dynVars.pos,pSys.name);"));
+        mixin(withPSys("WriteOut.writeXyz(s,pSys.sysStruct,pSys.dynVars.x.pos,pSys.name);"));
     }
 
     void writeTurboCoord(CharSink s){
-        mixin(withPSys("WriteOut.writeTurboCoord(s,pSys.sysStruct,pSys.dynVars.pos);"));
+        mixin(withPSys("WriteOut.writeTurboCoord(s,pSys.sysStruct,pSys.dynVars.x.pos);"));
     }
     
     void updateEF(bool updateE=true,bool updateF=true){

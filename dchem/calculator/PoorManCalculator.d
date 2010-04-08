@@ -13,8 +13,8 @@ import blip.io.Console;
 
 void clearEF(T)(ParticleSys!(T)pSys){
     pSys.potentialEnergy=T.init;
-    if (pSys.dynVars.mddpos !is null)
-        pSys.dynVars.mddpos[]=T.init;
+    if (pSys.dynVars.mddx.pos !is null)
+        pSys.dynVars.mddx.pos[]=T.init;
     // clear also other forces??? for now assume no
 }
 
@@ -48,7 +48,7 @@ class PoorManContext:ExecuterContext{
 
         auto externalOrder=pSys.sysStruct.externalOrder;
         pSys.checkMddx();
-        auto f=pSys.dynVars.mddpos;
+        auto f=pSys.dynVars.mddx.pos;
         foreach (idx;externalOrder.lSortedPIndex.pLoop){
             Vector!(T,3) pos;
             p(pos.x)(pos.y)(pos.z);
