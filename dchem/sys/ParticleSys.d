@@ -900,7 +900,7 @@ class ParticleSys(T): CopiableObjectI,Serializable
     
     /// system structure changed (particle added/removed, kinds added/removed)
     /// the segmented array structs should be initialized, and modifiable.
-    /// positions,... are not yet valid
+    /// positions,... are not yet available
     void sysStructChanged(){
         foreach(pKind;sysStruct.particleKinds.pLoop){
             pKind.sysStructChanged(Variant(this));

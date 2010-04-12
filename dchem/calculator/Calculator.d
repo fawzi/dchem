@@ -2,7 +2,7 @@
 module dchem.calculator.Calculator;
 import dchem.Common;
 import blip.util.NotificationCenter;
-import blip.t.core.Traits: cmp;
+import blip.t.core.Traits: cmp,ctfe_rep;
 import blip.t.core.Variant;
 import blip.io.BasicIO;
 import blip.io.Console;
@@ -344,7 +344,7 @@ char[] withPSys(char[]op,char[]from=""){
         auto pSys=`~from~`pSysLowP;
         `~op~`
     } else {
-        throw new Exception("no valid particle system in context "~`~from~`contextId,__FILE__,__LINE__);
+        throw new Exception("no valid particle system in context "~`~from~`contextId~" trying to execute "~`~ctfe_rep(op)~`,__FILE__,__LINE__);
     }
     `;
 }
