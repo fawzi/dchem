@@ -516,7 +516,7 @@ ReadSystem readCarHeader(TextParser!(char) tp,ReadSystem sys=null){
             {
                 real[6] params;
                 int iPos=3;
-                size_t ate;
+                uint ate;
                 for (int iparam=0;iparam<6;iparam++){
                     params[iparam]=Float.parse(line[iPos..iPos+10],&ate);
                     if (trim(line[iPos+ate..iPos+10]).length!=0) break;
@@ -548,7 +548,7 @@ ReadSystem readCarHeader(TextParser!(char) tp,ReadSystem sys=null){
                 params[3]=90;
                 params[4]=90;
                 int iPos=3;
-                size_t ate;
+                uint ate;
                 for (int iparam=0;iparam<3;iparam++){
                     params[[0,1,5][iparam]]=Float.parse(line[iPos..iPos+10],&ate);
                     if (trim(line[iPos+ate..iPos+10]).length!=0) break;
@@ -581,7 +581,7 @@ ReadSystem readCarHeader(TextParser!(char) tp,ReadSystem sys=null){
             if (line.length>64 && isNumber(line[3..13]))
             {
                 int iPos=3;
-                size_t ate;
+                uint ate;
                 for (int iparam=0;iparam<1;iparam++){
                     params[iparam]=Float.parse(line[iPos..iPos+10],&ate);
                     if (trim(line[iPos+ate..iPos+10]).length!=0) break;
