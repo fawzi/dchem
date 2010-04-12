@@ -34,7 +34,7 @@ class ParticleKindMap{
                         symb=symb[0..1];
                     }
                 } else {
-                    symb=symb[0..1];
+                    symb=k.name[0..1];
                 }
                 if (atomFromSymbol(symb,true)is null){
                     symb=null;
@@ -207,11 +207,12 @@ ParticleSys!(T) readIn2PSys(T)(ReadSystem rIn,
         }
     }
 
-    auto subParticlesStruct=new SegmentedArrayStruct("subparticleStruct",fullSystem,KindRange(levels[1].kStart,levels[3].kEnd),nSubparticles);
+    auto subParticlesStruct=new SegmentedArrayStruct("subparticleStruct",fullSystem,KindRange(levels[1].kStart,levels[3].kEnd),nSubparticles[levels[1].kStart..levels[3].kEnd]);
     auto subParticleIdxs=new SegmentedArray!(PIndex)(subParticlesStruct);
     nSub[]=0;
-    foreach(lIdx,superP;superParticle.sLoop){ // sequential, we need to guarantee a deterministic result
-        auto idxAtt=nSub.ptrI(lIdx,0);
+    foreach(lIdx,superP;superParticle[KindRange(levels[0].kStart,levels[2].kEnd)].sLoop){ // sequential, we need to guarantee a deterministic result
+        nSub.dtype* idxAtt;
+        idxAtt=nSub.ptrI(superP,0);
         *(subParticleIdxs.ptrI(superP,*idxAtt))=PIndex(lIdx);
         ++(*idxAtt);
     }
@@ -239,9 +240,11 @@ ParticleSys!(T) readIn2PSys(T)(ReadSystem rIn,
     sout("particleSystem\n");
     // particleSystem
     auto pSys=new ParticleSys!(T)(0,rIn.name,sysStruct,nCenter);
-    
+    sout("will reallocStructs\n");
     pSys.reallocStructs();
+    sout("did reallocStructs\n");
     pSys.sysStructChanged();
+    sout("sysStructChanged\n");
     
     pSys.checkX();
     Matrix!(T,3,3) h;

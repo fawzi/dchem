@@ -16,9 +16,11 @@ interface Constraint{
     /// related to the change in the state (sup norm) + change in the contrained value
     /// if you have constraints on the velocities,... the update
     /// is not restricted to the x (position) values
-    real applyR(ParticleSys!(Real) state);
+    /// if partial is true only one iteration is performed, so the contraint might be unfulfilled
+    /// (useful when called by a llop that tries to fulfull various constraints at once)
+    real applyR(ParticleSys!(Real) state,bool partial=false);
     /// ditto
-    real applyR(ParticleSys!(LowP) state);
+    real applyR(ParticleSys!(LowP) state,bool partial=false);
     /// removes the component of dr in state that is along a constraint, puts what is
     /// removed in diff if given. (projection state=(1-pi)state , diff=pi state, where pi
     /// is the projection in the space spanned by the gradient of the constraints).
@@ -206,16 +208,16 @@ class MultiConstraint: Constraint{
         return res;
     }
     
-    real applyRT(T)(ParticleSys!(T) state){
+    real applyRT(T)(ParticleSys!(T) state,bool partial=false){
         Real maxErr,oldMaxErr;
         bool checkConflicts=false;
         for (uint i=0;i!=maxShakeIter;++i){
             maxErr=0;
             foreach (subC;subConstraints){
-                auto err=subC.applyR(state);
+                auto err=subC.applyR(state,true);
                 maxErr=max(maxErr,err);
             }
-            if (maxErr<targetPrecision) break;
+            if (maxErr<targetPrecision || partial) break;
             if (i!=0) {
                 if (maxErr>=oldMaxErr){
                     checkConflicts=true;
@@ -227,16 +229,16 @@ class MultiConstraint: Constraint{
         if (checkConflicts){
             hasConflicts(state,serr.call); // should probably use another log...
         }
-        if (maxErr>targetPrecision){
+        if (!partial && maxErr>targetPrecision){
             // to do cg optimization
             assert(0,"cg optimization not yet implemented");
         }
     }
-    real applyR(ParticleSys!(LowP) state){
-        return applyRT!(LowP)(state);
+    real applyR(ParticleSys!(LowP) state,bool partial=false){
+        return applyRT!(LowP)(state,partial);
     }
-    real applyR(ParticleSys!(Real) state){
-        return applyRT!(Real)(state);
+    real applyR(ParticleSys!(Real) state,bool partial=false){
+        return applyRT!(Real)(state,partial);
     }
     
     void applyDRT(T)(ParticleSys!(T) state,ParticleSys!(T) diff=null){

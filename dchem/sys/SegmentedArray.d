@@ -43,8 +43,7 @@ final class SegmentedArrayStruct{
         this.name=name;
         this.submapping = submapping;
         this.kRange     = kRange    ;
-        this.flags      = f;
-        this.flags=(f& ~Flags.Direct)|(((submapping.mappingKind & MappingKind.Direct)!=0)?
+        this.flags=(f& ~(Flags.Direct|Flags.Frozen))|(((submapping.mappingKind & MappingKind.Direct)!=0)?
                 Flags.Direct:Flags.None);
         auto nkinds=cast(size_t)(kRange.kEnd-kRange.kStart);
         if (kindDims.length==0 && nkinds!=0){
@@ -52,13 +51,13 @@ final class SegmentedArrayStruct{
             kindDims[]=0; // should be the default
         }
         this._kindDims   = kindDims  ;
-        assert(_kindDims.length==nkinds);
+        assert(_kindDims.length==nkinds,"kindDims has the wrong length");
         assert(kRange in submapping.lKRange,"submapping is smaller than current kRange");
-        if ((flags & Flags.Frozen)!=0){
-            recalculateStarts();
-        } else {
+        //if ((flags & Flags.Frozen)!=0){
+        //    recalculateStarts();
+        //} else {
             kindStarts[]=index_type.max;
-        }
+        //}
     }
     /// ditto
     this(char[] name,SubMapping submapping, KindRange kRange, NArray!(index_type,1) kindDims,Flags f=Flags.Min1){
@@ -129,7 +128,7 @@ final class SegmentedArrayStruct{
     index_type addToKindDim(KindIdx k,index_type val){
         assert(k in kRange,"kind out of range");
         auto i=cast(size_t)(k-kRange.kStart);
-        if((flags & Flags.Frozen)==0)
+        if((flags & Flags.Frozen)!=0)
             throw new Exception("index assign on frozen struct",__FILE__,__LINE__);
         return atomicAdd(_kindDims[cast(size_t)i],val);
     }
@@ -165,13 +164,15 @@ final class SegmentedArray(T){
     this(SegmentedArrayStruct arrayStruct, BulkArray!(T)data=BulkArray!(T).dummy,
         KindRange kRange=KindRange.all,index_type[] kindStarts=null)
     in{
+        assert(arrayStruct!is null,"arrayStruct must be valid");
         auto myKRange=kRange;
         if (kRange.kEnd==KindIdx.init) myKRange=arrayStruct.kRange;
         if (kindStarts!is null){
+            arrayStruct.freeze;
             auto nkinds=cast(size_t)(myKRange.kEnd-myKRange.kStart);
+            assert(myKRange in arrayStruct.kRange,"kRange out of bounds");
             assert(kindStarts.length==nkinds+1,"kindStarts has wrong size");
             auto kindShift=cast(size_t)(myKRange.kStart-arrayStruct.kRange.kStart);
-            
             for (size_t i=0;i<=nkinds;++i){
                 assert(kindStarts[i]==kindStarts[0]+arrayStruct.kindStarts[kindShift+i]-arrayStruct.kindStarts[kindShift],
                     "invalid kindStarts");
@@ -187,9 +188,9 @@ final class SegmentedArray(T){
         }
         assert(this.kRange in arrayStruct.kRange);
         this.kindStarts=kindStarts;
-        if (this.kindStarts is null){
+        if (this.kindStarts.length==0){
             auto nkinds=cast(size_t)(this.kRange.kEnd-this.kRange.kStart);
-            this.kindStarts=new index_type[cast(size_t)(nkinds+1)];
+            this.kindStarts=new index_type[nkinds+1];
             auto kindShift=cast(size_t)(this.kRange.kStart-arrayStruct.kRange.kStart);
             for (size_t i=0;i<=nkinds;++i){
                 this.kindStarts[i]=arrayStruct.kindStarts[kindShift+i]-arrayStruct.kindStarts[kindShift];

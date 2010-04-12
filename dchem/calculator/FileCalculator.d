@@ -269,6 +269,7 @@ class ExecuterContext:CalcContext{
         else
             _nCenter=pSys.nCenter;
         sout("pippo_a8\n");
+        _pSysReal=pSys;
         
         templateH.longSubs["coord.xyz"]=&writeXyz;
         templateH.longSubs["turboCoord"]=&writeTurboCoord;

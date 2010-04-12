@@ -42,22 +42,34 @@ class PoorManContext:ExecuterContext{
         sout("pippo5\n");
     }
     void readFomattedWhitespaceF(T)(ParticleSys!(T)pSys){
+        sout("pippo r1\n");
         scope inF=toReaderChar(templateH.targetDir.file(forceFile).input);
-        scope(exit){ inF.shutdownInput(); }
+        sout("pippo r2\n");
+        scope(exit){ sout("will shutdownInput\n"); inF.shutdownInput(); sout("did shutdownInput\n"); }
+        sout("pippo r3\n");
         scope p=new TextParser!(char)(inF);
 
+        sout("pippo r4\n");
         auto externalOrder=pSys.sysStruct.externalOrder;
+        sout("pippo r5\n");
         pSys.checkMddx();
+        sout("pippo r6\n");
         auto f=pSys.dynVars.mddx.pos;
-        foreach (idx;externalOrder.lSortedPIndex.pLoop){
+        sout("pippo r7\n");
+        foreach (idx;externalOrder.lSortedPIndex.sLoop){
+            sout("pippo r8.1\n");
             Vector!(T,3) pos;
             p(pos.x)(pos.y)(pos.z);
+            sout("pippo r8.2\n");
             f[LocalPIndex(idx),0]=pos;
         }
+        sout("pippo r9\n");
         auto tok=p.nextToken();
+        sout("pippo r10\n");
         if (tok.length>0){
             throw new Exception("force file '"~forceFile~"' is supposed to contain just the forces as sequence of numbers and nothing else, after reading all forces found '"~tok~"'.",__FILE__,__LINE__);
         }
+        sout("pippo r11\n");
     }
     
     /// should collect the newly calculated energy

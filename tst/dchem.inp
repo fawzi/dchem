@@ -1,7 +1,7 @@
 {
 startConfig:{
     class:"dchem.FileConfig",
-    fileName:"config.xyz",
+    fileName:"test.xyz",
     format:"xyz",
     cell:[[8.45,0,0],
         [0,24.0,0],
