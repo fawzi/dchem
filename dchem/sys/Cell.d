@@ -120,9 +120,9 @@ char[] cellLoopMixin(char[][] names,char[]op){
 class Cell(T)
 {
     alias T dtype;
-    int[3] periodic;
     Matrix!(T,3,3) h,hInv;
     Vector!(T,3) x0;
+    int[3] periodic;
 
     this(){} // just for serialization
     
