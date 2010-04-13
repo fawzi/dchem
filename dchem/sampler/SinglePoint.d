@@ -47,7 +47,7 @@ class SinglePoint:Sampler{
     
     bool verify(CharSink log){
         bool res=true;
-        auto s=dumperP(log);
+        auto s=dumper(log);
         if (method is null || method.typeId!=InputField.TypeId.Method){
             s("Error: method has to be valid and contain a method")(myFieldName)("\n");
             res=false;

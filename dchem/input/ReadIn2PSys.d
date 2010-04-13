@@ -188,7 +188,7 @@ ParticleSys!(T) readIn2PSys(T)(ReadSystem rIn,
         }
         if (nP!=val && nP!=index_type.max){
             throw new Exception(collectAppender(delegate void(CharSink sink){
-                auto s=dumperP(sink);
+                auto s=dumper(sink);
                 s("Found different number of subparticles:")(nP)(" vs ")(val)
                 (" for particle of kind ")(kindsData[kind])("\n");
             }),__FILE__,__LINE__);
@@ -199,7 +199,7 @@ ParticleSys!(T) readIn2PSys(T)(ReadSystem rIn,
             auto oldV=kindsData[i].subParticles;
             if(oldV!=0 && oldV!=size_t.max && oldV!=v && oldV!=index_type.max){
                 throw new Exception(collectAppender(delegate void(CharSink sink){
-                    dumperP(sink)("subParticles was set to ")(oldV)(" but found ")(v)
+                    dumper(sink)("subParticles was set to ")(oldV)(" but found ")(v)
                         (" subparticles for particles of kind ")(kindsData[i])("\n");
                 }),__FILE__,__LINE__);
             }
@@ -220,7 +220,7 @@ ParticleSys!(T) readIn2PSys(T)(ReadSystem rIn,
     foreach(lIdx,nPart;nSub.pLoop){
         if (nSubparticles[cast(size_t)lIdx.kind]!=cast(index_type)nPart){
             e=new Exception(collectAppender(delegate void(CharSink sink){
-                dumperP(sink)("internal error inconsistent number of subparticles:")
+                dumper(sink)("internal error inconsistent number of subparticles:")
                     (nSubparticles[cast(size_t)lIdx.kind])("vs")(nPart)("\n");
             }),__FILE__,__LINE__);
             break;

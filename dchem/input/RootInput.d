@@ -476,7 +476,7 @@ class FileConfig:Config{
     mixin myFieldMixin!();
     bool verify(CharSink logger){
         bool res=true;
-        auto w=dumperP(logger);
+        auto w=dumper(logger);
         if (fileName.length==0){
             w("Error: fileName is empty in field ")(myFieldName)("\n");
             res=false;

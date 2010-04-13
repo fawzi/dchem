@@ -46,7 +46,7 @@ class LocalExeInstanceManager:ClassInstanceManager {
         return new ExecuterInstance(this,calcInstanceId,newF.toString(),maxContexts);
     }
     bool verify(CharSink sink){
-        auto s=dumperP(sink);
+        auto s=dumper(sink);
         if (baseDir.length==0) {
             s("Warning: no baseDir given in field ")(myFieldName)(", assuming '.'\n");
             baseDir=".";
@@ -97,7 +97,7 @@ class TemplateExecuter: Method {
     }
     bool verify(CharSink sink){
         bool res=true;
-        auto s=dumperP(sink);
+        auto s=dumper(sink);
         if (superTemplate !is null){
             if ((cast(TemplateExecuter)superTemplate.content)is null){
                 s("Error: superTemplate should be of type dchem.TemplateExecuter in field "~myFieldName);

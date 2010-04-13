@@ -68,7 +68,7 @@ class ClassInstanceManager: Executer {
         
     bool verify(CharSink sink){
         bool res=true;
-        auto s=dumperP(sink); 
+        auto s=dumper(sink); 
         if (maxInstances==0){
             s("Error: maxInstances should be larget than 0 in field ")(myFieldName)("\n");
             res=false;
@@ -272,7 +272,7 @@ class CalcInstance:CalculationInstance{
         if (cmd.length>0 && cmd!="NONE"){
             char[256] buf;
             auto arr=lGrowableArray(buf,0);
-            dumperP(&arr)("executing ")(cmd)("\n");
+            dumper(&arr)("executing ")(cmd)("\n");
             log(arr.data);
             arr.clearData();
             auto p=new Process(cmd);

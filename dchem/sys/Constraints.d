@@ -72,7 +72,7 @@ struct Particles{
     mixin printOut!();
     bool verify(CharSink sink,char[]fieldName){
         if (particleKind.length!=0 && particleIndexes.length!=0){
-            dumperP(sink)("Error: only one of particleIndexes and particleKind should be set in field "~fieldName);
+            dumper(sink)("Error: only one of particleIndexes and particleKind should be set in field "~fieldName);
             return false;
         }
     }
@@ -124,7 +124,7 @@ struct Particles{
                 }
                 if (!found){
                     throw new Exception(collectAppender(delegate void(CharSink sink){
-                        auto s=dumperP(sink);
+                        auto s=dumper(sink);
                         s("could not find partikle kind named '")(particleKind)("', known particle kinds: ");
                         bool first=true;
                         foreach(pKind;pSys.sysStruct.particleKinds[pSys.sysStruct.levels[0]].sLoop){
@@ -151,7 +151,7 @@ struct Particles{
             }
             if (kRef==KindIdx.init){
                 throw new Exception(collectAppender(delegate void(CharSink sink){
-                    auto s=dumperP(sink);
+                    auto s=dumper(sink);
                     s("could not find particle kind named '")(referencePKind)("', known particle kinds at level ")
                         (referenceLevel)(":");
                     bool nonFirst=false;

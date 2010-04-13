@@ -89,12 +89,12 @@ class SubMapping: BasicObjectI{
     PIndex opIndex(LocalPIndex l)
     in {
         assert(l.kind in lKRange,collectAppender(delegate void(CharSink s){
-            dumperP(s)("indexing of a local particle with kind out of range:")
+            dumper(s)("indexing of a local particle with kind out of range:")
                 (l)(" not in ")(lKRange);
         }));
         assert((cast(size_t)l.particle)+cast(size_t)kindStarts[l.kind-lKRange.kStart] <
             cast(size_t)kindStarts[l.kind-lKRange.kStart+1],collectAppender(delegate void(CharSink s){
-                dumperP(s)("indexing of a local particle out of range:")
+                dumper(s)("indexing of a local particle out of range:")
                     (l)(" when that kind has ")
                     (kindStarts[l.kind-lKRange.kStart+1]-kindStarts[l.kind-lKRange.kStart])
                     ("particles");
@@ -110,7 +110,7 @@ class SubMapping: BasicObjectI{
             if(i!=0){
                 auto prevPk=*(&pk-1);
                 assert(prevPk<pk,collectAppender(delegate void(CharSink s){
-                    dumperP(s)("non strictly ordered sortedPIndex [")(i-1)("]=")(prevPk)
+                    dumper(s)("non strictly ordered sortedPIndex [")(i-1)("]=")(prevPk)
                         (",[")(i)("]=")(pk)("\n");
                 }));
             }
@@ -118,7 +118,7 @@ class SubMapping: BasicObjectI{
         foreach(i,ref lk;gSortedLocalPIndex.pLoop){
             assert(this[this[lk]]==lk,"identity lk->pk->lk not valid");
             assert(this[lk]==sortedPIndex[i],collectAppender(delegate void(CharSink s){
-                dumperP(s)("gSortedLocalPIndex ordering does not recover sortedPIndex at ")(i)(": ")(lk)
+                dumper(s)("gSortedLocalPIndex ordering does not recover sortedPIndex at ")(i)(": ")(lk)
                     ("->")(this[lk])(" vs ")(sortedPIndex[i])("\n");
             }));
         }
@@ -126,7 +126,7 @@ class SubMapping: BasicObjectI{
             if (i!=0){
                 auto prevLk= *(&lk-1);
                 assert(this[lk].data>this[prevLk].data,collectAppender(delegate void(CharSink s){
-                    dumperP(s)("lSortedPIndex is not ordered [")(i-1)("]=")(prevLk)
+                    dumper(s)("lSortedPIndex is not ordered [")(i-1)("]=")(prevLk)
                         (",[")(i)("]=")(lk)("\n");
                 }));
             }

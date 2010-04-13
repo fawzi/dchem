@@ -430,14 +430,14 @@ struct DynPVector(T){
         return len;
     }
     
-    U dot(V,U=typeof(T.init+V.init))(DynPVector!(V) v2){ // could overlap the various loops...
+    U opDot(V,U=typeof(T.init+V.init))(DynPVector!(V) v2){ // could overlap the various loops...
         U res=0;
         Exception e=null;
         void doPosLoop(){
             try{
                 if (e!is null) return;
-                assert(v2.pos!is null,"Different vectors in dot");
-                assert(v2.pos.arrayStruct is pos.arrayStruct,"Different array structs in dot");
+                assert(v2.pos!is null,"Different vectors in opDot");
+                assert(v2.pos.arrayStruct is pos.arrayStruct,"Different array structs in opDot");
                 auto d1=a2NA2((cast(T*)pos.data.ptr)[3*pos.data.length]);
                 auto d2=a2NA2((cast(T*)v2.pos.data.ptr)[3*v2.pos.data.length]);
                 auto rAtt=dot(d1,d2);
@@ -449,8 +449,8 @@ struct DynPVector(T){
         void doDofLoop(){
             try{
                 if (e!is null) return;
-                assert(v2.dof!is null,"Different vectors in dot");
-                assert(v2.dof.arrayStruct is dof.arrayStruct,"Different array structs in dot");
+                assert(v2.dof!is null,"Different vectors in opDot");
+                assert(v2.dof.arrayStruct is dof.arrayStruct,"Different array structs in opDot");
                 if (dof.length==0) return;
                 auto d1=a2NA2(dof.data.data);
                 auto d2=a2NA2(v2.dof.data);
@@ -463,8 +463,8 @@ struct DynPVector(T){
         void doOrientLoop(){
             try{
                 if (e!is null) return;
-                assert(v2.orient!is null,"Different vectors in dot");
-                assert(v2.orient.arrayStruct is orient.arrayStruct,"Different array structs in dot");
+                assert(v2.orient!is null,"Different vectors in opDot");
+                assert(v2.orient.arrayStruct is orient.arrayStruct,"Different array structs in opDot");
                 if (orient.length==0) return;
                 auto d1=NArray!(T,2)([cast(index_type)4*T.sizeof,T.sizeof],[cast(index_type)orient.data.length,3],
                     cast(index_type)0,(cast(T*)orient.data.ptr)[4*orient.data.length],0);
@@ -493,17 +493,17 @@ struct DynPVector(T){
                     }
                     atomicAdd(res,resTmp);
                 } else {
-                    assert(v2.cell is null,"different vectors in dot");
+                    assert(v2.cell is null,"different vectors in opDot");
                 }
                 if (dof!is null){
                     Task("DynPVectorDotDof",&doDofLoop).autorelease.submitYield();
                 } else {
-                    assert(v2.dof is null,"different vectors in dot");
+                    assert(v2.dof is null,"different vectors in opDot");
                 }
                 if (orient!is null){
                     Task("DynPVectorDotOrient",&doOrientLoop).autorelease.submit();
                 } else {
-                    assert(v2.orient is null,"different vectors in dot");
+                    assert(v2.orient is null,"different vectors in opDot");
                 }
             }
         ).autorelease.executeNow();
@@ -712,7 +712,12 @@ struct DynamicsVars(T){
     DynamicsVars dup(PSCopyDepthLevel level){
         return dupT!(T)(level);
     }
-    
+    T opDot(V)(ref DynamicsVars!(V) b){ // could be parallel...
+        auto r1=x.opDot(b.x);
+        auto r2=dx.opDot(b.dx);
+        auto r3=mddx.opDot(b.mddx);
+        return r1+r2+r3;
+    }
     size_t length(){
         return x.length+dx.length+mddx.length;
     }
@@ -816,6 +821,18 @@ class SysStruct: CopiableObjectI,Serializable
     mixin printOut!();
 }
 
+/// interface for hidden variables
+interface HiddenVars:Serializable{
+    void axpby(HiddenVars x,Real a,Real b);
+    HiddenVars dup();
+    HiddenVars emptyCopy();
+    void opSliceAssign(Real r);
+    void opSliceAssign(HiddenVars b);
+    void opMulAssign(Real b);
+    void opMulAssign(HiddenVars b);
+    Real opDot(HiddenVars b);
+}
+
 /// represent a system of particles
 ///
 /// startup should be as follow:
@@ -835,17 +852,20 @@ class ParticleSys(T): CopiableObjectI,Serializable
     NotificationCenter nCenter;
     SysStruct sysStruct;
     
-    DynamicsVars!(T) dynVars;
+    DynamicsVars!(T) dynVars; /// dynamics variables
+    HiddenVars hVars; /// possibly some hidden degrees of freedom
     
     /// internal use
     this(){}
     /// constructor
-    this(ulong iter,char[] name,SysStruct sysStruct,NotificationCenter nCenter,DynamicsVars!(T) dynVars){
+    this(ulong iter,char[] name,SysStruct sysStruct,NotificationCenter nCenter,DynamicsVars!(T) dynVars,
+        HiddenVars hVars=null){
         this.iteration=iter;
         this.name=name;
         this.sysStruct=sysStruct;
         this.dynVars=dynVars;
         this.nCenter=nCenter;
+        this.hVars=hVars;
     }
     this(ulong iter,char[] name,SysStruct sysStruct,NotificationCenter nCenter){
         this.iteration=iter;
@@ -858,15 +878,18 @@ class ParticleSys(T): CopiableObjectI,Serializable
         if (x) dynVars.x[]=0;
         if (dx) dynVars.dx[]=0;
         if (mddx) dynVars.mddx[]=0;
+        if (hVars!is null) hVars[]=0;
     }
     
     ParticleSys!(V) dupT(V=T)(PSCopyDepthLevel l){
         if (l==PSCopyDepthLevel.None){
             return this;
         } else if (l==PSCopyDepthLevel.PSysLevel) {
-            return new ParticleSys!(V)(iteration,name,sysStruct.dup(l),null,dynVars.dupT!(V)(l));
+            return new ParticleSys!(V)(iteration,name,sysStruct.dup(l),null,dynVars.dupT!(V)(l),
+                ((hVars!is null)?hVars.dup:null));
         } else if (cast(int)l>cast(int)PSCopyDepthLevel.PSysLevel) {
-            return new ParticleSys!(V)(iteration,name,sysStruct.dup(l),null,dynVars.dupT!(V)(l));
+            return new ParticleSys!(V)(iteration,name,sysStruct.dup(l),null,dynVars.dupT!(V)(l),
+                ((hVars!is null)?hVars.dup:null));
         }
     }
     
@@ -929,11 +952,13 @@ class ParticleSys(T): CopiableObjectI,Serializable
         iteration=p.iteration;
         sysStruct=p.sysStruct;
         dynVars[]=p.dynVars;
+        if (hVars!is null) hVars[]=p.hVars;
     }
     
     mixin(serializeSome("dchem.sys.ParticleSys",
         `sysStruct: structure of the system (particle, particle kinds,...)
-        dynVars: dynamic variables (position,cell,velocities,forces,...)`));
+        dynVars: dynamic variables (position,cell,velocities,forces,...)
+        hVars: hidden degrees of freedom`));
     mixin printOut!();
 }
 
