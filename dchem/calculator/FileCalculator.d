@@ -42,7 +42,6 @@ class LocalExeInstanceManager:ClassInstanceManager {
         });
         auto newF=baseDirectory.folder(calcInstanceId).create();
         char[] dir=baseDir;
-        sout("LocalExeInstanceManager will create new Instance pippo\n");
         return new ExecuterInstance(this,calcInstanceId,newF.toString(),maxContexts);
     }
     bool verify(CharSink sink){
@@ -257,26 +256,21 @@ class ExecuterContext:CalcContext{
         
         templateH.evalTemplates(0,true);
         cInstance.execCmd(input.setupCommand());
-        sout("pippo_a6..\n");
         if (input.startConfig is null || input.startConfig.config is null){
             throw new Exception("Error: startConfiguration in field "~input.myFieldName~" should be set to a valid configuration",__FILE__,__LINE__);
         }
         auto pSys=input.startConfig.config.particleSysReal();
         
-        sout("pippo_a7\n");
         if (pSys.nCenter is null)
             pSys.nCenter=nCenter;
         else
             _nCenter=pSys.nCenter;
-        sout("pippo_a8\n");
         _pSysReal=pSys;
         
         templateH.longSubs["coord.xyz"]=&writeXyz;
         templateH.longSubs["turboCoord"]=&writeTurboCoord;
         
-        sout("pippo_a9\n");
         templateH.evalTemplates(0,true);
-        sout("pippo_a10\n");
     }
     
     void writeXyz(CharSink s){

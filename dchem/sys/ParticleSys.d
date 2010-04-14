@@ -80,14 +80,16 @@ class ParticleKind: Serializable,CopiableObjectI{
     /// just for internal use
     this(){}
     
-    this(char[] pName,LevelIdx pLevel,KindIdx kindIdx,char[] potential=null,char[] symbol=null,
+    this(char[] pName,LevelIdx pLevel,KindIdx kindIdx,char[] symbol=null,char[] potential=null,
         size_t position=1,size_t orientation=0, size_t degreesOfFreedom=0){
-        _name=pName;
-        _level=pLevel;
-        pKind=kindIdx;
-        position=1;
-        degreesOfFreedom=0;
-        orientation=0;
+        this._name=pName;
+        this.symbol=symbol;
+        this._potential=potential;
+        this._level=pLevel;
+        this.pKind=kindIdx;
+        this.position=position;
+        this.degreesOfFreedom=degreesOfFreedom;
+        this.orientation=orientation;
     }
     typeof(this)dup(){
         ParticleKind res=cast(ParticleKind)this.classinfo.create();
@@ -630,9 +632,12 @@ struct DynamicsVars(T){
     
     /// reallocates the segmented array structures, invalidates everything
     void reallocStructs(SysStruct sys){
-        posStruct=new SegmentedArrayStruct("posStruct",sys.fullSystem,KindRange(sys.levels[0].kStart,sys.levels[$-1].kEnd));
-        orientStruct=new SegmentedArrayStruct("orientStruct",sys.fullSystem,KindRange(sys.levels[0].kStart,sys.levels[$-1].kEnd));
-        dofStruct=new SegmentedArrayStruct("dofStruct",sys.fullSystem,KindRange(sys.levels[0].kStart,sys.levels[$-1].kEnd));
+        posStruct=new SegmentedArrayStruct("posStruct",sys.fullSystem,KindRange(sys.levels[0].kStart,sys.levels[$-1].kEnd),
+            [],SegmentedArrayStruct.Flags.None);
+        orientStruct=new SegmentedArrayStruct("orientStruct",sys.fullSystem,KindRange(sys.levels[0].kStart,sys.levels[$-1].kEnd),
+            [],SegmentedArrayStruct.Flags.None);
+        dofStruct=new SegmentedArrayStruct("dofStruct",sys.fullSystem,KindRange(sys.levels[0].kStart,sys.levels[$-1].kEnd),
+            [],SegmentedArrayStruct.Flags.None);
         if (pool!is null){
             pool.flush(); // call stopCaching???
         }
@@ -925,7 +930,7 @@ class ParticleSys(T): CopiableObjectI,Serializable
     /// the segmented array structs should be initialized, and modifiable.
     /// positions,... are not yet available
     void sysStructChanged(){
-        foreach(pKind;sysStruct.particleKinds.pLoop){
+        foreach(pKind;sysStruct.particleKinds.data){
             pKind.sysStructChanged(Variant(this));
         }
         if (nCenter!is null)
@@ -933,7 +938,7 @@ class ParticleSys(T): CopiableObjectI,Serializable
     }
     /// position of particles changed, position,... are valid
     void positionsChanged(){
-        foreach(pKind;sysStruct.particleKinds.pLoop){
+        foreach(pKind;sysStruct.particleKinds.data){
             pKind.positionsChanged(Variant(this));
         }
         if (nCenter!is null)
@@ -941,7 +946,7 @@ class ParticleSys(T): CopiableObjectI,Serializable
     }
     /// cell changed
     void cellChanged(){
-        foreach(pKind;sysStruct.particleKinds.pLoop){
+        foreach(pKind;sysStruct.particleKinds.data){
             pKind.cellChanged(Variant(this));
         }
         if (nCenter!is null)

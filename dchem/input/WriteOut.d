@@ -19,7 +19,7 @@ void writeXyz(T)(CharSink sink,SysStruct sysStruct,SegmentedArray!(Vector!(T,3))
     s(comments)("\n");
     foreach(p;sysStruct.externalOrder.lSortedPIndex){
         auto k=sysStruct.kinds[cast(size_t)p.kind];
-        s(k.symbol)(" ");
+        s(k.name)(" ");
         auto posAtt=pos[p,0];
         s(posAtt.x*angstrom)(" ")(posAtt.y*angstrom)(" ")(posAtt.z*angstrom)("\n");
     }
@@ -41,7 +41,7 @@ void writeTurboCoord(T)(CharSink sink,SysStruct sysStruct,SegmentedArray!(Vector
 /// structure to dump out a segmented array
 struct SegArrWriter(T){
     KindRange kRange;
-    uint[] kindStarts;
+    index_type[] kindStarts;
     T[] data;
     mixin(serializeSome("dchem.SegArray!("~T.stringof~")","kRange|kindStarts|data"));
     mixin printOut!();
@@ -52,16 +52,17 @@ struct SegArrWriter(T){
         if (sarr is null) return res;
         uint dimMult=V.sizeof/T.sizeof;
         if (dimMult!=1){
-            kindStarts=new index_type[](sarr.kindStarts.length);
+            res.kindStarts=new index_type[](sarr.kindStarts.length);
             foreach (i,p;sarr.kindStarts){
-                kindStarts[i]=dimMult*p;
+                res.kindStarts[i]=dimMult*p;
             }
         } else {
-            kindStarts=sarr.kindStarts;
+            res.kindStarts=sarr.kindStarts;
         }
         auto mdata=sarr.data.data;
-        data=(cast(T*)mdata.ptr)[0..mdata.length*dimMult];
-        kRange=sarr.kRange;
+        res.data=(cast(T*)mdata.ptr)[0..mdata.length*dimMult];
+        res.kRange=sarr.kRange;
+        return res;
     }
     
     SegmentedArray!(V) toSegArr(V=T)(SysStruct sysStruct){
@@ -111,7 +112,7 @@ struct DynPVectorWriter(T){
     
     static DynPVectorWriter opCall(DynPVector!(T) v){
         DynPVectorWriter res;
-        res.cell=v.cell.h.cell;
+        if (v.cell!is null) res.cell=v.cell.h.cell;
         res.pos=SegArrWriter!(T)(v.pos);
         res.orient=SegArrWriter!(T)(v.orient);
         res.dof=SegArrWriter!(T)(v.dof);
@@ -160,10 +161,15 @@ struct PSysWriter(T){
     
     static PSysWriter opCall(ParticleSys!(T) pSys){
         PSysWriter res;
-        res.x=dynPVectorWriter(pSys.x);
-        res.dx=dynPVectorWriter(pSys.dx);
-        res.mddx=dynPVectorWriter(pSys.mddx);
+        res.x=dynPVectorWriter(pSys.dynVars.x);
+        res.dx=dynPVectorWriter(pSys.dynVars.dx);
+        res.mddx=dynPVectorWriter(pSys.dynVars.mddx);
         res.hVars=pSys.hVars;
         return res;
     }
+}
+
+/// return a struct that dumps the given ParticleSys
+PSysWriter!(T) pSysWriter(T)(ParticleSys!(T) pSys){
+    return PSysWriter!(T)(pSys);
 }

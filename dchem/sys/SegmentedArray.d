@@ -373,10 +373,12 @@ final class SegmentedArray(T){
     size_t length(){
         size_t iterRef=this.data.length;
         auto submap=this.arrayStruct.submapping;
-        for (auto k=this.kRange.kStart;k<this.kRange.kEnd;++k){
-            if (this.arrayStruct.kindDim(k)==0){
-                iterRef-=1;
-                iterRef+=submap.kindStarts[k-submap.lKRange.kStart+1]-submap.kindStarts[k-submap.lKRange.kStart];
+        if((arrayStruct.flags&SegmentedArrayStruct.Flags.Min1)!=0){
+            for (auto k=this.kRange.kStart;k<this.kRange.kEnd;++k){
+                if (this.arrayStruct.kindDim(k)==0){
+                    iterRef-=1;
+                    iterRef+=submap.kindStarts[k-submap.lKRange.kStart+1]-submap.kindStarts[k-submap.lKRange.kStart];
+                }
             }
         }
         return iterRef;

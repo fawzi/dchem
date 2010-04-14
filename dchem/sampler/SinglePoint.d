@@ -7,6 +7,8 @@ import blip.serialization.Serialization;
 import blip.io.Console;
 import WriteOut=dchem.input.WriteOut;
 import dchem.calculator.FileCalculator;
+import dchem.calculator.Calculator;
+import dchem.input.WriteOut;
 
 class SinglePoint:Sampler{
     bool calcE;
@@ -35,8 +37,14 @@ class SinglePoint:Sampler{
             sout("potentialEnergy:")(c.potentialEnergy())("\n");
         }
         if (calcF){
-            auto f=c.mddpos;
-            WriteOut.writeXyz!(Real)(sout.call,c.sysStruct,f,"forces "~c.sysStruct.name);
+            mixin(withPSys(`
+            if (pSys.dynVars.x.dof.length>0 || pSys.dynVars.x.orient.length>0){
+                auto w=pSysWriter(pSys);
+                sout(w);
+            } else {
+                auto f=c.mddpos;
+                WriteOut.writeXyz!(Real)(sout.call,c.sysStruct,f,"forces "~c.sysStruct.name);
+            }`,"c."));
         }
         sout("End calculation\n");
     }

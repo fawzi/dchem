@@ -11,7 +11,6 @@ import blip.serialization.SerializationMixins;
 import blip.BasicModels;
 import blip.io.BasicIO;
 import blip.container.GrowableArray;
-import blip.io.Console; // pippo
 
 enum MappingKind:uint{
     Generic=0u,   /// generic mapping
@@ -59,7 +58,6 @@ class SubMapping: BasicObjectI{
         this.lKRange=lKRange;
         this.kindStarts=kindStarts;
         this.mappingKind=mappingKind;
-        sout("pippo kindStarts:")(kindStarts.length)(" vs ")(1+cast(size_t)(lKRange.kEnd-lKRange.kStart))("\n");
         assert(kindStarts.length==1+cast(size_t)(lKRange.kEnd-lKRange.kStart));
         for (size_t i=1;i<kindStarts.length;++i){
             assert(kindStarts[i-1]<=kindStarts[i]);

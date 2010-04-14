@@ -26,50 +26,33 @@ class PoorManContext:ExecuterContext{
     char[] forceFile="dchem.forces";
     
     static CalculationContext contextAllocator(CalculationInstance cInstance,Method method,char[]className,char[] contextId){
-        sout("pippo1\n");
         auto m=cast(TemplateExecuter)cast(Object)method;
-        sout("pippo2\n");
         if (m is null){
             throw new Exception("method must be valid and must be a TemplateExecuter",__FILE__,__LINE__);
         }
-        sout("pippo3\n");
         return new PoorManContext(m,cInstance,className,contextId);
     }
     
     this(TemplateExecuter input,CalculationInstance cInstance,char[] className,char[] contextId){
-        sout("pippo4\n");
         super(input,cInstance,className,contextId);
-        sout("pippo5\n");
     }
     void readFomattedWhitespaceF(T)(ParticleSys!(T)pSys){
-        sout("pippo r1\n");
         scope inF=toReaderChar(templateH.targetDir.file(forceFile).input);
-        sout("pippo r2\n");
-        scope(exit){ sout("will shutdownInput\n"); inF.shutdownInput(); sout("did shutdownInput\n"); }
-        sout("pippo r3\n");
+        scope(exit){ inF.shutdownInput(); }
         scope p=new TextParser!(char)(inF);
 
-        sout("pippo r4\n");
         auto externalOrder=pSys.sysStruct.externalOrder;
-        sout("pippo r5\n");
         pSys.checkMddx();
-        sout("pippo r6\n");
         auto f=pSys.dynVars.mddx.pos;
-        sout("pippo r7\n");
         foreach (idx;externalOrder.lSortedPIndex.sLoop){
-            sout("pippo r8.1\n");
             Vector!(T,3) pos;
             p(pos.x)(pos.y)(pos.z);
-            sout("pippo r8.2\n");
             f[LocalPIndex(idx),0]=pos;
         }
-        sout("pippo r9\n");
         auto tok=p.nextToken();
-        sout("pippo r10\n");
         if (tok.length>0){
             throw new Exception("force file '"~forceFile~"' is supposed to contain just the forces as sequence of numbers and nothing else, after reading all forces found '"~tok~"'.",__FILE__,__LINE__);
         }
-        sout("pippo r11\n");
     }
     
     /// should collect the newly calculated energy

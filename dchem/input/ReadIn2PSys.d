@@ -13,7 +13,6 @@ import dchem.sys.SubMapping;
 import dchem.sys.SegmentedArray;
 import blip.sync.Atomic;
 import dchem.sys.Cell;
-import blip.io.Console; // pippo
 
 class ParticleKindMap{
     ParticleKind[char[]] specialMap;
@@ -23,7 +22,7 @@ class ParticleKindMap{
             return *kVal;
         }
         char[] symb=k.symbol;
-        if (symb==""){
+        if (symb.length==0){
             auto nLen=k.name.length;
             if (nLen>0){
                 if (nLen>=2){
@@ -56,7 +55,6 @@ ParticleSys!(T) readIn2PSys(T)(ReadSystem rIn,
     ParticleKind delegate(Kind,LevelIdx,KindIdx) pkindsMap=&ParticleKindMap.defaultMap.mapKind,
     NotificationCenter nCenter=null)
 {
-    sout("fullSystem & levels\n");
     // fullSystem & levels
     KindRange[] levels=new KindRange[](4);
     auto sortedPIndex=BulkArray!(PIndex)(rIn.nParticles+rIn.residui.length+rIn.chains.length+1);
@@ -115,7 +113,6 @@ ParticleSys!(T) readIn2PSys(T)(ReadSystem rIn,
         sortedPIndex,kindStarts,
         fullRange,MappingKind.Same);
     
-    sout("externalOrder\n");
     // externalOrder
     auto gSortedLocalPIndex=BulkArray!(LocalPIndex)(kindStarts[levels[0].kEnd]);
     auto lSortedPIndex=BulkArray!(PIndex)(kindStarts[levels[0].kEnd]);
@@ -127,11 +124,9 @@ ParticleSys!(T) readIn2PSys(T)(ReadSystem rIn,
         gSortedLocalPIndex,lSortedPIndex,kindStarts[0..1+levels[0].kEnd],KindRange(levels[0].kStart,levels[0].kEnd),
         MappingKind.Gapless);
     
-    sout("particleStruct, superParticle\n");
     // particleStruct, superParticle
     index_type[] kindDims=new index_type[](cast(size_t)fullRange.kEnd);
     kindDims[]=1;
-    sout("pippo1\n");
     auto particlesStruct=new SegmentedArrayStruct("particleStruct",fullSystem,fullRange,kindDims);
     auto particles=new SegmentedArray!(PIndex)(particlesStruct,sortedPIndex,fullRange,kindStarts);
     auto superParticle=new SegmentedArray!(PIndex)(particlesStruct);
@@ -151,12 +146,8 @@ ParticleSys!(T) readIn2PSys(T)(ReadSystem rIn,
     }
     auto sysIdx=PIndex(levels[3].kStart,0);
     superParticle[levels[2]].data[]=sysIdx;
-    sout("sysIdx")(sysIdx)(" levels[3].kStart")(levels[3].kStart)(" levels[3].kEnd")(levels[3].kEnd)("\n");
-    sout("pippo17\n");
     *nSub.ptrI(sysIdx,0)=superParticle[levels[2]].data.length;
-    sout("pippo18\n");
     
-    sout("kinds particleKinds\n");
     /// kinds particleKinds
     auto kindsData=BulkArray!(ParticleKind)(rIn.pKinds.length+rIn.resKinds.length+rIn.chainKinds.length+2);
     foreach(i,pk; rIn.pKinds){
@@ -176,7 +167,6 @@ ParticleSys!(T) readIn2PSys(T)(ReadSystem rIn,
     auto kindsStruct=new SegmentedArrayStruct("kindsStruct",fullSystem,fullRange,kindDims2,SegmentedArrayStruct.Flags.Min1);
     auto particleKinds=new SegmentedArray!(ParticleKind)(kindsStruct,kindsData);
     
-    sout("subparticles\n");
     /// subparticles
     index_type[] nSubparticles=new index_type[](cast(size_t)levels[3].kEnd);
     nSubparticles[]=index_type.max;
@@ -229,7 +219,6 @@ ParticleSys!(T) readIn2PSys(T)(ReadSystem rIn,
     if (e!is null) throw e;
     if (nSub.data.guard!is null) nSub.data.guard.release();
     
-    sout("sysStruct\n");
     // sysStruct
     auto sysStruct=new SysStruct(rIn.name, fullSystem, externalOrder, levels,
          particlesStruct, particles, superParticle, subParticlesStruct,
@@ -237,14 +226,10 @@ ParticleSys!(T) readIn2PSys(T)(ReadSystem rIn,
     
     if (nCenter is null) nCenter=new NotificationCenter();
     
-    sout("particleSystem\n");
     // particleSystem
     auto pSys=new ParticleSys!(T)(0,rIn.name,sysStruct,nCenter);
-    sout("will reallocStructs\n");
     pSys.reallocStructs();
-    sout("did reallocStructs\n");
     pSys.sysStructChanged();
-    sout("sysStructChanged\n");
     
     pSys.checkX();
     Matrix!(T,3,3) h;
@@ -255,17 +240,13 @@ ParticleSys!(T) readIn2PSys(T)(ReadSystem rIn,
     }
     pSys.dynVars.x.cell=new Cell!(T)(h,rIn.periodic,Vector!(T,3)(rIn.x0[0],rIn.x0[1],rIn.x0[2]));
     
-    sout("setPos\n");
     auto posV=pSys.dynVars.x.pos;
     foreach (p;rIn.particles){
         posV[LocalPIndex(p.pIndex),0]=Vector!(T,3)(p.pos[0],p.pos[1],p.pos[2]);
     }
     
-    sout("cellUpdateNotification\n");
     pSys.cellChanged();
-    sout("posUpdateNotification\n");
     pSys.positionsChanged();
-    sout("pSys setup end\n");
     
     return pSys;
 }
