@@ -6,6 +6,7 @@ import blip.serialization.Serialization;
 
 alias ulong PKey; /// key of a main point (64 bit as trade off between collision probability and being small)
 alias ulong EKey; /// key of a MinEExplorer instance
+
 struct Neighbor{
     PKey key;
     uint  direction; // uint.max means unknown
@@ -15,14 +16,17 @@ class MainPoint(T){
     PKey key;
     Real energies[]; /// energies of the other points (might be unallocated)
     ParticleSys!(T) pos; // position+deriv+energy
-    // 0- core, i, direction i: particle,x,y,z...
-    // flags values: 0-not explored, 1- explored by others, 2- explored close, 3- explored far
+    /// 0- core, i, direction i: particle,x,y,z...
+    /// flags values: 0-not explored, 1- explored by others, 2- explored close, 3- explored far
     BitArray flags;
-    T stepSize;
-    T repulsionSize;
+    T[] stepScales;
+    T[] repulsionScales;
     size_t nNeigh;
     Neighbor[] _neighbors;
+    
+    
 }
+
 // ops newpointUsed -> update neighs & flags of others,+
 
 struct Point(T){
