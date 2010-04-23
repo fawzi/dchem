@@ -140,8 +140,9 @@ class Cell(T)
     }
     
     /// y.axpby(x,a,b): y = ax+by
-    void axpby(V)(Cell!(V) x,V scaleC=cscalar!(V,1),T scaleRes=cscalar!(T,1)){
+    void axpby(V)(Cell!(V) x,T a=cscalar!(T,1),T b=cscalar!(T,1)){
         auto y=this;
+        h.axpby(h,a,b);
         mixin(cellLoopMixin(["y","x"],"y.axpby(x,a,b);"));
     }
     

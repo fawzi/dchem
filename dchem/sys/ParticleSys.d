@@ -1,3 +1,5 @@
+/// Particle system, the basic way to represent the state of a system
+/// author: Fawzi
 module dchem.sys.ParticleSys;
 import dchem.sys.Requests;
 import dchem.sys.PIndexes;
@@ -16,6 +18,237 @@ import blip.container.Deque;
 import blip.container.BulkArray;
 import blip.parallel.smp.WorkManager;
 import blip.t.math.Math:sqrt;
+import blip.t.core.sync.Mutex;
+import blip.narray.NArray;
+import gobo.blas.Types:BlasTypeForType;
+
+/// a pool for dynamical properties
+/// setup as follow: init, update *Structs, possibly consolidateStructs, allocPools, possibly consolidate
+class DynPPool(T){
+    char[] name;
+    SegmentedArrayStruct posStruct;
+    SegmentedArrayStruct orientStruct;
+    SegmentedArrayStruct dofStruct;
+    
+    SegArrPool!(Vector!(T,3)) poolPos;
+    SegArrPool!(Quaternion!(T)) poolOrient;
+    SegArrPool!(T) poolDof;
+    
+    /// constructor, sets up the structures
+    this(char[]name,SubMapping submapping,KindRange kRange,SegmentedArrayStruct.Flags f=SegmentedArrayStruct.Flags.None){
+        this.name=name;
+        posStruct=new SegmentedArrayStruct(name~".posStruct",submapping,kRange,[],f);
+        orientStruct=new SegmentedArrayStruct(name~".orientStruct",submapping,kRange,[],f);
+        dofStruct=new SegmentedArrayStruct(name~".dofStruct",submapping,kRange,[],f);
+    }
+    /// constructor that uses the given structures
+    this(char[]name,SegmentedArrayStruct posStruct,SegmentedArrayStruct orientStruct,SegmentedArrayStruct dofStruct){
+        this.name=name;
+        assert(posStruct!is null,"posStruct has to be allocated");
+        assert(orientStruct!is null,"orientStruct has to be allocated");
+        assert(dofStruct!is null,"dofStruct has to be allocated");
+        this.posStruct=posStruct;
+        this.orientStruct=orientStruct;
+        this.dofStruct=dofStruct;
+    }
+    /// constructor for internal use only
+    this(){}
+    /// alloc pools, reusing baseVal pools if possible
+    void allocPools(DynPPool!(T) baseVal=null)
+    {
+        posStruct.freeze();
+        orientStruct.freeze();
+        dofStruct.freeze();
+        if (baseVal!is null && baseVal.poolPos!is null && baseVal.poolPos.arrayStruct is posStruct){
+            poolPos=baseVal.poolPos;
+        } else {
+            poolPos=new SegArrPool!(Vector!(T,3))(posStruct);
+        }
+        if (baseVal!is null && baseVal.poolOrient!is null && baseVal.poolOrient.arrayStruct is orientStruct){
+            poolOrient=baseVal.poolOrient;
+        } else {
+            poolOrient=new SegArrPool!(Quaternion!(T))(orientStruct);
+        }
+        if (baseVal!is null && baseVal.poolDof!is null && baseVal.poolDof.arrayStruct is dofStruct){
+            poolDof=baseVal.poolDof;
+        } else {
+            poolDof=new SegArrPool!(T)(dofStruct);
+        }
+    }
+    /// consolidates pools
+    void consolidate(DynPPool!(T) baseVal)
+    {
+        if (baseVal!is null && baseVal.poolPos!is null && baseVal.poolPos.arrayStruct is posStruct){
+            poolPos=baseVal.poolPos;
+        }
+        if (baseVal!is null && baseVal.poolOrient!is null && baseVal.poolOrient.arrayStruct is orientStruct){
+            poolOrient=baseVal.poolOrient;
+        }
+        if (baseVal!is null && baseVal.poolDof!is null && baseVal.poolDof.arrayStruct is dofStruct){
+            poolDof=baseVal.poolDof;
+        }
+    }
+    /// consolidates the structures that are equivalent (struct names might get lost)
+    void consolidateStructs(DynPPool!(T) baseVal)
+    {
+        assert(posStruct!is null&&orientStruct!is null && dofStruct!is null);
+        if (baseVal!is null && baseVal.posStruct == posStruct){
+            posStruct=baseVal.posStruct;
+        }
+        if (baseVal!is null && baseVal.orientStruct == orientStruct){
+            orientStruct=baseVal.orientStruct;
+        }
+        if (baseVal!is null && baseVal.dofStruct is dofStruct){
+            dofStruct=baseVal.dofStruct;
+        }
+    }
+    /// returns a postition like array
+    SegmentedArray!(Vector!(T,3)) newPos(){
+        assert(poolPos!is null,"you need to call allocPools before asking elements from the pool");
+        return poolPos.getObj();
+    }
+    /// returns an orientation like array
+    SegmentedArray!(Quaternion!(T)) newOrient(){
+        assert(poolOrient!is null,"you need to call allocPools before asking elements from the pool");
+        return poolOrient.getObj();
+    }
+    /// returns a dof like array
+    SegmentedArray!(T) newDof(){
+        assert(poolDof!is null,"you need to call allocPools before asking elements from the pool");
+        return poolDof.getObj();
+    }
+    /// removes all cached arrays
+    void flush(){
+        poolPos.flush();
+        poolOrient.flush();
+        poolDof.flush();
+    }
+    /// removes cached arrays and never cache again
+    void stopCaching(){
+        poolPos.stopCaching();
+        poolOrient.stopCaching();
+        poolDof.stopCaching();
+    }
+    /// convex hull of the ranges of all structures
+    KindRange gRange(){
+        KindRange res=posStruct.kRange;
+        res.convexHull(orientStruct.kRange);
+        res.convexHull(dofStruct.kRange);
+        return res;
+    }
+}
+
+/// matrix going from vectors in g1 to vectors in g2
+class DynPMatrix(T,int g1,int g2){
+    alias T dtype;
+    enum{ rowGroupId=g1, colGroupId=g2 }
+    NArray!(T,2) data;
+    NArray!(T,2)[3][3] blocks;
+    index_type[4] rowIdxs,colIdxs;
+    DynPPool!(T) rowGroup;
+    DynPPool!(T) colGroup;
+    this(DynPPool!(T)rowGroup,DynPPool!(T)colGroup,NArray!(T,2) data=null){
+        this.rowGroup=rowGroup;
+        this.colGroup=colGroup;
+        rowIdxs[0]=0;
+        rowIdxs[1]=3*rowGroup.posStruct.dataLength;
+        rowIdxs[2]=rowIdxs[1]+4*rowGroup.orientStruct.dataLength;
+        rowIdxs[3]=rowIdxs[2]+rowGroup.dofStruct.dataLength;
+        colIdxs[0]=0;
+        colIdxs[1]=3*colGroup.posStruct.dataLength;
+        colIdxs[2]=colIdxs[1]+4*colGroup.orientStruct.dataLength;
+        colIdxs[3]=colIdxs[2]+colGroup.dofStruct.dataLength;
+        if (data is null){
+            this.data=empty!(T)([rowIdxs[3],colIdxs[3]],true); // fortran storage is more efficent for multiplication from the right
+        } else {
+            this.data=data;
+            assert(data.shape[0]==rowIdxs[3],"invalid row size");
+            assert(data.shape[1]==colIdxs[3],"invalid row size");
+        }
+        for (int iStripe=0;iStripe<3;++iStripe)
+        for (int jStripe=0;jStripe<3;++jStripe){
+            blocks[iStripe][jStripe]=data[Range(colIdxs[iStripe],colIdxs[iStripe+1]),Range(colIdxs[jStripe],colIdxs[jStripe+1])];
+        }
+    }
+    /// matrix times the vector v1 in v2: v2 = scaleV2*v2+scaleRes*M*v1
+    void matVectMult(V,U)(DynPVector!(V,g2)v1,DynPVector!(U,g1)v2,U scaleRes=1,U scaleV2=0){
+        size_t[4] idxs;
+        assert(v2.pos!is null && v2.orient!is null && v2.dof!is null,"target vector must be fully allocated");
+        assert(rowIdxs[1]==3*v2.pos.length,"unexpected size of v2.pos");
+        assert(rowIdxs[2]-rowIdxs[1]==4*v2.orient.length,"unexpected size of v2.orient");
+        assert(rowIdxs[3]-rowIdxs[2]==v2.dof.length,"unexpected size of v2.dof");
+        scope v2Pos=a2NA(v2.pos.data.basicData);
+        scope v2Orient=a2NA(v2.orient.data.basicData);
+        scope v2Dof=a2NA(v2.dof.data.basicData);
+        T myscaleV2=scaleV2;
+        if (v1.pos!is null){
+             assert(3*v1.pos.data.length==colIdxs[1],"unexpected size of v1.pos");
+             scope v0=a2NA(v1.pos.data.basicData);
+             dot!(T,2,V,1,U,1)(blocks[0][0],v0,v2Pos,scaleRes,myscaleV2);
+             dot!(T,2,V,1,U,1)(blocks[1][0],v0,v2Orient,scaleRes,myscaleV2);
+             dot!(T,2,V,1,U,1)(blocks[2][0],v0,v2Dof,scaleRes,myscaleV2);
+             myscaleV2=1;
+         }
+         if (v1.orient!is null){
+             assert(3*v1.orient.data.length==colIdxs[2]-colIdxs[1],"unexpected size of v1.orient");
+             scope v0=a2NA(v1.orient.data.basicData);
+             dot!(T,2,V,1,U,1)(blocks[0][1],v0,v2Pos,scaleRes,myscaleV2);
+             dot!(T,2,V,1,U,1)(blocks[1][1],v0,v2Orient,scaleRes,myscaleV2);
+             dot!(T,2,V,1,U,1)(blocks[2][1],v0,v2Dof,scaleRes,myscaleV2);
+             myscaleV2=1;
+         }
+         if (v1.pos!is null){
+             assert(v1.dof.data.length==colIdxs[3]-colIdxs[2],"unexpected size of v1.pos");
+             scope v0=a2NA(v1.dof.data.basicData);
+             dot!(T,2,V,1,U,1)(blocks[0][2],v0,v2Pos,scaleRes,myscaleV2);
+             dot!(T,2,V,1,U,1)(blocks[1][2],v0,v2Orient,scaleRes,myscaleV2);
+             dot!(T,2,V,1,U,1)(blocks[2][2],v0,v2Dof,scaleRes,myscaleV2);
+             myscaleV2=1;
+         }
+        if (myscaleV2!=1){
+            v2*=myscaleV2;
+        }
+    }
+    /// transposed matrix times the vector v1 in v2: v2 = scaleV2*v2+scaleRes*M^T*v1
+    void matTVectMult(V,U)(DynPVector!(V,g1)v1,DynPVector!(U,g2)v2,U scaleRes=1,U scaleV2=0){
+        size_t[4] idxs;
+        assert(v2.pos!is null && v2.orient!is null && v2.dof!is null,"target vector must be fully allocated");
+        assert(colIdxs[1]==3*v2.pos.length,"unexpected size of v2.pos");
+        assert(colIdxs[2]-colIdxs[1]==4*v2.orient.length,"unexpected size of v2.orient");
+        assert(colIdxs[3]-colIdxs[2]==v2.dof.length,"unexpected size of v2.dof");
+        scope v2Pos=a2NA(v2.pos.data.basicData);
+        scope v2Orient=a2NA(v2.orient.data.basicData);
+        scope v2Dof=a2NA(v2.dof.data.basicData);
+        T myscaleV2=scaleV2;
+        if (v1.pos!is null){
+            assert(3*v1.pos.data.length==colIdxs[1],"unexpected size of v1.pos");
+            scope v0=a2NA(v1.pos.data.basicData);
+            dot(blocks[0][0],v0,v2Pos,scaleRes,myscaleV2,0,0);
+            dot(blocks[0][1],v0,v2Orient,scaleRes,myscaleV2,0,0);
+            dot(blocks[0][2],v0,v2Dof,scaleRes,myscaleV2,0,0);
+            myscaleV2=1;
+        }
+        if (v1.orient!is null){
+            assert(3*v1.orient.data.length==colIdxs[2]-colIdxs[1],"unexpected size of v1.orient");
+            scope v0=a2NA(v1.orient.data.basicData);
+            dot(blocks[1][0],v0,v2Pos,scaleRes,myscaleV2,0,0);
+            dot(blocks[1][1],v0,v2Orient,scaleRes,myscaleV2,0,0);
+            dot(blocks[1][2],v0,v2Dof,scaleRes,myscaleV2,0,0);
+            myscaleV2=1;
+        }
+        if (v1.pos!is null){
+            assert(v1.dof.data.length==colIdxs[3]-colIdxs[2],"unexpected size of v1.pos");
+            scope v0=a2NA(v1.dof.data.basicData);
+            dot(blocks[2][0],v0,v2Pos,scaleRes,myscaleV2,0,0);
+            dot(blocks[2][1],v0,v2Orient,scaleRes,myscaleV2,0,0);
+            dot(blocks[2][2],v0,v2Dof,scaleRes,myscaleV2,0,0);
+            myscaleV2=1;
+        }
+        if (myscaleV2!=1){
+            v2*=myscaleV2;
+        }
+    }
+}
 
 /// various levels of duplication
 enum PSCopyDepthLevel{
@@ -26,6 +259,58 @@ enum PSCopyDepthLevel{
     SysStruct, /// copies particles and particle kinds
     DeepProperties, /// all properties
     All /// copies all
+}
+
+/// simple interface that offers the basic derivative transfer types
+/// this is nt meant to give a full differential geometry like setup, but to give enough
+/// to implement the basic algorithms in a clean way without too much overheaad (thus not all the
+/// guarantees of an exact treatement can be assumed)
+/// one should make no assumptions about any regularity beyond continuity for large displacements
+char[] DerivTransferTMixin(char[] t){
+    return `
+    /// adds to res in the tangential space of pos (derivative space) the equivalent (to first order)
+    /// to the one that goes from pos.x to pos.x+diffP, or better pos.x-0.5*diffP to pos.x+0.5*diffP
+    void addToTangentialSpace(ParticleSys!(`~t~`)pos,DynPVector!(`~t~`,0)diffP,DynPVector!(`~t~`,1)res);
+    /// adds to the vector in res the derivative deriv from the dual tangential space of pos.
+    /// This is conceptually equivalent to geodesic following, but it doesn't have to be exactly that,
+    /// it just have to be exact at the first order.
+    void addFromDualTangentialSpace(ParticleSys!(`~t~`)pos,DynPVector!(`~t~`,2)deriv,DynPVector!(`~t~`,0)res);
+    /// transfers from a foreign dual tangential space, this is conceptually equivalent to parallel
+    /// transfer, but needs to be valid only if x and pos2.x are close, in particular
+    /// a direct transfer res+=derivAtPos2 is always allowed.
+    /// uses the dual tangential space as it should be more "uniform"
+    void addFromForeignDualTangentialSpace(ParticleSys!(`~t~`)pos1, ParticleSys!(`~t~`)pos2,DynPVector!(`~t~`,2)derivAtPos2,DynPVector!(`~t~`,2)res);
+    `;
+}
+/// implements DerivTransferT using the templates that end with T (to work around compiler bugs in implementing interfaces with alias)
+char[] derivTransferTMixin(char[]t){
+    return `
+    void addToTangentialSpace(ParticleSys!(`~t~`)pos,DynPVector!(`~t~`,0)diffP,DynPVector!(`~t~`,1)res){
+        addToTangentialSpaceT(pos,diffP,res);
+    }
+    void addFromDualTangentialSpace(ParticleSys!(`~t~`)pos,DynPVector!(`~t~`,2)deriv,DynPVector!(`~t~`,0)res){
+        addFromDualTangentialSpaceT!(`~t~`)(pos,deriv,res);
+    }
+    void addFromForeignDualTangentialSpace(ParticleSys!(`~t~`)pos1,ParticleSys!(`~t~`)pos2,DynPVector!(`~t~`,2)derivAtPos2,DynPVector!(`~t~`,2)res){
+        addFromForeignDualTangentialSpaceT!(`~t~`)(pos1,pos2,derivAtPos2,res);
+    }
+    void setOverlap(DynPMatrix!(`~t~`,1,2)m){
+        setOverlapT!(`~t~`)(m);
+    }
+    `;
+}
+
+/// interface that implements Real and LowP versions (multiple inheritane of templated interface seems to trigger bugs)
+interface DerivTransfer{
+    mixin(DerivTransferTMixin("Real")~DerivTransferTMixin("LowP"));
+    /// should return true if the overlap is different from the identity
+    bool specialOverlap();
+    /// should set the overlap, matrix should use 2d distribution, at the moment it uses just pos,orient,dof sequence
+    void setOverlap(DynPMatrix!(BlasTypeForType!(Real),1,2)m);
+    static if(! is(BlasTypeForType!(Real)==BlasTypeForType!(LowP))){
+        /// should set the overlap, matrix should use 2d distribution, at the moment it uses just pos,orient,dof sequence
+        void setOverlap(DynPMatrix!(BlasTypeForType!(LowP),1,2)m);
+    }
 }
 
 char[] withParticleSysMixin(char[]tmpl,char[] variant){
@@ -41,7 +326,11 @@ char[] withParticleSysMixin(char[]tmpl,char[] variant){
     }`;
 }
 /// represent a group of particles with the same kind
-class ParticleKind: Serializable,CopiableObjectI{
+class ParticleKind: Serializable,CopiableObjectI,DerivTransfer{
+    enum DerivMap{
+        SimpleMap,  /// a simple map from position to derivatives is enough
+        ComplexMap, /// a complex map has to be performed
+    }
     char[] _name;
     char[] name(){ return _name; }
     void name(char[] nName){ _name=nName; }
@@ -49,14 +338,251 @@ class ParticleKind: Serializable,CopiableObjectI{
     char[] potential(){ return _potential; }
     void potential(char[] nPotential){ _potential=nPotential; }
     char[] symbol;
+    
+    /// describes the elements of a single particle in a segmented array
+    /// in particular if the simple copy to build the derivative should be valid
+    struct SegAElements{
+        index_type nElements; /// number of elements in position array
+        index_type nDelements; /// number of elements in derivative arrays
+        index_type[] skipElements; /// ranges to skip in the array
+        index_type[] skipDelements; /// ranges to skip in deriv array
+        index_type[] el2DelMap; /// mapping of the contiguous sequences
+        DerivMap derivMap=DerivMap.SimpleMap; /// how the derivatives are mapped
+        Object _lockObj;
+        mixin(serializeSome("dchem.SegAElements",`nElements: number of elements in position array
+            nDelements: number of elements in derivative arrays
+            skipElements: ranges to skip in the array
+            skipDelements: ranges to skip derivatives array
+            el2DelMap: mapping of the contiguous sequences
+            derivMap: kind of mapping`));
+        mixin printOut!();
+        Object lockObj(){
+            if (_lockObj !is null) return _lockObj;
+            synchronized{
+                if (_lockObj !is null){
+                    _lockObj=new Mutex();
+                }
+            }
+        }
+        /// copies arr to darr
+        void addArrayToDArray(T,V)(BulkArray!(T)arr,BulkArray!(V)darr,index_type blockSizeArr, index_type blockSizeDarr){
+            assert(blockSizeArr>=nElements,"invalid block size in arr");
+            assert(blockSizeDarr>=nDelements,"invalid block size in darr");
+            if (derivMap==DerivMap.SimpleMap){
+                assert(nElements==nDelements);
+                alias typeof(arr.basicData[0]) ArrBData;
+                scope a1=NArray!(ArrBData,2)([cast(index_type)(T.sizeof*blockSizeArr),ArrBData.sizeof],
+                    [arr.basicData.length/(T.sizeof/ArrBData.sizeof),nElements],0,arr.basicData,0);
+                alias typeof(darr.basicData[0]) DarrBData;
+                scope a2=NArray!(DarrBData,2)([cast(index_type)(V.sizeof*blockSizeArr),DarrBData.sizeof],
+                    [darr.basicData.length/(V.sizeof/DarrBData.sizeof),nDelements],0,darr.basicData,0);
+                a2+=a1;
+            } else {
+                assert(el2DelMap.length>1&&(el2DelMap.length-2)%3==0,"unexpected el2DelMap length");
+                index_type resEl=blockSizeArr-nElements;
+                index_type resDel=blockSizeDarr-nDelements;
+                size_t nSeg=el2DelMap.length/3;
+                size_t nPart=arr.length/nElements;
+                auto p=arr.ptr;
+                auto dp=darr.ptr;
+                for (size_t iPart=nPart;iPart!=0;--iPart){
+                    p+=el2DelMap[0];
+                    dp+=el2DelMap[1];
+                    for(size_t iseg=0;iseg!=nSeg;++iseg){
+                        for (index_type i=0;i!=el2DelMap[iseg*3+2];--i){
+                            static if(is(typeof((*dp)+=*p))){
+                                (*dp)+=(*p);
+                            } else {
+                                *dp=(*dp)+(*p);
+                            }
+                            ++dp;
+                            ++p;
+                        }
+                        p+=el2DelMap[iseg*3+3];
+                        dp+=el2DelMap[iseg*3+4];
+                    }
+                    p+=resEl;
+                    dp+=resDel;
+                }
+            }
+        }
+        /// copies arr to darr
+        void addDArrayToArray(T,V)(BulkArray!(V)darr,BulkArray!(T)arr,index_type blockSizeDarr,index_type blockSizeArr){
+            assert(blockSizeArr>=nElements,"invalid block size in arr");
+            assert(blockSizeDarr>=nDelements,"invalid block size in darr");
+            if (derivMap==DerivMap.SimpleMap){
+                assert(nElements==nDelements);
+                alias typeof(darr.basicData[0]) DarrBData;
+                scope a1=NArray!(DarrBData,2)([cast(index_type)(V.sizeof*blockSizeArr),DarrBData.sizeof],
+                    [darr.basicData.length/(V.sizeof/DarrBData.sizeof),nDelements],0,darr.basicData,0);
+                alias typeof(arr.basicData[0]) ArrBData;
+                scope a2=NArray!(ArrBData,2)([cast(index_type)(T.sizeof*blockSizeArr),ArrBData.sizeof],
+                    [arr.basicData.length/(T.sizeof/ArrBData.sizeof),nElements],0,arr.basicData,0);
+                a2+=a1;
+            } else {
+                assert(el2DelMap.length>2&&(el2DelMap.length)%3==0,"unexpected el2DelMap length");
+                index_type resEl=blockSizeArr-nElements;
+                index_type resDel=blockSizeDarr-nDelements;
+                size_t nSeg=el2DelMap.length/3;
+                size_t nPart=arr.length/nElements;
+                auto p=arr.ptr;
+                auto dp=darr.ptr;
+                for (size_t iPart=nPart;iPart!=0;--iPart){
+                    for(size_t iseg=0;iseg!=nSeg;++iseg){
+                        for (index_type i=0;i!=el2DelMap[iseg*3];--i){ // use the safer < instead of != ?
+                            static if(is(typeof((*p)+=*dp))){
+                                (*p)+= (*dp);
+                            } else {
+                                *p=(*p)+(*dp);
+                            }
+                            ++dp;
+                            ++p;
+                        }
+                        p+=el2DelMap[iseg*3+1];
+                        dp+=el2DelMap[iseg*3+2];
+                    }
+                    p+=resEl;
+                    dp+=resDel;
+                }
+            }
+        }
+        /// sets overlap
+        void setOverlap(T)(NArray!(T,2)overlap,index_type blockSizeArr,index_type blockSizeDarr){
+            assert(blockSizeArr>=nElements,"invalid block size in arr");
+            assert(blockSizeDarr>=nDelements,"invalid block size in darr");
+            assert(overlap.shape[0]%blockSizeArr==0,"unexpected overlap size");
+            assert(overlap.shape[1]%blockSizeDarr==0,"unexpected overlap size");
+            if (derivMap==DerivMap.SimpleMap){
+                diag(overlap)[]=cast(T)1;
+            } else {
+                assert(el2DelMap.length>2&&(el2DelMap.length)%3==0,"unexpected el2DelMap length");
+                index_type resEl=blockSizeArr-nElements;
+                index_type resDel=blockSizeDarr-nDelements;
+                size_t nSeg=el2DelMap.length/3;
+                index_type arrIdx=0;
+                index_type darrIdx=0;
+                while (arrIdx!=overlap.shape[1] && darrIdx!=overlap.shape[0]){
+                    for(size_t iseg=0;iseg!=nSeg;++iseg){
+                        for (index_type i=0;i!=el2DelMap[iseg*3];--i){ // use the safer < instead of != ?
+                            overlap[arrIdx,darrIdx]=cast(T)1;
+                            ++arrIdx;
+                            ++darrIdx;
+                        }
+                        arrIdx+=el2DelMap[iseg*3+1];
+                        darrIdx+=el2DelMap[iseg*3+2];
+                    }
+                    arrIdx+=resEl;
+                    darrIdx+=resDel;
+                }
+                assert(arrIdx==overlap.shape[1] && darrIdx==overlap.shape[0]);
+            }
+        }
+        /// rebuilds the el2DelMap and updates the derivMap
+        void rebuildEl2DelMap(){
+            synchronized(lockObj){
+                if (skipElements.length==0 && skipDelements.length==0){
+                    derivMap=DerivMap.SimpleMap;
+                    el2DelMap=null;
+                } else {
+                    index_type elPos=0,skipElPos=0;
+                    index_type delPos=0,skipDelPos=0;
+                    index_type resPos=0;
+                    while(elPos<nElements && delPos<nElements){
+                        index_type nMax=nElements-elPos;
+                        if(skipElPos<skipElements.length){
+                            if (elPos<skipElements[skipElPos]){
+                                nMax=skipElements[skipElPos]-elPos;
+                            } else {
+                                nMax=0;
+                            }
+                        }
+                        if (skipDelPos<skipDelements.length){
+                            if (delPos<skipDelements[skipDelPos]){
+                                nMax=min(nMax,skipDelements[skipDelPos]);
+                            } else {
+                                nMax=0;
+                            }
+                        }
+                        if (resPos>=el2DelMap.length){
+                            el2DelMap~=[cast(index_type)0,0,0];
+                        }
+                        assert(el2DelMap.length>resPos+2,"internal error el2DelMap");
+                        el2DelMap[resPos]=nMax;
+                        elPos+=nMax;
+                        ++resPos;
+                        if(skipElPos<skipElements.length){
+                            assert(skipElPos+1<skipElements.length);
+                            if (elPos<=skipElements[skipElPos]){
+                                assert(elPos==skipElements[skipElPos]);
+                                el2DelMap[resPos]=skipElements[skipElPos+1]-elPos;
+                                skipElPos+=2;
+                            } else {
+                                el2DelMap[resPos]=0;
+                            }
+                        } else {
+                            el2DelMap[resPos]=0;
+                        }
+                        elPos+=el2DelMap[resPos];
+                        ++resPos;
+                        if (skipDelPos<skipDelements.length){
+                            assert(skipDelPos+1<skipDelements.length);
+                            if (delPos<=skipDelements[skipDelPos]){
+                                assert(delPos==skipDelements[skipDelPos]);
+                                el2DelMap[resPos]=skipDelements[skipDelPos+1]-delPos;
+                                skipDelPos+=2;
+                            } else {
+                                el2DelMap[resPos]=0;
+                            }
+                        } else {
+                            el2DelMap[resPos]=0;
+                        }
+                        delPos+=el2DelMap[resPos];
+                        ++resPos;
+                    }
+                    assert(elPos==nElements && delPos==nDelements);
+                }
+            }
+        }
+        /// adds the given number of elements to the particles of this type.
+        /// if complexMapping is true the simplified mapping between elements and derivatives is
+        /// skipped (this is required if nEl!=nDel).
+        /// returns the indexes of the first element and delement added to the particle with this
+        /// operation
+        void addElements(index_type nEl,index_type nDel,bool complexMapping ,
+            out index_type elIdx, out index_type delIdx)
+        {
+            assert(nEl==nDel || complexMapping,"the simple mapping works only if nEl==nDel");
+            synchronized(lockObj){
+                elIdx=nElements;
+                delIdx=nDelements;
+                nElements+=nEl;
+                nDelements+=nDel;
+                if (complexMapping){
+                    if (skipElements.length>0 && skipElements[$-1]==elIdx){
+                        skipElements[$-1]=nElements;
+                    } else {
+                        skipElements~=[elIdx,nElements];
+                    }
+                    if (skipDelements.length>0 && skipDelements[$-1]==delIdx){
+                        skipDelements[$-1]=nDelements;
+                    } else {
+                        skipDelements~=[delIdx,nDelements];
+                    }
+                }
+                rebuildEl2DelMap();
+            }
+        }
+    }
+    size_t subParticles; /// number of subparticles for each particle of this type
+    SegAElements posEls; /// per particle position like (Vector(T,3)) elements
+    SegAElements orientEls; /// per particle orientation like (Quaternion(T)) elements
+    SegAElements dofEls; /// per particle generic degrees of freedom (T) elements
+    DerivTransfer[] transferHandlers; /// extra functions that are called to handle the complex part of the derivative transfers
     LevelIdx _level;
     LevelIdx level(){ return _level; }
     void level(LevelIdx l){ _level=l; }
     KindIdx pKind;
-    size_t position;
-    size_t degreesOfFreedom;
-    size_t orientation;
-    size_t subParticles;
+    
     static ClassMetaInfo metaI;
     static this(){
         metaI=ClassMetaInfo.createForType!(typeof(this))("ParticleKind");
@@ -65,11 +591,11 @@ class ParticleKind: Serializable,CopiableObjectI{
         metaI.addFieldOfType!(ubyte)("level","level of the particle",
             SerializationLevel.debugLevel);
         metaI.addFieldOfType!(ushort)("pKind","kind index");
-        metaI.addFieldOfType!(size_t)("position","number of 3D space elements",
+        metaI.addFieldOfType!(SegAElements)("posEls","number of 3D space elements",
             SerializationLevel.debugLevel);
-        metaI.addFieldOfType!(size_t)("degreesOfFreedom","number of 3D space elements",
+        metaI.addFieldOfType!(SegAElements)("dofEls","number generalized degrees of freedom elements",
             SerializationLevel.debugLevel);
-        metaI.addFieldOfType!(size_t)("orientation","number of 3D space elements",
+        metaI.addFieldOfType!(SegAElements)("orientEls","number of oriantation elements",
             SerializationLevel.debugLevel);
         metaI.addFieldOfType!(size_t)("subParticles","number of subParticles",
             SerializationLevel.debugLevel);
@@ -80,16 +606,16 @@ class ParticleKind: Serializable,CopiableObjectI{
     /// just for internal use
     this(){}
     
-    this(char[] pName,LevelIdx pLevel,KindIdx kindIdx,char[] symbol=null,char[] potential=null,
-        size_t position=1,size_t orientation=0, size_t degreesOfFreedom=0){
+    this(char[] pName,LevelIdx pLevel,KindIdx kindIdx,char[] symbol=null,char[] potential=null){
         this._name=pName;
         this.symbol=symbol;
         this._potential=potential;
         this._level=pLevel;
         this.pKind=kindIdx;
-        this.position=position;
-        this.degreesOfFreedom=degreesOfFreedom;
-        this.orientation=orientation;
+        posEls._lockObj=this;
+        dofEls._lockObj=this;
+        orientEls._lockObj=this;
+        
     }
     typeof(this)dup(){
         ParticleKind res=cast(ParticleKind)this.classinfo.create();
@@ -104,9 +630,10 @@ class ParticleKind: Serializable,CopiableObjectI{
         _name=p._name;
         _level=p._level;
         pKind=p.pKind;
-        position=p.position;
-        degreesOfFreedom=p.degreesOfFreedom;
-        orientation=p.orientation;
+        posEls=p.posEls;
+        orientEls=p.orientEls;
+        dofEls=p.dofEls;
+        subParticles=p.subParticles;
     }
     
     void serial(S)(S s){
@@ -115,9 +642,10 @@ class ParticleKind: Serializable,CopiableObjectI{
         s.field(metaI[1],*ui);
         auto us=cast(ushort*)&pKind;
         s.field(metaI[2],*us);
-        s.field(metaI[3],position);
-        s.field(metaI[1],degreesOfFreedom);
-        s.field(metaI[1],orientation);
+        s.field(metaI[3],posEls);
+        s.field(metaI[4],dofEls);
+        s.field(metaI[5],orientEls);
+        s.field(metaI[6],subParticles);
     }
     
     void preSerialize(Serializer s){}
@@ -138,9 +666,28 @@ class ParticleKind: Serializable,CopiableObjectI{
     /// system structure changed (particle added/removed, kinds added/removed)
     /// the segmented array structs should be initialized, positions,... are not yet valid
     void sysStructChangedT(T)(ParticleSys!(T) p){
-        p.dynVars.posStruct.addToKindDim(pKind,position);
-        p.dynVars.orientStruct.addToKindDim(pKind,orientation);
-        p.dynVars.dofStruct.addToKindDim(pKind,degreesOfFreedom);
+        foreach (pool;[&p.dynVars.xGroup]){
+            if (pool.posStruct.addToKindDim(pKind,posEls.nElements)!=0){
+                throw new Exception("particleKind '"~name~"' should be the first to add to posStruct for its kind for group "~pool.name);
+            }
+            if (pool.orientStruct.addToKindDim(pKind,orientEls.nElements)!=0){
+                throw new Exception("particleKind '"~name~"' should be the first to add to orientStruct for its kind for group "~pool.name);
+            }
+            if (pool.dofStruct.addToKindDim(pKind,dofEls.nElements)!=0){
+                throw new Exception("particleKind '"~name~"' should be the first to add to dofStruct for its kind for group "~pool.name);
+            }
+        }
+        foreach (pool;[&p.dynVars.dxGroup,&p.dynVars.dualDxGroup]){
+            if (pool.posStruct.addToKindDim(pKind,posEls.nDelements)!=0){
+                throw new Exception("particleKind '"~name~"' should be the first to add to posStruct for its kind for group "~pool.name);
+            }
+            if (pool.orientStruct.addToKindDim(pKind,orientEls.nDelements)!=0){
+                throw new Exception("particleKind '"~name~"' should be the first to add to orientStruct for its kind for group "~pool.name);
+            }
+            if (pool.dofStruct.addToKindDim(pKind,dofEls.nDelements)!=0){
+                throw new Exception("particleKind '"~name~"' should be the first to add to dofStruct for its kind for group "~pool.name);
+            }
+        }
     }
     
     void sysStructChanged(Variant pV){
@@ -162,6 +709,98 @@ class ParticleKind: Serializable,CopiableObjectI{
     void didReadProperties(){}
     /// request to try to reduce memory usage
     void minimizeMemory(Variant p){}
+    
+    /// adds to res in the tangential space of pos (derivative space) the equivalent (to first order)
+    /// to the one that goes from pos.x-0.5*diffP to pos.x+0.5*diffP
+    void addToTangentialSpaceT(T)(ParticleSys!(T)pos,DynPVector!(T,0)diffP,DynPVector!(T,1)res){
+        if (pKind in res.pos.kRange && pKind in diffP.pos.kRange){
+            posEls.addArrayToDArray(res.pos[pKind],res.pos[pKind],
+                diffP.pos.arrayStruct.kindDim(pKind),res.pos.arrayStruct.kindDim(pKind));
+        }
+        if (pKind in res.orient.kRange && pKind in diffP.orient.kRange){
+            orientEls.addArrayToDArray(res.orient[pKind],res.orient[pKind],
+                diffP.orient.arrayStruct.kindDim(pKind),res.orient.arrayStruct.kindDim(pKind));
+        }
+        if (pKind in res.dof.kRange && pKind in diffP.dof.kRange){
+            dofEls.addArrayToDArray(res.dof[pKind],res.dof[pKind],
+                diffP.dof.arrayStruct.kindDim(pKind),res.dof.arrayStruct.kindDim(pKind));
+        }
+        foreach(obj;transferHandlers){
+            obj.addToTangentialSpace(pos,diffP,res);
+        }
+    }
+    /// adds to the vector in res the derivative deriv from the tangential space of pos.
+    /// This is conceptually equivalent to geodesic following, but it doesn't have to be exactly that,
+    /// it just have to be exact at the first order.
+    void addFromDualTangentialSpaceT(T)(ParticleSys!(T)pos,DynPVector!(T,2)deriv,DynPVector!(T,0)res){
+        if (pKind in res.pos.kRange && pKind in deriv.pos.kRange){
+            posEls.addDArrayToArray(res.pos[pKind],res.pos[pKind],
+                deriv.pos.arrayStruct.kindDim(pKind),res.pos.arrayStruct.kindDim(pKind));
+        }
+        if (pKind in res.orient.kRange && pKind in deriv.orient.kRange){
+            orientEls.addDArrayToArray(res.orient[pKind],res.orient[pKind],
+                deriv.orient.arrayStruct.kindDim(pKind),res.orient.arrayStruct.kindDim(pKind));
+        }
+        if (pKind in res.dof.kRange && pKind in deriv.dof.kRange){
+            dofEls.addDArrayToArray(res.dof[pKind],res.dof[pKind],
+                deriv.dof.arrayStruct.kindDim(pKind),res.dof.arrayStruct.kindDim(pKind));
+        }
+        foreach(obj;transferHandlers){
+            obj.addFromDualTangentialSpace(pos,deriv,res);
+        }
+    }
+    /// transfers from a foreign tangential space, this is conceptually equivalent to parallel
+    /// transfer, but needs to be valid only if x and pos2.x are close, in particular
+    /// a direct transfer res+=derivAtPos2 is always allowed (and is what is done by default)
+    void addFromForeignDualTangentialSpaceT(T)(ParticleSys!(T)pos1,ParticleSys!(T)pos2,
+        DynPVector!(T,2)derivAtPos2,DynPVector!(T,2)res){
+        res.axpby(derivAtPos2,1,1);
+        foreach(obj;transferHandlers){
+            obj.addFromForeignDualTangentialSpace(pos1,pos2,derivAtPos2,res);
+        }
+    }
+    /// should return true if the overlap is different from the identity
+    bool specialOverlap(){
+        foreach(obj;transferHandlers){
+            if (obj.specialOverlap) return true;
+        }
+        return false;
+    }
+    /// should set the overlap, matrix should use 2d distribution
+    void setOverlapT(T)(DynPMatrix!(T,1,2)m){
+        assert(m.rowGroup.posStruct==m.colGroup.posStruct && m.rowGroup.orientStruct==m.colGroup.orientStruct &&
+            m.rowGroup.dofStruct==m.colGroup.dofStruct,"only col=row implemented");
+        if (pKind in m.rowGroup.gRange && pKind in m.colGroup.gRange){
+            if (pKind in m.rowGroup.posStruct.kRange && pKind in m.colGroup.posStruct.kRange){
+                auto rKStart=pKind-m.rowGroup.posStruct.kRange.kStart;
+                auto rKStarts=m.rowGroup.posStruct.kindStarts;
+                auto cKStart=pKind-m.colGroup.posStruct.kRange.kStart;
+                auto cKStarts=m.colGroup.posStruct.kindStarts;
+                posEls.setOverlap(m.blocks[0][0][Range(rKStarts[rKStart],rKStarts[rKStart+1]),
+                    Range(cKStarts[cKStart],cKStarts[cKStart+1])],m.rowGroup.posStruct.kindDim(pKind),
+                    m.colGroup.posStruct.kindDim(pKind));
+                rKStart=pKind-m.rowGroup.orientStruct.kRange.kStart;
+                rKStarts=m.rowGroup.orientStruct.kindStarts;
+                cKStart=pKind-m.colGroup.orientStruct.kRange.kStart;
+                cKStarts=m.colGroup.orientStruct.kindStarts;
+                orientEls.setOverlap(m.blocks[1][1][Range(rKStarts[rKStart],rKStarts[rKStart+1]),
+                    Range(cKStarts[cKStart],cKStarts[cKStart+1])],m.rowGroup.orientStruct.kindDim(pKind),
+                    m.colGroup.orientStruct.kindDim(pKind));
+                rKStart=pKind-m.rowGroup.dofStruct.kRange.kStart;
+                rKStarts=m.rowGroup.dofStruct.kindStarts;
+                cKStart=pKind-m.colGroup.dofStruct.kRange.kStart;
+                cKStarts=m.colGroup.dofStruct.kindStarts;
+                dofEls.setOverlap(m.blocks[1][1][Range(rKStarts[rKStart],rKStarts[rKStart+1]),
+                    Range(cKStarts[cKStart],cKStarts[cKStart+1])],m.rowGroup.dofStruct.kindDim(pKind),
+                    m.colGroup.dofStruct.kindDim(pKind));
+            }
+        }
+        foreach(obj;transferHandlers){
+            obj.setOverlap(m);
+        }
+    }
+    mixin(derivTransferTMixin("Real"));
+    mixin(derivTransferTMixin("LowP"));
 }
 
 /// kind of the particle that repesents the whole system
@@ -170,8 +809,8 @@ class SysKind: ParticleKind{
     override char[] potential() { return ""; }
     this(){}
     
-    this(LevelIdx pLevel,KindIdx kindIdx,size_t position=0,size_t orientation=0, size_t degreesOfFreedom=0){
-        super("_SYSTEM_",pLevel,kindIdx,"","",position,orientation,degreesOfFreedom);
+    this(LevelIdx pLevel,KindIdx kindIdx){
+        super("_SYSTEM_",pLevel,kindIdx,"","");
     }
     
 }
@@ -184,14 +823,15 @@ class SysKind: ParticleKind{
 char[] dynPVectorOp(char[][]namesLocal,char[] op,bool cell=true,bool nonEq=false)
 {
     char[] res;
-    char[][] els=[cast(char[])".pos",".orient",".dof"];
-    if (cell) els~=".cell";
+    char[][] els=[".pos",".orient",".dof"];
+    if (cell) els=[".pos",".orient",".dof",".cell"];
     foreach (pp;els){
         res=`
         if (`;
         foreach (i,n; namesLocal){
             if (i!=0) res~="||";
             res~=n;
+            res~=pp;
             res~=" is null ";
         }
         res~=`) {`;
@@ -201,6 +841,7 @@ char[] dynPVectorOp(char[][]namesLocal,char[] op,bool cell=true,bool nonEq=false
             foreach (i,n; namesLocal){
                 if (i!=0) res~="||";
                 res~=n;
+                res~=pp;
                 res~=" !is null ";
             }
             res~=`)) {
@@ -215,7 +856,7 @@ char[] dynPVectorOp(char[][]namesLocal,char[] op,bool cell=true,bool nonEq=false
             res~=` else if (`;
             foreach (i,n;namesLocal[1..$]){
                 if (i!=0) res~=" || ";
-                res~=namesLocal[0]~` is `~n;
+                res~=namesLocal[0]~pp~` is `~n~pp;
             }
             res~=`) {
             throw new Exception("equal equivalent DynPVector in `~pp~`",__FILE__,__LINE__);
@@ -242,45 +883,13 @@ char[] dynPVectorOp(char[][]namesLocal,char[] op,bool cell=true,bool nonEq=false
     return res;
 }
 
-/// a pool for dynamical properties
-class DynPPool(T){
-    this(SegmentedArrayStruct posStruct,SegmentedArrayStruct orientStruct,SegmentedArrayStruct dofStruct){
-        poolPos=new SegArrPool!(Vector!(T,3))(posStruct);
-        poolOrient=new SegArrPool!(Quaternion!(T))(orientStruct);
-        poolDof=new SegArrPool!(T)(dofStruct);
-    }
-    
-    SegArrPool!(Vector!(T,3)) poolPos;
-    SegArrPool!(Quaternion!(T)) poolOrient;
-    SegArrPool!(T) poolDof;
-    /// returns a postition like array
-    SegmentedArray!(Vector!(T,3)) newPos(){
-        return poolPos.getObj();
-    }
-    /// returns an orientation like array
-    SegmentedArray!(Quaternion!(T)) newOrient(){
-        return poolOrient.getObj();
-    }
-    /// returns a dof like array
-    SegmentedArray!(T) newDof(){
-        return poolDof.getObj();
-    }
-    void flush(){
-        poolPos.flush();
-        poolOrient.flush();
-        poolDof.flush();
-    }
-    void stopCaching(){
-        poolPos.stopCaching();
-        poolOrient.stopCaching();
-        poolDof.stopCaching();
-    }
-}
-
 /// a vector representing a state,dstate or mddstate, implements vector ops
 /// the basic type to represent a state is DynamicsVars, so that forces dependent on the velocity, forces,...
 /// can be represented cleanly, but for normal conservative systems DynPVector is a useful abstraction.
-struct DynPVector(T){
+/// group is used just to subdivide DynPVectors in typechecked incompatible groups (position (0), and derivatives (1) for example)
+struct DynPVector(T,int group){
+    alias T dtype;
+    enum{ vGroup=group }
     Cell!(T) cell;
     /// position in 3D space
     SegmentedArray!(Vector!(T, 3)) pos;
@@ -309,29 +918,48 @@ struct DynPVector(T){
         cell=null;
         return this;
     }
+    /// cast between different groups, obviously if the groups are structurally different you might get problems
+    /// later on (but as different group have exactly the same content type this is still safe memorywise)
+    DynPVector!(T,g2) toGroup(int g2)(){
+        union GConv{
+            DynPVector v1;
+            DynPVector!(T,g2) v2;
+        }
+        GConv a;
+        a.v1=*this;
+        return a.v2;
+    }
     void clear(){
         cell=null;
         pos=null;
         orient=null;
         dof=null;
     }
-    void axpby(V)(DynPVector!(V)x,V a,T y){
+    void axpby(V)(V x,T a=1,T b=1){
+        static assert(is(V==DynPVector!(V.dtype,group)),"axpby only between DynPVectors of the same group, not "~V.stringof);
+        enum{ weak=false }
         if ((cell is x.cell) && cell !is null){
             throw new Exception("identical cells in axpby",__FILE__,__LINE__);
         }
         auto y=this;
+        pragma(msg,"-----------------");
+        pragma(msg,dynPVectorOp(["x","y"],"y.axpby(x,a,b);",true,false));
+        pragma(msg,"=================");
         mixin(dynPVectorOp(["x","y"],"y.axpby(x,a,b);",true,false));
     }
     void opMulAssign()(T scale){
+        enum{ weak=false }
         auto x=this;
         mixin(dynPVectorOp(["x"],"x*=scale;",true,false));
     }
-    void opMulAssign(V)(DynPVector!(V) y){
+    void opMulAssign(V)(DynPVector!(V,group) y){
+        enum{ weak=false }
         auto x=this;
         mixin(dynPVectorOp(["x","y"],"x*=y;",true,false));
     }
     
-    void opSliceAssign(V)(DynPVector!(V) b){
+    void opSliceAssign(V)(DynPVector!(V,group) b){
+        enum{ weak=false }
         auto a=this;
         mixin(dynPVectorOp(["a","b"],"a[]=b;",true,true));
     }
@@ -432,7 +1060,7 @@ struct DynPVector(T){
         return len;
     }
     
-    U opDot(V,U=typeof(T.init+V.init))(DynPVector!(V) v2){ // could overlap the various loops...
+    U opDot(V,U=typeof(T.init+V.init))(DynPVector!(V,group) v2){ // could overlap the various loops...
         U res=0;
         Exception e=null;
         void doPosLoop(){
@@ -440,8 +1068,8 @@ struct DynPVector(T){
                 if (e!is null) return;
                 assert(v2.pos!is null,"Different vectors in opDot");
                 assert(v2.pos.arrayStruct is pos.arrayStruct,"Different array structs in opDot");
-                auto d1=a2NA2((cast(T*)pos.data.ptr)[3*pos.data.length]);
-                auto d2=a2NA2((cast(T*)v2.pos.data.ptr)[3*v2.pos.data.length]);
+                auto d1=a2NA(pos.data.basicData);
+                auto d2=a2NA(v2.pos.data.basicData);
                 auto rAtt=dot(d1,d2);
                 atomicAdd(res,cast(U)rAtt);
             } catch (Exception eTmp){
@@ -454,8 +1082,8 @@ struct DynPVector(T){
                 assert(v2.dof!is null,"Different vectors in opDot");
                 assert(v2.dof.arrayStruct is dof.arrayStruct,"Different array structs in opDot");
                 if (dof.length==0) return;
-                auto d1=a2NA2(dof.data.data);
-                auto d2=a2NA2(v2.dof.data);
+                auto d1=a2NA(dof.data.data);
+                auto d2=a2NA(v2.dof.data);
                 auto rAtt=dot(d1,d2);
                 atomicAdd(res,cast(U)rAtt);
             } catch(Exception eTmp){
@@ -597,12 +1225,35 @@ struct DynPVector(T){
         if (dof!is null) res.dof=dof.dup();
         return res;
     }
-    DynPVector!(V) dupT(V)(){
-        DynPVector!(V) res;
+    DynPVector!(V,group) dupT(V)(){
+        DynPVector!(V,group) res;
         if (cell!is null) res.cell=cell.dupT!(V);
         if (pos!is null) res.pos=pos.dupT!(Vector!(V,3));
         if (orient!is null) res.orient=orient.dupT!(Quaternion!(V));
         if (dof!is null) res.dof=dof.dupT!(V);
+        return res;
+    }
+    /// returns the convex hull of the kinds of all components
+    KindRange gRange(){
+        KindRange res;
+        if (pos!is null){
+            res=pos.kRange;
+        }
+        if (orient!is null){
+            res=res.convexHull(orient.kRange);
+        }
+        if (dof!is null){
+            res=res.convexHull(dof.kRange);
+        }
+        return res;
+    }
+    /// allocates an empty vector from the given pool
+    static DynPVector allocFromPool(DynPPool!(T) p,bool allocCell=false){
+        DynPVector res;
+        if (allocCell) res.cell=new Cell!(T)(Matrix!(T,3,3).identity,[0,0,0]);
+        res.pos=p.newPos();
+        res.orient=p.newOrient();
+        res.dof=p.newDof();
         return res;
     }
     mixin(serializeSome("dchem.sys.DynamicsVars("~T.stringof~")","cell|pos|orient|dof"));
@@ -612,54 +1263,68 @@ struct DynPVector(T){
 /// variables that normally an integrator should care about
 // (put here mainly for tidiness reasons)
 struct DynamicsVars(T){
-    DynPPool!(T) pool;
     alias T dtype;
     Real potentialEnergy; /// potential energy of the system (NAN if unknown)
 
-    /// structure of all position based arrays
-    SegmentedArrayStruct posStruct;
-    /// structure of all orientation based arrays
-    SegmentedArrayStruct orientStruct;
-    /// structure of all dof (degrees of freedom) arrays
-    SegmentedArrayStruct dofStruct;
+    /// structure (and pool) of the positions
+    DynPPool!(T) xGroup;
+    /// structure (and pool) of the derivatives
+    DynPPool!(T) dxGroup;
+    /// structure (and pool) of the dual derivatives (this is an extra separate group because if the overlap matrix
+    /// is distributed the local vectors will indeed be incompatible)
+    DynPPool!(T) dualDxGroup;
     
     /// position vector
-    DynPVector!(T) x;
+    DynPVector!(T,0) x;
     /// velocities vector
-    DynPVector!(T) dx;
+    DynPVector!(T,1) dx;
     /// forces vector
-    DynPVector!(T) mddx;
+    DynPVector!(T,1) mddx;
     
     /// reallocates the segmented array structures, invalidates everything
     void reallocStructs(SysStruct sys){
-        posStruct=new SegmentedArrayStruct("posStruct",sys.fullSystem,KindRange(sys.levels[0].kStart,sys.levels[$-1].kEnd),
-            [],SegmentedArrayStruct.Flags.None);
-        orientStruct=new SegmentedArrayStruct("orientStruct",sys.fullSystem,KindRange(sys.levels[0].kStart,sys.levels[$-1].kEnd),
-            [],SegmentedArrayStruct.Flags.None);
-        dofStruct=new SegmentedArrayStruct("dofStruct",sys.fullSystem,KindRange(sys.levels[0].kStart,sys.levels[$-1].kEnd),
-            [],SegmentedArrayStruct.Flags.None);
-        if (pool!is null){
-            pool.flush(); // call stopCaching???
-        }
-        pool=new DynPPool!(T)(posStruct,orientStruct,dofStruct);
+        if (xGroup!is null) xGroup.flush; // call stopCaching ?
+        if (dxGroup!is null) dxGroup.flush; // call stopCaching ?
+        if (dualDxGroup!is null) dualDxGroup.flush; // call stopCaching ?
+        xGroup=new DynPPool!(T)("xGroup",sys.fullSystem,KindRange(sys.levels[0].kStart,sys.levels[$-1].kEnd),
+            SegmentedArrayStruct.Flags.None);
+        dxGroup=new DynPPool!(T)("dxGroup",sys.fullSystem,KindRange(sys.levels[0].kStart,sys.levels[$-1].kEnd),
+            SegmentedArrayStruct.Flags.None);
+        dualDxGroup=new DynPPool!(T)("dualDxGroup",sys.fullSystem,KindRange(sys.levels[0].kStart,sys.levels[$-1].kEnd),
+            SegmentedArrayStruct.Flags.None);
         x.clear();
         dx.clear();
         mddx.clear();
     }
+    /// the structures have been defined and can be consolidated (if possible)
+    /// sets up the pools
+    void freezeStructs(){
+        dxGroup.consolidateStructs(xGroup);
+        dualDxGroup.consolidateStructs(dxGroup);
+        xGroup.allocPools();
+        dxGroup.allocPools(xGroup);
+        dualDxGroup.allocPools(dxGroup);
+    }
     
     /// checks that the given vector is allocated
-    void checkAllocDynPVect(V)(DynPVector!(V)* v){
-        assert(posStruct!is null);
-        assert(orientStruct!is null);
-        assert(dofStruct!is null);
+    void checkAllocDynPVect(V,int i)(DynPVector!(V,i)* v){
+        static if (i==0){
+            auto pool=xGroup;
+        } else static if (i==1){
+            auto pool=dxGroup;
+        } else static if (i==2){
+            auto pool=dualDxGroup;
+        } else {
+            static assert(0,"unexpected vector group "~ctfe_i2a(i));
+        }
         static if (is(V==T)){
             if (v.pos is null)    v.pos=pool.newPos();
             if (v.orient is null) v.orient=pool.newOrient();
             if (v.dof is null)    v.dof=pool.newDof();
         } else {
-            if (v.pos is null)    v.pos=new SegmentedArray!(Vector!(V,3))(posStruct);
-            if (v.orient is null) v.orient=new SegmentedArray!(Quaternion!(V))(orientStruct);
-            if (v.dof is null)    v.dof=new SegmentedArray!(V)(dofStruct);
+            if (v.pos is null)    v.pos=new SegmentedArray!(Vector!(V,3))(pool.posStruct);
+            if (v.orient is null) v.orient=new SegmentedArray!(Quaternion!(V))(pool.orientStruct);
+            if (v.dof is null)    v.dof=new SegmentedArray!(V)(pool.dofStruct);
         }
     }
     
@@ -689,9 +1354,9 @@ struct DynamicsVars(T){
         mddx[]=val;
     }
     void axpby(V)(DynamicsVars!(V) v,V a,T b){
-        x.axpby!(V)(v.x,a,b);
-        dx.axpby!(V)(v.dx,a,b);
-        mddx.axpby!(V)(v.mddx,a,b);
+        x.axpby(v.x,a,b);
+        dx.axpby(v.dx,a,b);
+        mddx.axpby(v.mddx,a,b);
     }
     void opMulAssign(V)(DynamicsVars!(V) v){
         x*=v.x;
@@ -852,6 +1517,7 @@ interface HiddenVars:Serializable{
 class ParticleSys(T): CopiableObjectI,Serializable
 {
     alias T dtype;
+    alias BlasTypeForType!(T) dtypeBlas;
     char[] name; /// name of the particle system
     ulong iteration;
     NotificationCenter nCenter;
@@ -859,6 +1525,93 @@ class ParticleSys(T): CopiableObjectI,Serializable
     
     DynamicsVars!(T) dynVars; /// dynamics variables
     HiddenVars hVars; /// possibly some hidden degrees of freedom
+    struct DerivOverlap{
+        DynPMatrix!(dtypeBlas,1,2) overlap; /// overlap of the derivatives (metric), might be null or outdated, access through maybeOverlap
+        DynPMatrix!(dtypeBlas,2,1) overlapInv; /// pseudo inverse of the overlap, might be null or outdated, access through maybeOverlapInv
+        bool specialOverlap=true;
+        bool overlapUpToDate=false;
+        bool overlapInvUpToDate=false;
+        /// full reset of the structure
+        void clear(){
+            overlap=null;
+            overlapInv=null;
+            specialOverlap=true;
+            overlapUpToDate=false;
+            overlapInvUpToDate=false;
+        }
+        /// signals that the overlap has become invalid
+        void invalidate(){
+            overlapUpToDate=false;
+            overlapInvUpToDate=false;
+        }
+        /// update of the overlap if specialOverlap && !overlapUpToDate
+        void updateOverlap(ParticleSys pSys){
+            synchronized(pSys){
+                if (specialOverlap){
+                    specialOverlap=pSys.specialDerivOverlap();
+                }
+                if (specialOverlap){
+                    if (overlap is null || overlap.rowGroup.posStruct !is pSys.dynVars.dualDxGroup.posStruct
+                        || overlap.rowGroup.orientStruct !is pSys.dynVars.dualDxGroup.orientStruct
+                        || overlap.rowGroup.dofStruct !is pSys.dynVars.dualDxGroup.dofStruct
+                        || overlap.colGroup.posStruct !is pSys.dynVars.dxGroup.posStruct
+                        || overlap.colGroup.orientStruct !is pSys.dynVars.dxGroup.orientStruct
+                        || overlap.colGroup.dofStruct !is pSys.dynVars.dxGroup.dofStruct)
+                    {
+                        auto rowGroup=pSys.dynVars.dxGroup;
+                        auto colGroup=pSys.dynVars.dualDxGroup;
+                        static if (! is(dtype==dtypeBlas)){
+                            auto rGroup=new DynPPool!(dtypeBlas)("blasDxGroup",rowGroup.posStruct,
+                                rowGroup.orientStruct,rowGroup.dofStruct);
+                            auto cGroup=new DynPPool!(dtypeBlas)("blasDualDxGroup",colGroup.posStruct,
+                                colGroup.orientStruct,colGroup.dofStruct);
+                            overlap=new DynPMatrix!(dtypeBlas,1,2)(rGroup,cGroup);
+                        } else {
+                            overlap=new DynPMatrix!(dtypeBlas,1,2)(rowGroup,colGroup);
+                        }
+                    } else {
+                        overlap.data[]=cast(dtypeBlas)0;
+                    }
+                    pSys.setDerivOverlap(overlap);
+                }
+                overlapUpToDate=true;
+            }
+        }
+        /// update the inverse of the overlap
+        void updateOverlapInv(ParticleSys pSys){
+            synchronized(pSys){
+                updateOverlap(pSys);
+                if (specialOverlap){
+                    if (overlapInvUpToDate) return;
+                    assert(overlap!is null);
+                    if (overlapInv is null || overlapInv.rowGroup!is pSys.dynVars.dxGroup 
+                        || overlapInv.colGroup!is pSys.dynVars.dualDxGroup){
+                        overlapInv=new DynPMatrix!(dtypeBlas,2,1)(overlap.colGroup,overlap.rowGroup);
+                    }
+                    // well inversion is a global thing, so most likely n!=m makes no sense, anyway...
+                    index_type m=overlapInv.data.shape[0],n=overlapInv.data.shape[1],mn=min(n,m);
+                    scope u=empty!(dtypeBlas)([m,mn]);
+                    scope vt=empty!(dtypeBlas)([mn,n]);
+                    scope s=empty!(RealTypeOf!(dtypeBlas))(mn);
+                    scope s2=svd(overlap.data,u,s,vt); /// should use the 'O' method and drop vt
+                    unaryOpStr!(`
+                        if (abs(*aPtr0)>1.e-10) {
+                            *aPtr0=1/(*aPtr0);
+                        }
+                    `,1,dtypeBlas)(s2);
+                    if (n<=m){
+                        vt*=repeat(s2,n,-1);
+                        dot(u[Range(0,-1),Range(0,n)],vt,overlapInv.data);
+                    } else {
+                        u*=repeat(s2,m,0);
+                        dot(u,vt[Range(0,m)],overlapInv.data);
+                    }
+                    overlapInvUpToDate=true;
+                }
+            }
+        }
+    }
+    DerivOverlap derivOverlap;
     
     /// internal use
     this(){}
@@ -909,7 +1662,7 @@ class ParticleSys(T): CopiableObjectI,Serializable
     ParticleSys deepdup(){
         return dup(PSCopyDepthLevel.All);
     }
-    
+    /// reallocates array structs
     void reallocStructs(){
         dynVars.reallocStructs(sysStruct);
     }
@@ -926,18 +1679,29 @@ class ParticleSys(T): CopiableObjectI,Serializable
         dynVars.checkMddx();
     }
     
+    /// kinds (actually the whole sys struct) have been created and are valid
+    /// (can be used to add stuff to particles: extra dofs,...)
+    void pKindsInitialSetup(){
+        if (nCenter!is null)
+            nCenter.notify("kindsSet",Variant(this));
+        dynVars.freezeStructs();
+    }
     /// system structure changed (particle added/removed, kinds added/removed)
     /// the segmented array structs should be initialized, and modifiable.
     /// positions,... are not yet available
     void sysStructChanged(){
+        derivOverlap.clear();
+        this.reallocStructs();
         foreach(pKind;sysStruct.particleKinds.data){
             pKind.sysStructChanged(Variant(this));
         }
         if (nCenter!is null)
             nCenter.notify("sysStructChanged",Variant(this));
+        dynVars.freezeStructs();
     }
     /// position of particles changed, position,... are valid
     void positionsChanged(){
+        derivOverlap.invalidate();
         foreach(pKind;sysStruct.particleKinds.data){
             pKind.positionsChanged(Variant(this));
         }
@@ -958,6 +1722,82 @@ class ParticleSys(T): CopiableObjectI,Serializable
         sysStruct=p.sysStruct;
         dynVars[]=p.dynVars;
         if (hVars!is null) hVars[]=p.hVars;
+    }
+    
+    /// returns a vector in the tangential space (derivative space) equivalent (to first order)
+    /// to the one that goes from x-0.5*scale*diffP to x+0.5*scale*diffP
+    void addToTSpace(T)(DynPVector!(T,0)diffP,DynPVector!(T,1)res){
+        foreach(k;diffP.gRange.intersect(res.gRange).pLoop()){
+            sysStruct.particleKinds[k][0].addToTangentialSpace(this,diffP,res);
+        }
+    }
+    /// adds to the vector in res the derivative deriv.
+    /// This is conceptually equivalent to geodesic following, but it doesn't have to be exactly that,
+    /// it just have to be exact at the first order in particular
+    /// r[]=0; r2[]=0; addFromTangentialSpace(deriv,r); r2[]=r-x; addToTangentialSpace(r2,d);
+    /// implies that d and deriv might differ, but should become equal for small derivatives
+    /// (in first order).
+    void addFromDualTSpace(T)(DynPVector!(T,2)deriv,DynPVector!(T,0)res){
+        foreach(k;deriv.gRange.intersect(res.gRange).pLoop()){
+            sysStruct.particleKinds[k][0].addFromTangentialSpace(this,deriv,res);
+        }
+    }
+    /// transfers from a foreign tangential space, this is conceptually equivalent to parallel
+    /// transfer, but needs to be valid only if x and pos2.x are close, in particular
+    /// a direct transfer res+=derivAtPos2 is always allowed.
+    void addFromForeignDualTSpace(T)(DynPVector!(T,0)pos2,DynPVector!(T,2)derivAtPos2,DynPVector!(T,2)res){
+        foreach(k;derivAtPos2.gRange.intersect(res.gRange).pLoop()){
+            sysStruct.particleKinds[k][0].addFromForeignDualTangentialSpace(this,pos2,derivAtPos2,res);
+        }
+    }
+    /// returns either an up to date overlap of the derivatives or null (which means that it is the identity)
+    DynPMatrix!(dtypeBlas,1,2) maybeDerivOverlap(){
+        if (!derivOverlap.specialOverlap) return null;
+        if (derivOverlap.overlapUpToDate) return derivOverlap.overlap;
+        derivOverlap.updateOverlap(this);
+        if (!derivOverlap.specialOverlap) return null;
+        return derivOverlap.overlap;
+    }
+    /// returns either an up to date inverse of the derivatives overlap or null (which means that it is the identity)
+    DynPMatrix!(dtypeBlas,2,1) maybeDerivOverlapInv(){
+        if (!derivOverlap.specialOverlap) return null;
+        if (derivOverlap.overlapInvUpToDate) return derivOverlap.overlapInv;
+        derivOverlap.updateOverlapInv(this);
+        if (!derivOverlap.specialOverlap) return null;
+        return derivOverlap.overlapInv;
+    }
+    bool specialDerivOverlap(){
+        bool specOv=false;
+        foreach(pKind;sysStruct.particleKinds.data){
+            if (pKind.specialOverlap()){
+                return true;
+            }
+        }
+        return false;
+    }
+    void setDerivOverlap(DynPMatrix!(dtypeBlas,1,2) overlap){
+        foreach(pKind;sysStruct.particleKinds.data){
+            pKind.setOverlap(overlap);
+        }
+    }
+    
+    /// goes to the dual tangential space (multiplication with S^-1) and adds the result to dualDeriv
+    void toDualTSpace(DynPVector!(T,1)deriv,DynPVector!(T,2)dualDeriv,T scaleRes=1,T scaleDualDeriv=0){
+        auto overlapInv=maybeDerivOverlapInv();
+        if (overlapInv!is null){
+            overlapInv.matVectMult!(T,T)(deriv,dualDeriv,scaleRes,scaleDualDeriv);
+        } else { // assumes two groups ar actually equal
+            dualDeriv.axpby(deriv.toGroup!(2)(),scaleRes,scaleDualDeriv);
+        }
+    }
+    /// comes back from the dual tangential space (multiplication with S)
+    void fromDualTSpace(DynPVector!(T,2)dualDeriv,DynPVector!(T,1)deriv,T scaleRes=1,T scaleDeriv=0){
+        auto overlap=maybeDerivOverlap();
+        if (overlap!is null){
+            overlap.matVectMult!(T,T)(dualDeriv,deriv,scaleRes,scaleDeriv);
+        } else {
+            deriv.axpby(dualDeriv.toGroup!(1)(),scaleRes,scaleDeriv);
+        }
     }
     
     mixin(serializeSome("dchem.sys.ParticleSys",

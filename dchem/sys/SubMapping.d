@@ -16,8 +16,9 @@ enum MappingKind:uint{
     Generic=0u,   /// generic mapping
     SameOrder=1u, /// order is manteined: sortedPIndex and lSortedPIndex are equal
     Gapless=2u,   /// whole ranges are mapped (if p1 and p2 are in then all p inbetween are in)
-    Direct=3u,    /// there is only a subsetting
-    Same=7u,      /// no mapping at all
+    KindPreserving=4u, /// the kind is preserved
+    Direct=7u,    /// there is only a subsetting
+    Same=11u,     /// no mapping at all
 }
 /// mapping os a system to a subsystem, assumes that the subsystem is smaller
 /// (but only memory wastage occurs if this is not true)

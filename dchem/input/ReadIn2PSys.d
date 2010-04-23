@@ -42,7 +42,9 @@ class ParticleKindMap{
                 }
             }
         }
-        auto p=new ParticleKind(k.name.dup,pLevel,kindIdx,symb,k.potential.dup,((pLevel==0)?1:0),0,0);
+        auto p=new ParticleKind(k.name.dup,pLevel,kindIdx,symb,k.potential.dup);
+        index_type elIdx,delIdx;
+        if (pLevel==0) p.posEls.addElements(1,1,false,elIdx,delIdx); // add a position
         return p;
     }
     static ParticleKindMap defaultMap;
@@ -226,9 +228,11 @@ ParticleSys!(T) readIn2PSys(T)(ReadSystem rIn,
     
     if (nCenter is null) nCenter=new NotificationCenter();
     
+    // first setup of particle kinds
+    pSys.pKindsInitialSetup();
+    
     // particleSystem
     auto pSys=new ParticleSys!(T)(0,rIn.name,sysStruct,nCenter);
-    pSys.reallocStructs();
     pSys.sysStructChanged();
     
     pSys.checkX();

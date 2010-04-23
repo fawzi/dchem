@@ -12,11 +12,11 @@ import dchem.sys.SubMapping;
 import blip.sync.Atomic;
 
 struct RandomSegmentedArrayStruct(SegmentedArrayStruct.Flags flags=SegmentedArrayStruct.Flags.Min1,
-    MappingKind mappingKind=MappingKind.Generic,char[]nameBase="RandomSArrayStruct"){
+    MappingKind mappingKind=MappingKind.KindPreserving,char[]nameBase="RandomSArrayStruct"){
     SegmentedArrayStruct arrayStruct;
     
     static RandomSegmentedArrayStruct randomGenerate(Rand r, ref bool acceptable){
-        RandomSegmentedArrayStruct res;
+        RandomSegmentedArrayStruct!(flags,mappingKind) res;
         RandomMap!(mappingKind,nameBase) submap;
         acceptable=acceptable&&simpleRandom(r,submap);
         char[] namePostfix;
@@ -55,7 +55,7 @@ struct RandomSegmentedArrayStruct(SegmentedArrayStruct.Flags flags=SegmentedArra
 }
 
 
-struct RandomSegmentedArray(T,SegmentedArrayStruct.Flags flags=SegmentedArrayStruct.Flags.Min1,MappingKind mappingKind=MappingKind.Generic,char[]nameBase=""){
+struct RandomSegmentedArray(T,SegmentedArrayStruct.Flags flags=SegmentedArrayStruct.Flags.Min1,MappingKind mappingKind=MappingKind.KindPreserving,char[]nameBase=""){
     SegmentedArrayStruct arrayStruct;
     Rand localR;
     SegmentedArray!(T)[] generatedArrays;

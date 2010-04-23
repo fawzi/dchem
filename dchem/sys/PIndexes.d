@@ -2,6 +2,7 @@
 module dchem.sys.PIndexes;
 import blip.serialization.Serialization;
 import blip.serialization.SerializationMixins;
+import blip.parallel.smp.WorkManager;
 
 version(LongIndexes){
     alias ulong idxType; /// type used for particle,... indexing
@@ -68,19 +69,34 @@ struct KindRange{
         }
         return res;
     }
+    /// a pseudo range that represents an infinite range (not accepted everywhere)
     static KindRange all(){
         KindRange res;
         res.kStart=cast(KindIdx)0;
         return res;
     }
+    /// returns the intersection of this range with kr
     KindRange intersect(KindRange kr){
         KindRange res;
         res.kStart=((kStart>kr.kStart)?kStart:kr.kStart);
         res.kEnd=((kEnd<kr.kEnd)?kEnd:kr.kEnd);
         if (res.kEnd<res.kStart){
-            res.kEnd=res.kStart; // avoid?
+            res.kEnd=res.kStart;
         }
         return res;
+    }
+    /// returns the convex hull of this range and kr (empy ranges are ignored)
+    KindRange convexHull(KindRange kr){
+        if (kr.kStart>=kr.kEnd){
+            return *this;
+        } else if (kStart>=kEnd){
+            return kr;
+        } else {
+            KindRange res;
+            res.kStart=((kStart<kr.kStart)?kStart:kr.kStart);
+            res.kEnd=((kEnd>kr.kEnd)?kEnd:kr.kEnd);
+            return res;
+        }
     }
     bool opIn_r(KindIdx i){
         return i>=kStart && i<kEnd;
@@ -95,10 +111,61 @@ struct KindRange{
         }
         return 0;
     }
+    /// parallel loop on this kind range
+    struct PLoop{
+        KindRange kr;
+        static PLoop opCall(KindRange k){
+            PLoop res;
+            res.kr=k;
+            return res;
+        }
+        int opApply(int delegate(KindIdx)loopOp){
+            if (kr.kStart>=kr.kEnd) return 0;
+            Exception exception;
+            int res=0;
+            struct LoopK{
+                int delegate(KindIdx) inOp;
+                KindIdx k;
+                Exception* ep;
+                int *resPtr;
+                void doOp(){
+                    if ((*ep) is null && *resPtr==0){
+                        try{
+                            auto resAtt=inOp(k);
+                            if (resAtt!=0) *resPtr=resAtt;
+                        } catch (Exception e){
+                            *ep=e;
+                        }
+                    }
+                }
+                void seppuku(){
+                    delete this;
+                }
+            }
+            Task("KindRangePLoop",delegate void(){
+                for (KindIdx k=kr.kStart;k<kr.kEnd;++k){
+                    auto lNow=new LoopK;
+                    lNow.inOp=loopOp;
+                    lNow.k=k;
+                    lNow.ep=&exception;
+                    lNow.resPtr=&res;
+                    Task("KindRangePLoopIter",&lNow.doOp).appendOnFinish(&lNow.seppuku).autorelease.submitYield();
+                }
+            }).autorelease.executeNow();
+            if (exception!is null) throw new Exception("Exception in parallel kind loop",__FILE__,__LINE__,exception);
+            return res;
+        }
+    }
+    /// parallel loop (all kinds in parallel)
+    PLoop pLoop(){
+        return PLoop(*this);
+    }
+    /// true if the current KindRange is a dummy
     bool isDummy(){
         return kStart==KindIdx.init && kEnd==KindIdx.init;
     }
     mixin printOut!();
+    /// true if the current KindRange is invalid or dummy
     bool valid(){
         return kStart<=kEnd && kEnd<KindIdx.init;
     }

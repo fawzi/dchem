@@ -43,6 +43,7 @@ final class SegmentedArrayStruct{
         this.name=name;
         this.submapping = submapping;
         this.kRange     = kRange    ;
+        assert(submapping.mappingKind&MappingKind.KindPreserving,"submapping must be KindPreserving");
         this.flags=(f& ~(Flags.Direct|Flags.Frozen))|(((submapping.mappingKind & MappingKind.Direct)!=0)?
                 Flags.Direct:Flags.None);
         auto nkinds=cast(size_t)(kRange.kEnd-kRange.kStart);
@@ -135,6 +136,26 @@ final class SegmentedArrayStruct{
     /// returns a non frozen copy
     typeof(this) dup(){
         return new SegmentedArrayStruct(name~"Dup",submapping,kRange,_kindDims.dup,flags & (~Flags.Frozen));
+    }
+    /// the length of the data stored in the segmented array (i.e. sArr.data.length), change???
+    size_t dataLength(){
+        return kindStarts[$-1]-kindStarts[0];
+    }
+    /// length of a particle based loop on this (i.e skipping kinds without particles, and counting
+    /// the number of particles for dimension of size 0 if Min1, i.e. a single value per kind)
+    /// this is the size of sLoop and pLoop. The real storage size is .data.length
+    size_t length(){
+        size_t iterRef=this.dataLength;
+        auto submap=submapping;
+        if((this.flags&SegmentedArrayStruct.Flags.Min1)!=0){
+            for (auto k=this.kRange.kStart;k<this.kRange.kEnd;++k){
+                if (this.kindDim(k)==0){
+                    iterRef-=1;
+                    iterRef+=submap.kindStarts[k-submap.lKRange.kStart+1]-submap.kindStarts[k-submap.lKRange.kStart];
+                }
+            }
+        }
+        return iterRef;
     }
 }
 
@@ -952,15 +973,15 @@ char[] segArrayBinLoop(int pFlags,char[] iterName, char[][]namesLocal1, char[] c
 
 /// a pool for segmented arrays
 class SegArrPool(T):Pool!(SegmentedArray!(T)){
-    SegmentedArrayStruct aStruct;
+    SegmentedArrayStruct arrayStruct;
     
     this(SegmentedArrayStruct s,size_t bufferSpace=8*batchSize, size_t maxEl=16*batchSize){
         super(bufferSpace,maxEl);
         assert(s!is null,"arrayStruct must be non null");
-        aStruct=s;
+        arrayStruct=s;
     }
     SegmentedArray!(T) allocateNew(){
-        auto res=new SegmentedArray!(T)(aStruct);
+        auto res=new SegmentedArray!(T)(arrayStruct);
         res.pool=this;
         return res;
     }

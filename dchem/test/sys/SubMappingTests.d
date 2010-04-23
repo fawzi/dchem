@@ -52,7 +52,7 @@ SubMapping randomSubmapping(char[] baseName,Random r,SubMapping mainSubmap,Mappi
     simpleRandom(r,namePostfix);
     auto name=baseName~namePostfix;
     switch(mappingKind){
-    case MappingKind.Generic:
+    case MappingKind.Generic,MappingKind.KindPreserving:
         toGen=mapK[r.uniformR(5)];
         break;
     case MappingKind.SameOrder:
@@ -112,7 +112,7 @@ SubMapping randomSubmapping(char[] baseName,Random r,SubMapping mainSubmap,Mappi
             if (r.uniform!(bool)()){
                 res.mappingKind=mappingKind;
             } else {
-                res.mappingKind=toGen;
+                res.mappingKind=toGen|MappingKind.KindPreserving;
             }
             return res;
         case MappingKind.Same:
@@ -144,6 +144,7 @@ struct RandomMap(MappingKind mappingKind=MappingKind.Generic,char[] baseName="")
             case MappingKind.SameOrder:
             case MappingKind.Gapless:
             case MappingKind.Direct:
+            case MappingKind.KindPreserving:
             res.map=mainMap; // pippo to do make real random...
             //res.map=randomSubmapping(name,r,mainMap,mappingKind);
             break;
