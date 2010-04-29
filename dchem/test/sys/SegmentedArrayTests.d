@@ -16,8 +16,8 @@ struct RandomSegmentedArrayStruct(SegmentedArrayStruct.Flags flags=SegmentedArra
     SegmentedArrayStruct arrayStruct;
     
     static RandomSegmentedArrayStruct randomGenerate(Rand r, ref bool acceptable){
-        RandomSegmentedArrayStruct!(flags,mappingKind) res;
-        RandomMap!(mappingKind,nameBase) submap;
+        RandomSegmentedArrayStruct!(flags,mappingKind|MappingKind.KindPreserving) res;
+        RandomMap!(mappingKind|MappingKind.KindPreserving,nameBase) submap;
         acceptable=acceptable&&simpleRandom(r,submap);
         char[] namePostfix;
         simpleRandom(r,namePostfix);

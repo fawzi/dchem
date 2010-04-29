@@ -7,16 +7,20 @@ import tango.math.random.Random;
 import blip.rtest.RTest;
 import Atomic=blip.sync.Atomic;
 import blip.t.math.Math:max;
+import tango.util.container.more.Heap;
+import blip.container.BatchedGrowableArray;
+import tango.util.container.HashSet;
 
 /// unique key for a point, dimensions might change
 /// key might have some special values,
 ///   0: means no point,
 ///   1: pseudo key for points whose exploration has been excluded (for example due to constraints)
 /// the key itself has the first 10 bits (size might change) that are used for collision reduction
-/// and the rest that encodes a mostly sequential number (this is indirectly useful as the exploration is not random)
+/// and the rest that encodes a mostly sequential number (this is indirectly useful as the exploration is not random),
+/// and to allow efficient storage of dense arrays (making unbundling of properties of points easy)
 /// all keys with 0 at the beginning and only the first 10 bit set are thus never generated,
 /// and might be used as special keys (see the special values above)
-struct PointKey{
+struct Point{
     ulong data;
     ulong key(){
         return data;
@@ -27,8 +31,8 @@ struct PointKey{
         data=k&0x0000_0FFF_FFFF_FFFFUL; // drop the extra &?
     }
     /// set base key without loosing too many bits (and guranteeing that if it was non 0 it stays non 0)
-    static PointKey opCall(ulong k){
-        PointKey res;
+    static Point opCall(ulong k){
+        Point res;
         res.data=(k & 0x0000_0FFF_FFFF_FFFFUL);
         auto r=((k>>21)&0x0000_07FF_FF80_0000UL);
         if (r!=0){
@@ -39,16 +43,16 @@ struct PointKey{
     bool isValid(){
         return (data&0x0000_0FFF_FFFF_F000UL)!=0;
     }
-    mixin(serializeSome("dchem.PointKey","data"));
+    mixin(serializeSome("dchem.Point","data"));
     mixin printOut!();
 }
 
 /// unique key for a point, and a direction in the same structure
-struct PointKeyAndDir{
+struct PointAndDir{
     /// 16 bit direction, 36 bit sequence number, 12 bit collision reduction, the bit grouping might change, don't count on it
     ulong data; /// key of a main point (64 bit as trade off between collision probability and being small). 0 is an invalid key
-    static PointKeyAndDir opCall(PointKey k,uint dir){
-        PointKeyAndDir res;
+    static PointAndDir opCall(Point k,uint dir){
+        PointAndDir res;
         if (dir!=uint.max){
             assert(dir<0xF_FFFF,"direction too large");
             res.data=(k.data&0x0000_0FFF_FFFF_FFFFUL)|((cast(ulong)dir)<<44);
@@ -72,39 +76,18 @@ struct PointKeyAndDir{
         }
     }
     /// base key
-    ulong key(){
-        return 0x0000_0FFF_FFFF_FFFFUL & data;
+    Point point(){
+        return Point(0x0000_0FFF_FFFF_FFFFUL & data);
     }
     /// sets base key, dropping extra bits
-    void key(ulong k){
-        data=(0xFFFF_F000_0000_0000 & data)|(k & 0x0000_0FFF_FFFF_FFFFUL);
-    }
-    /// base key
-    PointKey pointKey(){
-        return PointKey(0x0000_0FFF_FFFF_FFFFUL & data);
-    }
-    /// sets base key, dropping extra bits
-    void pointKey(PointKey k){
+    void point(Point k){
         data=(0xFFFF_F000_0000_0000 & data)|(k.data & 0x0000_0FFF_FFFF_FFFFUL);
     }
-    mixin(serializeSome("dchem.PointKeyAndDir","data"));// split in pointKey and dir???
+    mixin(serializeSome("dchem.PointAndDir","data"));// split in Point and dir???
     mixin printOut!();
 }
 
 alias ulong EKey; /// key of a MinEExplorer instance, 0 is an invalid key
-
-// exploration:
-// find smallest energy still "free"
-// evaluate next direction of it
-// apply constraints, if movement is too small declare it as fully visited
-// bcast point as explored
-// start calculation
-// if too close to existing points stop calculation???
-// when calculation is finished
-// if mainpoint:
-//    gradient -> orient neighbors, compile visited flags, perform topology analysis (attractor, min,max,...)
-//    second deriv check
-// else store energy, first deriv check??
 
 /// flags about a direction
 enum DirFlags{
@@ -112,6 +95,26 @@ enum DirFlags{
     ExploredByOthers=1,
     ExploredLocal=2,
     ExploredAndSpawn=3
+}
+
+/// prints the bit pattern of a, at least minBits are printed (minBits can be at most 64)
+char[] printBits(size_t a,int minBits=1){
+    char[64] res;
+    auto i=64;
+    while(a!=0){
+        --i;
+        if ((a&1)==1){
+            res[i]='1';
+        } else {
+            res[i]='0';
+        }
+        a>>=1;
+    }
+    auto mBit=((minBits<=64)?minBits:64);
+    while (64-i<mBit){
+        res[--i]='0';
+    }
+    return res[i..$].dup;
 }
 
 /// an array with flags for each direction, does not use BitArray to have a fast earch of free directions
@@ -135,6 +138,7 @@ class FlagsArray{
     }
     size_t nFlags;
     size_t[] data;
+    this(){}
     /// construct an array with the given size
     this(size_t dim){
         nFlags=dim;
@@ -148,8 +152,14 @@ class FlagsArray{
         return res;
     }
     // returns the flags at the given index
-    uint opIndex(size_t idx){
-        assert(idx<nFlags,"flags index out of bounds");
+    uint opIndex(size_t idx)
+    in{
+        if (idx>=nFlags){
+            throw new Exception(collectAppender(delegate void(CharSink s){
+                dumper(s)("flags index ")(idx)(" out of bounds (0,")(nFlags)(")");
+            }),__FILE__,__LINE__);
+        }
+    } body {
         auto block=data[idx/bitsPerEl];
         block>>=usedBits*(idx%bitsPerEl);
         return (mask&block);
@@ -164,10 +174,10 @@ class FlagsArray{
         assert((newF&mask)==newF,"new value is too large");
         auto localVal=(cast(size_t)newF)<<inBlockIdx;
         while(1){ // only for collisions with other updates
-            auto oldFlags=(oldVal>>inBlockIdx)&0b11;
-            if (oldFlags!=oldF || newF==oldF) return oldFlags;
+            auto oldFlags=((oldVal>>inBlockIdx)&0b11);
+            if (oldFlags!=oldF) return oldFlags;
             auto actualVal=Atomic.atomicCAS(data[blockIdx],((oldVal&inBlockMask)|localVal),oldVal);
-            if (actualVal==oldVal) return oldFlags;
+            if ((actualVal&inBlockMask)==(oldVal&inBlockMask)) return ((actualVal>>inBlockIdx)&0b11);
             oldVal=actualVal;
         }
     }
@@ -210,32 +220,50 @@ class FlagsArray{
     /// wraps around, looks at nFlags-1 as last direction, returns nFlags if no direction was found
     size_t findFreeAndSet(size_t startPos,uint newVal=0){
         if (nFlags==0) return 0;
+        if (nFlags==1) {
+            if (atomicCAS(0,newVal,0)==0){
+                return 0;
+            }
+            return 1;
+        }
         assert(startPos<nFlags,"startPos out of bounds");
         auto idx=startPos;
         auto blockIdx=idx/bitsPerEl;
         auto rest=idx%bitsPerEl;
         auto val=(data[blockIdx])>>(rest*usedBits);
+        rest=bitsPerEl-rest;
         blockIdx+=1;
-        auto last=max(nFlags-2,startPos);
+        auto last=((nFlags>startPos+2)?(nFlags-2):startPos);
         auto stopBlock=last/bitsPerEl;
+        bool wasReset=false;
         while (1){
-            for (int i=rest;rest!=0;--rest){
-                if ((val&0b11)==0){
-                    if (atomicCAS(idx,newVal,0)==0){
-                        return idx;
-                    }
+            while (rest!=0){
+                --rest;
+                if (atomicCAS(idx,newVal,0)==0){
+                    return idx;
                 }
                 idx+=1;
-                if (idx==startPos) { // finished search
+                val>>=usedBits;
+                if (idx==startPos) { // finished search¨
                     if (opIndex(nFlags-1)==0){
-                        return nFlags-1;
+                        if (atomicCAS(nFlags-1,newVal,0)==0){
+                            return nFlags-1;
+                        }
                     }
                     return nFlags;
                 }
                 if (idx>last) {
+                    if (wasReset) throw new Exception("reset loop",__FILE__,__LINE__);
+                    wasReset=true;
                     idx=0;
                     blockIdx=0;
                     stopBlock=startPos/bitsPerEl;
+                    if (idx==startPos) { // finished search
+                        if (atomicCAS(nFlags-1,newVal,0)==0){
+                            return nFlags-1;
+                        }
+                        return nFlags;
+                    }
                     break;
                 }
             }
@@ -255,9 +283,21 @@ class FlagsArray{
     size_t length(){
         return nFlags;
     }
+    mixin(serializeSome("dchem.FlagsArray","nFlags|data"));
+    void desc(CharSink sink){
+        auto s=dumper(sink);
+        s("{class:\"dchem.FlagsArray\",length:")(nFlags)(",data:");
+        auto i=nFlags;
+        while(i!=0){
+            if(i!=nFlags) s(".");
+            --i;
+            s(printBits(opIndex(i),2));
+        }
+        s("}");
+    }
 }
 
-/// scale factors, put like this, so that they can be catched by the serializer
+/// scale factors, put like this, so that they can be catched by the serializer, * to remove *
 class ScaleFactors(T){
     char[] idName;
     BulkArray!(T) data;
@@ -267,11 +307,6 @@ class ScaleFactors(T){
     }
     mixin(serializeSome("dchem.MinE.ScaleFactors("~T.stringof~")","data"));
     mixin printOut!();
-}
-
-// ops newpointUsed -> update neighs & flags of others,+
-class ExpandedPoint(T){
-    
 }
 
 /// a main evaluation point
@@ -286,15 +321,14 @@ class MainPoint(T){
         LocalCopy=(1<<5),      /// this MainPoint is a local copy done for efficency reasons
     }
     MinEExplorer!(T) localContext;
-    PKey key;
+    Point point;
     Real energies[]; /// energies of the other points (might be unallocated)
     ParticleSys!(T) pos; // position+deriv+energy
     /// 0- core, i, direction i: particle,x,y,z...
     /// flags values: 0-not explored, 1- explored by others, 2- explored local, 3- explored &spawn
     FlagsArray dirFlags;
     uint gFlags;
-    ScaleFactors!(T) stepScales;
-    ScaleFactors!(T) repulsionScales;
+    T repulsionSize;
     size_t nNeigh;
     Neighbor[] _neighbors;
     
@@ -304,36 +338,41 @@ class MainPoint(T){
         Explorating,
     }
     /// explores the next direction, immediately marks it as in exploration
-    PointKeyAndDir exploreNext(bool cheapGrad){
+    PointAndDir exploreNext(bool cheapGrad){
         if ((gFlags&GFlags.DoNotExplore)!=0){
-            return SubPoint;
+            return PointAndDir(0,uint.max);
         }
         if ((gFlags&GFlags.Evaluated)==0){
-            if (!localContext.isInProgress(Point(PKey,0))){
+            if (!localContext.isInProgress(PointAndDir(point,0))){
                 synchronized(this){
                     if ((gFlags&GFlags.Evaluated)==0){
                         throw new Exception(collectAppender(delegate void(CharSink s){
-                            dumper(s)("non evaluated ans non in progress ")(key)(" in ")(localContext.nameId);
+                            dumper(s)("non evaluated and non in progress ")(point)(" in ")(localContext.nameId);
                         }));
                     }
                 }
             }
-            return false; // needs to wait evaluation
+            return PointAndDir(this.point,uint.max); // needs to wait evaluation
         }
         if ((gFlags&GFlags.FullyExplored)==0){
             synchronized(this){
                 if ((gFlags&GFlags.FullyExplored)==0){
-                    if(dirFlags.atomicCAS(1,DirFlags.None,DirFlags.ExploredLocal)==DirFlags.None){
-                        //exploreDown
+                    size_t nextDir=dirFlags.length;
+                    if(dirFlags.findFreeAndSet(1,GFlags.ExploredLocal)){
+                        nextDir=0;
+                    } else {
+                        auto nextDir=dirFlags.findFreeAndSet(start,GFlags.ExploredLocal);
                     }
+                    if (nextDir!=dirFlags.length) return PointAndDir(this.point,nextDir);
                 }
             }
         }
-        return PointKeyAndDir(0,0);
+        return PointAndDir(0,0);
     }
-    /// spawn exploration in the given direction
-    MainPoint spawnDirection(uint dir){
-        return false;
+    
+    /// calculates the point in the given direction
+    DynPVect!(T) posInDir(uint dir){
+        return null;
     }
 }
 
@@ -345,7 +384,7 @@ class MinEJournal{
     const char[] jVersion="MinEJournal v1.0";
     struct MainPointAdd(T){
         ulong nr;
-        PKey key;
+        Point point;
         PSysWriter!(T) pos;
         T stepSize;
         T repulsionSize;
@@ -353,7 +392,7 @@ class MinEJournal{
         void reapply(MinEExplorer expl){}
     }
     struct EFEval(T){
-        PKey key;
+        Point key;
         ParticleSys!(T) pos;
         Real energy;
 
@@ -374,21 +413,138 @@ class MinEJournal{
     
 }
 
-class MinEExplorer(T): Sampler{
+class MinHeapSync(T){
+    MinHeap!(T) heap;
+    WaitCondition nonEmpty;
+    
+    bool nonEmptyHeap(){
+        return heap.length!=0;
+    }
+    
+    this(){
+        nonEmpty=new WaitCondition(&nonEmptyHeap);
+    }
+    void push(T[] t){
+        synchronized(this){
+            heap.push(t);
+        }
+        nonEmpty.checkCondition();
+    }
+    void push(T t){
+        synchronized(this){
+            heap.push(t);
+        }
+        nonEmpty.checkCondition();
+    }
+    T pop(){
+        synchronized(this){
+            return heap.pop();
+        }
+    }
+    /// returns the minimal energy elements, waits if no elements is available until some becomes available
+    T waitPop(){
+        while (1){
+            synchronized(this){
+                if (heap.length>0)
+                    return heap.pop();
+            }
+            nonEmpty.wait();
+        }
+    }
+}
+
+struct PointAndEnergy{
+    double energy;
+    Point point;
+}
+
+interface ActiveExplorer(T){
+    /// stops all explorers (at the moent there is no support for dynamic adding/removal of explorers, worth adding???)
+    void shutdown(EKey);
+
+    /// key of this explorer
+    EKey key();
+    /// where the journal is kept
+    char[] journalPos();
+    
+    /// adds energy to the evaluated ones (and removes from the inProgress)
+    void addEnergyEval(EKey,PointAndEnergy p);
+    /// communicates that the given point is being expored
+    /// flags: communicate doubleEval?
+    void addExploredPoint(EKey,Point key,PSysWriter!(T) pos,uint flags);
+    /// finished exploring the given point
+    void finishedExploringPoint(EKey,Point);
+    /// drops all calculation/storage connected with the given point (called upon collisions)
+    void dropPoint(EKey,Point);
+    
+    /// returns the position of the given point
+    
+}
+alias HashSet Set;
+enum { batchSize=512 }
+/// dense array of elements indexed by local point keys
+class DenseLocalPointArray(T){
+    BatchedGrowableArray!(Point,batchSize) keys;
+    BatchedGrowableArray!(T,batchSize) values;
+    
+    T opIndex(Point k){
+        synchronized(this){
+            auto idx=lbound(keys,k);
+            assert(idx<keys.length && keys[idx]==k,"could not find local key "~k.toString());
+            if (values.length<idx){
+                return T.init;
+            }
+            return values[idx];
+        }
+    }
+    T* ptrI(Point k){
+        auto idx=lbound(keys,k);
+        assert(idx<keys.length && keys[idx]==k,"could not find local key "~k.toString());
+        if (values.length<idx){
+            values.growTo(keys.length);
+        }
+        return &(values[idx]);
+    }
+    void opIndexAssign(T val,Point k){
+        synchronized(this){
+            *ptrI()=val;
+        }
+    }
+    /+static if (T U:U*){
+        int opApply(int delegate(ref U el)){
+            synchronized(this){
+                auto k=keys.view();
+                values.growTo(k.length);
+                auto v=values.view();
+            }
+            //v.sLoop()
+        }
+    }+/
+}
+
+class MinEExplorer(T): Sampler,ActiveExplorer!(T){
     static UniqueNumber!(ulong) nextLocalId;
     static UniqueNumber!(ulong) nextPntNr;
     char[] nameId;
     EKey key;
-    MainPoint!(T)[PKey] localPoints;
-    EKey[PKey] owner;
-    CalculationInstance[Point] calcInProgress;
+    /// points to explore more ordered by energy (at the moment this is replicated)
+    /// this could be either distribued, or limited to a given max size + refill upon request
+    MinHeapSync!(PointAndEnergy) toExploreMore;
+    /// list of all the currently active explorers (including this one)
+    ActiveExplorer!(T)[] activeExplorers;
+    BatchGrowableArray!(Point,batchSize) localPointsKeys; // indexes for local points
+    EKey[Point] owner;
+    CalculationInstance[Point] localCalcInProgress;
+    Set!(Point) calcInProgress;
     Random randLocal;
     RandomSync rand;
-    
-    T d;
+    /// step used for the discretization
+    T discretizationStep;
+    /// place to store the trajectory (journal)
     char[] trajDir;
+    /// the current method for energy evaluation
     InputField evaluator;
-    char[] cClass;
+    
     /// returns a globally unique string 
     char[] nextUniqueStr(){
         return collectAppender(delegate void(CharSinker s){
@@ -396,32 +552,54 @@ class MinEExplorer(T): Sampler{
         });
     }
     /// returns a most likely valid point id
-    PKey nextPointId(){
+    Point nextPointId(){
         ushort r;
         rand(r);
-        return ((nextPntNr.next())<<16)|cast(ulong)r;
+        return Point(((nextPntNr.next())<<12)|cast(ulong)(r&0xFFF));
     }
+    
     /// returns true if the evaluation of the given point is in progress
-    bool isInProgress(Point!(T)p){
+    bool isInProgress(Point p){
         bool res=false;
         synchronized(this){
-            res=(p in calcInPyrogressy)!is null;
+            res=(p in calcInProgress)!is null;
         }
-        return this;
+        return res;
     }
+    
     mixin(serializeSome("dchem.MinEExplorer_"~T.stringof,
         `trajDir: directory where to store the trajectory (journal)`));
     mixin printOut!();
+    
     void run(){
         bool restarted=false;
         evaluator.method.setupCalculatorClass();
-        cClass=evaluator.method.calculatorClass;
         // possiby restarts
         if (! restarted){
             cInstance=getInstanceForClass(InstanceGetFlags.ReuseCache|InstanceGetFlags.NoAllocSubOpt|InstanceGetFlags.Wait);
         }
+        master.nextCalculation();
     }
     
+    // exploration:
+    // find smallest energy still "free"
+    // evaluate next direction of it
+    // apply constraints, if movement is too small declare it as fully visited and neighbor 1
+    // bcast point as explored
+    // possibly wait for non collision confirmation
+    // start calculation
+    // if too close to existing points stop calculation???
+    // when calculation is finished
+    // if mainpoint:
+    //    gradient -> orient neighbors, compile visited flags, perform topology analysis (attractor, min,max,...)
+    //    second deriv check
+    // else store energy, first deriv check??
+    
+    /// evaluates the next computation
+    PointAndDir nextComputation(){
+        auto smallPoint=toExploreMore.waitPop();
+        
+    }
     void stop(){
         
     }

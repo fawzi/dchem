@@ -13,6 +13,8 @@ import blip.parallel.smp.WorkManager;
 import blip.container.AtomicSLink;
 import blip.container.Pool;
 import blip.io.Console;
+import blip.util.Convert;
+import blip.t.core.Traits;
 
 enum ParaFlags{
     FullPara,
@@ -168,6 +170,7 @@ final class SegmentedArray(T){
     BulkArray!(T) _data;
     bool direct;
     alias T dtype;
+    alias BulkArray!(T).basicDtype basicDtype;
     static size_t defaultOptimalBlockSize=32*1024/T.sizeof;
     PoolI!(SegmentedArray) pool;
     
@@ -484,7 +487,13 @@ final class SegmentedArray(T){
         return res;
     }
     
-    void axpby(V)(SegmentedArray!(V) x,V a=cscalar!(V,1),T b=cscalar!(T,1)){
+    void axpby(V)(SegmentedArray!(V) x,basicDtype a=1,basicDtype b=1){
+        if (x.arrayStruct is arrayStruct){
+            scope a1=a2NA(data.basicData);
+            scope a2=a2NA(x.data.basicData);
+            a1.axpby(a2,a,b);
+            return;
+        }
         auto optimalBlockSize=defaultOptimalBlockSize;
         auto y=this;
         if(b==1){
@@ -492,106 +501,96 @@ final class SegmentedArray(T){
                 mixin(segArrayMonoLoop(ParaFlags.FullPara,"iterContext",["y","x"],"","",
                 "",`
                 visitKind=visitKind&&(!outOfRange);
-                assert((kNew.xNel<=1&&kNew.yNel<=1)||kNew.xNel==kNew.yNel,"variable combination of Nel not implemented in axpby");`,"",
-                ["","*yPtr += scalar!(T)(*xPtr);","",
+                assert((newK.xNel<=1&&newK.yNel<=1)||newK.xNel==newK.yNel,"variable combination of Nel not implemented in axpby");`,"",
+                ["","*yPtr += convertTo!(T)(*xPtr);","",
                 
                 "",`
                 for (size_t ii=0;ii<xNel;++ii){
-                    yPtr[ii] += scalar!(T)(xPtr[ii]);
+                    yPtr[ii] += convertTo!(T)(xPtr[ii]);
                 }`,""]));
             } else {
-                mixin(segArrayMonoLoop(ParaFlags.FullPara,"iterContext",["y","x"],
-                "V a;","",
-                "mainContext.a=a;",`
-                visitKind=visitKind&&(!outOfRange);
-                assert((kNew.xNel<=1&&kNew.yNel<=1)||kNew.xNel==kNew.yNel,"variable combination of Nel not implemented in axpby");`,"",
-                ["","*yPtr += scalar!(T)((*xPtr)*a);","",
+                alias optimalBlockSize optimalBlockSize_1;
+                mixin(segArrayMonoLoop(ParaFlags.FullPara,"iterContext2",["y","x"],
+                "basicDtype a;","_1",
+                "mainContext_1.a=a;",`
+                visitKind_1=visitKind_1&&(!outOfRange_1);
+                assert((newK_1.xNel<=1&&newK_1.yNel<=1)||newK_1.xNel==newK_1.yNel,"variable combination of Nel not implemented in axpby");`,"",
+                ["","*yPtr += convertTo!(T)((*xPtr)*this.a);","",
                 
                 "",`
                 for (size_t ii=0;ii<xNel;++ii){
-                    yPtr[ii] += scalar!(T)(xPtr[ii]*a);
+                    yPtr[ii] += convertTo!(T)(xPtr[ii]*this.a);
                 }`,""]));
             }
         } else if(b==0){
-            mixin(segArrayMonoLoop(ParaFlags.FullPara,"iterContext",["y","x"],
-            "V a;","",
-            "mainContext.a=a;",`
-            visitKind=visitKind&&(!outOfRange);
-            assert((kNew.xNel<=1&&kNew.yNel<=1)||kNew.xNel==kNew.yNel,"variable combination of Nel not implemented in axpby");`,"",
-            ["","*yPtr = scalar!(T)((*xPtr)*a);","",
+            alias optimalBlockSize optimalBlockSize_2;
+            mixin(segArrayMonoLoop(ParaFlags.FullPara,"iterContext_2",["y","x"],
+            "basicDtype a;","_2",
+            "mainContext_2.a=a;",`
+            visitKind_2=visitKind_2&&(!outOfRange_2);
+            assert((newK_2.xNel<=1&&newK_2.yNel<=1)||newK_2.xNel==newK_2.yNel,"variable combination of Nel not implemented in axpby");`,"",
+            ["","*yPtr = convertTo!(T)((*xPtr)*a);","",
             
             "",`
             for (size_t ii=0;ii<xNel;++ii){
-                yPtr[ii] = scalar!(T)(xPtr[ii]*a);
+                yPtr[ii] = convertTo!(T)(xPtr[ii]*a);
             }`,""]));
         } else {
-            mixin(segArrayMonoLoop(ParaFlags.FullPara,"iterContext",["y","x"],
-            "V a;T b;","",
-            "mainContext.a=a;mainContext.b=b;",`
-            visitKind=visitKind&&(!outOfRange);
-            assert((kNew.xNel<=1&&kNew.yNel<=1)||kNew.xNel==kNew.yNel,"variable combination of Nel not implemented in axpby");`,"",
-            ["","*yPtr = scalar!(T)((*yPtr)*b+(*xPtr)*a);","",
+            alias optimalBlockSize optimalBlockSize_3;
+            mixin(segArrayMonoLoop(ParaFlags.FullPara,"iterContext_3",["y","x"],
+            "basicDtype a;basicDtype b;","_3",
+            "mainContext_3.a=a;mainContext_3.b=b;",`
+            visitKind_3=visitKind_3&&(!outOfRange_3);
+            assert((newK_3.xNel<=1&&newK_3.yNel<=1)||newK_3.xNel==newK_3.yNel,"variable combination of Nel not implemented in axpby");`,"",
+            ["","*yPtr = convertTo!(T)((*yPtr)*b+(*xPtr)*a);","",
             
             "",`
             for (size_t ii=0;ii<xNel;++ii){
-                yPtr[ii] = scalar!(T)((*yPtr)*b+(*xPtr)*a);
+                yPtr[ii] = convertTo!(T)((*yPtr)*b+(*xPtr)*a);
             }`,""]));
         }
     }
     
-    static if (is(typeof(T.init*T.init))){
-        void opMulAssign()(T scale){
-            auto optimalBlockSize=defaultOptimalBlockSize;
-            auto x=this;
-            static if (is(typeof(function(T t){ t *= t; }))){
-                mixin(segArrayMonoLoop(ParaFlags.FullPara,"iterContext",["x"],
-                "T scale;","",
-                "mainContext.scale=scale;","visitKind=visitKind&&(!outOfRange);","",
-                ["","*xPtr *= scale;","",
-                "",`
-                for (size_t ii=0;ii<xNel;++ii){
-                    xPtr[ii] *= scale;
-                }`,""]));
-            } else {
-                mixin(segArrayMonoLoop(ParaFlags.FullPara,"iterContext",["x"],
-                "T scale;","",
-                "mainContext.scale=scale;","visitKind=visitKind&&(!outOfRange);","",
-                ["","*xPtr = (*xPtr)*scale;","",
-                
-                "",`
-                for (size_t ii=0;ii<xNel;++ii){
-                    xPtr[ii] = xPtr[ii]*scale;
-                }`,""]));
-            }
+    static if (is(typeof(basicDtype.init*basicDtype.init))){
+        void opMulAssign()(basicDtype scale){
+            scope a=a2NA(this.data.basicData);
+            a*=scale;
         }
-        void opMulAssign(V)(SegmentedArray!(V) y){
-            auto optimalBlockSize=defaultOptimalBlockSize;
-            auto x=this;
-            static if (is(typeof(function(T t){ t *= t; }))){
-                mixin(segArrayMonoLoop(ParaFlags.FullPara,"iterContext",["x","y"],
-                "T scale;","",
-                "mainContext.scale=scale;",`
-                visitKind=visitKind&&(!outOfRange);
-                assert((kNew.xNel<=1&&kNew.yNel<=1)||kNew.xNel==kNew.yNel,"variable combination of Nel not implemented in opMulAssign");`,"",
-                ["","*xPtr *= *yPtr;","",
-                
-                "",`
-                for (size_t ii=0;ii<xNel;++ii){
-                    xPtr[ii] *= yPtr[ii];
-                }`,""]));
-            } else {
-                mixin(segArrayMonoLoop(ParaFlags.FullPara,"iterContext",["x","y"],
-                "T scale;","",
-                "mainContext.scale=scale;",`
-                visitKind=visitKind&&(!outOfRange);
-                assert((kNew.xNel<=1&&kNew.yNel<=1)||kNew.xNel==kNew.yNel,"variable combination of Nel not implemented in opMulAssign");`,"",
-                ["","*xPtr = (*xPtr)*(*yPtr);","",
-                
-                "",`
-                for (size_t ii=0;ii<xNel;++ii){
-                    xPtr[ii] = xPtr[ii]*yPtr[ii];
-                }`,""]));
-            }
+    }
+    void opMulAssign(V)(SegmentedArray!(V) y){
+        if (x.arrayStruct is arrayStruct){
+            scope a1=a2NA(data.basicData);
+            scope a2=a2NA(y.data.basicData);
+            a1*=a2;
+            return;
+        }
+        auto optimalBlockSize=defaultOptimalBlockSize;
+        auto x=this;
+        static if (is(typeof(function(T t){ t *= t; }))){
+            mixin(segArrayMonoLoop(ParaFlags.FullPara,"iterContext_2",["x","y"],
+            "T scale;","",
+            "mainContext.scale=scale;",`
+            visitKind=visitKind&&(!outOfRange);
+            assert((newK.xNel<=1&&newK.yNel<=1)||newK.xNel==newK.yNel,"variable combination of Nel not implemented in opMulAssign");`,"",
+            ["","*xPtr *= *yPtr;","",
+            
+            "",`
+            for (size_t ii=0;ii<xNel;++ii){
+                xPtr[ii] *= convertTo!(T)(yPtr[ii]);
+            }`,""]));
+        } else {
+            alias optimalBlockSize optimalBlockSize_2;
+            mixin(segArrayMonoLoop(ParaFlags.FullPara,"iterContext_2",["x","y"],
+            "T scale;","_2",
+            "mainContext_2.scale=scale;",`
+            visitKind_2=visitKind_2&&(!outOfRange_2);
+            assert((newK_2.xNel<=1&&newK_2.yNel<=1)||newK_2.xNel==newK_2.yNel,"variable combination of Nel not implemented in opMulAssign");`,"",
+            ["","*xPtr = (*xPtr)*(*yPtr);","",
+            
+            "",`
+            for (size_t ii=0;ii<xNel;++ii){
+                xPtr[ii] = convertTo!(T)(xPtr[ii]*yPtr[ii]);
+            }`,""]));
         }
     }
     /// an array just like this, but with unitialized values
@@ -614,25 +613,25 @@ char[] segArrayContextExecStr(int pFlags,char[] iterName, char[][]namesLocal,cha
     char[]pVisitLocalStart,char[]pVisit,char[]pVisitLocalEnd){
     char[]visitorStr=`
         void exec`~execN~`(){
-            if (context.exception !is null) return;`;
+            if (this.context.exception !is null) return;`;
     visitorStr~="\n";
     visitorStr~=pVisitLocalStart;
     visitorStr~="\n";
     if (pFlags==ParaFlags.FullPara){
         visitorStr~=`
-            if (end-start>optimalBlockSize*3/2){
-                auto mid=cast(ParticleIdx)((end-start)/2);
-                if (mid>optimalBlockSize){ // tries to make optimalBlockSize a possible fast path
-                    mid=cast(ParticleIdx)(((mid+optimalBlockSize-1)/optimalBlockSize)*optimalBlockSize);
+            if (this.end-this.start>this.optimalBlockSize*3/2){
+                auto mid=cast(ParticleIdx)((this.end-this.start)/2);
+                if (mid>this.optimalBlockSize){ // tries to make optimalBlockSize a possible fast path
+                    mid=cast(ParticleIdx)(((mid+this.optimalBlockSize-1)/this.optimalBlockSize)*this.optimalBlockSize);
                 }
-                auto firstHalf=alloc();
-                firstHalf.end=start+mid;
+                auto firstHalf=this.alloc();
+                firstHalf.end=this.start+mid;
                 Task("SegArrLoop1`~iterName~`",&firstHalf.exec`~execN~`).appendOnFinish(&firstHalf.giveBack).autorelease.submit; // would submitYield be better (less suspended tasks, but more suspensions)??? 
-                auto secondHalf=alloc();
-                secondHalf.start=start+mid;`;
+                auto secondHalf=this.alloc();
+                secondHalf.start=this.start+mid;`;
         foreach (name;namesLocal){
             visitorStr~=`
-                secondHalf.`~name~`PtrStart+=`~name~`Nel*mid;`;
+                secondHalf.`~name~`PtrStart+=this.`~name~`Nel*mid;`;
         }
         visitorStr~=`
                 Task("SegArrLoop2`~iterName~`",&secondHalf.exec`~execN~`).appendOnFinish(&secondHalf.giveBack).autorelease.submit;
@@ -643,26 +642,26 @@ char[] segArrayContextExecStr(int pFlags,char[] iterName, char[][]namesLocal,cha
     }
     visitorStr~=`
                 try{
-                    LocalPIndex localPIndex`~uniq~`=LocalPIndex(kind,start);
-                    PIndex * pIndexPtr`~uniq~`=pIndexPtrStart;`;
+                    LocalPIndex localPIndex=LocalPIndex(this.kind,this.start);
+                    PIndex * pIndexPtr=this.pIndexPtrStart;`;
     foreach (name;namesLocal){
         visitorStr~=`
-                    `~name~`.dtype* `~name~`Ptr`~uniq~`=`~name~`PtrStart;`;
+                    `~name~`.dtype* `~name~`Ptr=this.`~name~`PtrStart;`;
     }
     visitorStr~=`
-                    for (ParticleIdx index`~uniq~`=start;index`~uniq~`<end;++index`~uniq~`){
-                        lIndex=index`~uniq~`;
+                    for (ParticleIdx index=this.start;index<this.end;++index){
+                        this.lIndex=index;
                         `~pVisit~`
-                        ++localPIndex`~uniq~`;
-                        ++pIndexPtr`~uniq~`;`;
+                        ++localPIndex;
+                        ++pIndexPtr;`;
     foreach (name;namesLocal){
         visitorStr~=`
-                        `~name~`Ptr`~uniq~`+=`~name~`Nel;`;
+                        `~name~`Ptr+=`~name~`Nel;`;
     }
     visitorStr~=`
                     }
                 } catch (Exception e){
-                    context.exception=e;
+                    this.context.exception=e;
                 }
             }
             `~pVisitLocalEnd~`
@@ -699,7 +698,7 @@ char[] segArrayContextStr(int pFlags,char[] iterName, char[][]namesLocal,char[] 
     visitorStr~=contextExtra;
     visitorStr~=`
         typeof(this) alloc(){
-            auto res=popFrom(context.next);
+            auto res=popFrom(this.context.next);
             if (res is null){
                 res=new `~iterName~`;
             }
@@ -713,7 +712,7 @@ char[] segArrayContextStr(int pFlags,char[] iterName, char[][]namesLocal,char[] 
     }
     visitorStr~=`
         void giveBack(){
-            insertAt(context.next,this);
+            insertAt(this.context.next,this);
         }
     }
     `;
@@ -739,7 +738,7 @@ char[] segArrayKLoopStr(int pFlags,char[] iterName, char[][]namesLocal,
     }
     visitorStr~=`
             for (KindIdx kIdx`~uniq~`=`~namesLocal[0]~`.kRange.kStart;kIdx`~uniq~`<kEnd`~uniq~`;++kIdx`~uniq~`){
-                if (mainContext.exception !is null) break;
+                if (mainContext`~uniq~`.exception !is null) break;
                 bool visitKind`~uniq~`=true;
                 bool outOfRange`~uniq~`=false;
                 if (newK`~uniq~` is null){
@@ -786,7 +785,7 @@ char[] segArrayKLoopStr(int pFlags,char[] iterName, char[][]namesLocal,
         }).autorelease.executeNow();`;
     }
     visitorStr~=`
-        if (mainContext.exception !is null) throw new Exception("exception in SegmentedArray loop",__FILE__,__LINE__,mainContext.exception);
+        if (mainContext`~uniq~`.exception !is null) throw new Exception("exception in SegmentedArray loop",__FILE__,__LINE__,mainContext`~uniq~`.exception);
         auto freeL=mainContext`~uniq~`.next;
         while (freeL!is null){
             auto cNext=freeL.next;
@@ -816,15 +815,15 @@ char[] segArrayMonoLoop(int pFlags,char[] iterName, char[][]namesLocal,
         pVisitors);
     char[] kVisit=kindVisit~`
             if (visitKind`~uniq~`){
-                newK.maxInnerDim=1;
+                newK`~uniq~`.maxInnerDim=1;
                 bool multiDim`~uniq~`=false;`;
     foreach (n;namesLocal){
                 kVisit~=`
-                if (newK`~uniq~`.`~n~`Nel!=newK.maxInnerDim && newK`~uniq~`.`~n~`Nel!=0 && newK`~uniq~`.`~n~`Nel!=1){
-                    if (newK.maxInnerDim!=1){
+                if (newK`~uniq~`.`~n~`Nel!=newK`~uniq~`.maxInnerDim && newK`~uniq~`.`~n~`Nel!=0 && newK`~uniq~`.`~n~`Nel!=1){
+                    if (newK`~uniq~`.maxInnerDim!=1){
                         multiDim`~uniq~`=true;
                     }
-                    if (newK.maxInnerDim<newK`~uniq~`.`~n~`Nel) newK.maxInnerDim=newK`~uniq~`.`~n~`Nel;
+                    if (newK`~uniq~`.maxInnerDim<newK`~uniq~`.`~n~`Nel) newK`~uniq~`.maxInnerDim=newK`~uniq~`.`~n~`Nel;
                 }`;
     }
     if (pVisitors.length==3) {
@@ -840,7 +839,7 @@ char[] segArrayMonoLoop(int pFlags,char[] iterName, char[][]namesLocal,
     } else if (pVisitors.length==6){
         if (pFlags==ParaFlags.Sequential){
             kVisit~=`
-                if (newK.maxInnerDim==1){
+                if (newK`~uniq~`.maxInnerDim==1){
                     newK`~uniq~`.exec0();
                 } else {
                     newK`~uniq~`.exec1();
@@ -848,7 +847,7 @@ char[] segArrayMonoLoop(int pFlags,char[] iterName, char[][]namesLocal,
                 newK`~uniq~`=null;`;
         } else {
             kVisit~=`
-                if (newK.maxInnerDim==1){
+                if (newK`~uniq~`.maxInnerDim==1){
                     Task("kindMainLoop`~iterName~`",&newK`~uniq~`.exec0)
                         .appendOnFinish(&newK`~uniq~`.giveBack).autorelease.submitYield();
                 } else {
@@ -861,7 +860,7 @@ char[] segArrayMonoLoop(int pFlags,char[] iterName, char[][]namesLocal,
         if (pFlags==ParaFlags.Sequential){
             kVisit~=`
                 if (!multiDim`~uniq~`){
-                    if (newK.maxInnerDim==1){
+                    if (newK`~uniq~`.maxInnerDim==1){
                         newK`~uniq~`.exec0();
                     } else {
                         newK`~uniq~`.exec1();
@@ -872,7 +871,7 @@ char[] segArrayMonoLoop(int pFlags,char[] iterName, char[][]namesLocal,
         } else {
             kVisit~=`
                 if (!multiDim`~uniq~`){
-                    if (newK.maxInnerDim==1){
+                    if (newK`~uniq~`.maxInnerDim==1){
                         Task("kindMainLoop`~iterName~`",&newK`~uniq~`.exec0)
                             .appendOnFinish(&newK`~uniq~`.giveBack).autorelease.submitYield();
                     } else {

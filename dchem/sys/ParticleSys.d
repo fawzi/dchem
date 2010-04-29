@@ -21,6 +21,7 @@ import blip.t.math.Math:sqrt;
 import blip.t.core.sync.Mutex;
 import blip.narray.NArray;
 import gobo.blas.Types:BlasTypeForType;
+import blip.t.core.Traits: ctfe_i2a;
 
 /// a pool for dynamical properties
 /// setup as follow: init, update *Structs, possibly consolidateStructs, allocPools, possibly consolidate
@@ -825,8 +826,8 @@ char[] dynPVectorOp(char[][]namesLocal,char[] op,bool cell=true,bool nonEq=false
     char[] res;
     char[][] els=[".pos",".orient",".dof"];
     if (cell) els=[".pos",".orient",".dof",".cell"];
-    foreach (pp;els){
-        res=`
+    foreach (iter,pp;els){
+        res~=`
         if (`;
         foreach (i,n; namesLocal){
             if (i!=0) res~="||";
@@ -863,7 +864,7 @@ char[] dynPVectorOp(char[][]namesLocal,char[] op,bool cell=true,bool nonEq=false
         }`;
         }
         res~=` else {
-            void doOp(`;
+            void doOp`~ctfe_i2a(iter)~`(`;
         foreach(i,n;namesLocal){
             if (i!=0) res~=",";
             res~="typeof("~n~pp~") "~n;
@@ -872,7 +873,7 @@ char[] dynPVectorOp(char[][]namesLocal,char[] op,bool cell=true,bool nonEq=false
         res~=op;
         res~=`
             }
-            doOp(`;
+            doOp`~ctfe_i2a(iter)~`(`;
         foreach(i,n;namesLocal){
             if (i!=0) res~=",";
             res~=n~pp;
@@ -942,9 +943,6 @@ struct DynPVector(T,int group){
             throw new Exception("identical cells in axpby",__FILE__,__LINE__);
         }
         auto y=this;
-        pragma(msg,"-----------------");
-        pragma(msg,dynPVectorOp(["x","y"],"y.axpby(x,a,b);",true,false));
-        pragma(msg,"=================");
         mixin(dynPVectorOp(["x","y"],"y.axpby(x,a,b);",true,false));
     }
     void opMulAssign()(T scale){
