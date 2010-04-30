@@ -45,6 +45,13 @@ struct Point{
     }
     mixin(serializeSome("dchem.Point","data"));
     mixin printOut!();
+    hash_t toHash(){
+        static if(hash_t.sizeof==4){
+            return cast(hash_t)(0xFFFF_FFFF&(data^(data>>32)));
+        } else {
+            return cast(hash_t)data;
+        }
+    } 
 }
 
 /// unique key for a point, and a direction in the same structure
@@ -85,6 +92,28 @@ struct PointAndDir{
     }
     mixin(serializeSome("dchem.PointAndDir","data"));// split in Point and dir???
     mixin printOut!();
+    struct ExpandedPointAndDir{
+        PointAndDir pDir;
+        uint dir(){
+            return pDir.dir();
+        }
+        void dir(uint d){
+            pDir.dir=d;
+        }
+        Point point(){
+            return pDir.point();
+        }
+        void point(Point p){
+            pDir.point=p;
+        }
+        mixin(serializeSome("dchem.PointDir","point|dir"));// split in Point and dir???
+        mixin printOut!();
+    }
+    ExpandedPointAndDir expanded(){
+        ExpandedPointAndDir e;
+        e.pDir=*this;
+        return e;
+    }
 }
 
 alias ulong EKey; /// key of a MinEExplorer instance, 0 is an invalid key
@@ -309,6 +338,21 @@ class ScaleFactors(T){
     mixin printOut!();
 }
 
+struct LocalPoint(T){
+    Point point;
+    PointAndDir generator;
+    MainPoint!(T) _mainPoint;
+    MainPoint!(T) mainPoint(){
+        if (_mainPoint !is null) return _mainPoint;
+        synchronized{
+            if (_mainPoint !is null) return _mainPoint;
+            if (! generator.isValid()) throw new Exception(collectAppender(delegate void(CharSink s){
+                dumper(s)(point)(" has no mainPoint and generator ")(generator)(" is non valid");
+            }),__FILE__,__LINE__);
+            
+        }
+    }
+}
 /// a main evaluation point
 class MainPoint(T){
     enum GFlags{
@@ -322,23 +366,36 @@ class MainPoint(T){
     }
     MinEExplorer!(T) localContext;
     Point point;
-    Real energies[]; /// energies of the other points (might be unallocated)
-    ParticleSys!(T) pos; // position+deriv+energy
-    /// 0- core, i, direction i: particle,x,y,z...
-    /// flags values: 0-not explored, 1- explored by others, 2- explored local, 3- explored &spawn
+    /// position of the point (energy, derivatives,... might be invalid, only real positions have to be valid)
+    ParticleSys!(T) pos;
+    /// direction of the minimum in the dual space with norm 1 wrt. euclidische norm
+    /// (frame of reference for minimization)
+    DynPVect!(T,2) minDir;
+    /// directions, at index 0- core, index i, direction i of the derivatives in the dual space (DynPVect!(T,2))
+    /// flags values are the DirFlags: 0-not explored, 1- explored by others, 2- explored local, 3- explored &spawn
     FlagsArray dirFlags;
-    uint gFlags;
+    /// localNeighbors, point is the evaluation point, dir the direction with respect to this point to generate it
+    /// energy its energy
+    GrowableArray!(PointDirAndEnergy) localNeighbors;
+    /// external neighbors, and the direction with respect to this point in which they are
+    GrowableArray!(PointAndDir) externalNeighbors;
+    /// energy of this point
+    Real energy0;
+    /// scale of mindir to recover the dual gradient
+    T minDirScale;
+    /// repulsion size (useful to block out regions)
     T repulsionSize;
-    size_t nNeigh;
-    Neighbor[] _neighbors;
+    /// exploration size for this point (useful to recover positions) 
+    T explorationSize;
+    /// bit or of GFlags of the current point
+    uint gFlags;
     
-    enum ExplorationProgress{
-        NoDirAvailable,
-        WaitingEvaluationCompletion,
-        Explorating,
-    }
     /// explores the next direction, immediately marks it as in exploration
+    /// returns an invalid point only if all direction are explored, and an invalid direction but this point if a
+    /// frame of exploration is not yet defined
     PointAndDir exploreNext(bool cheapGrad){
+        auto exploreFlags=DirFlags.ExploredLocal;
+        if (cheapGrad) exploreFlags=DirFlags.ExploredAndSpawn;
         if ((gFlags&GFlags.DoNotExplore)!=0){
             return PointAndDir(0,uint.max);
         }
@@ -358,10 +415,10 @@ class MainPoint(T){
             synchronized(this){
                 if ((gFlags&GFlags.FullyExplored)==0){
                     size_t nextDir=dirFlags.length;
-                    if(dirFlags.findFreeAndSet(1,GFlags.ExploredLocal)){
+                    if(dirFlags.findFreeAndSet(1,exploreFlags)){
                         nextDir=0;
                     } else {
-                        auto nextDir=dirFlags.findFreeAndSet(start,GFlags.ExploredLocal);
+                        auto nextDir=dirFlags.findFreeAndSet(start,exploreFlags);
                     }
                     if (nextDir!=dirFlags.length) return PointAndDir(this.point,nextDir);
                 }
@@ -371,7 +428,23 @@ class MainPoint(T){
     }
     
     /// calculates the point in the given direction
-    DynPVect!(T) posInDir(uint dir){
+    ParticleSys!(T) posInDir(uint dir){
+        if (dir==0) return pos;
+        rDir=(dir-1)/2;
+        T val=1;
+        if ((dir&1)==0) val=-1;
+        if (dir==dirFlags.length-1){
+            rDir=0;
+            val=-1;
+        }
+        auto v0=minDir.emptyCopy;
+        v0[]=0;
+        v0[dir]=1;
+        auto newDir=rotateEiV(V,M)(0,minDir,v0);
+        newDir*=explorationSize;
+        auto resPSys=pos.dup(PSDupLevel.DynProperties|PSDupLevel.DynPNullDx|PSDupLevel.DynPNullMddx|PSDupLevel.HiddenVars);
+        void addFromDualTSpace(T)(newDir,resPSys.dynVars.x);
+        resPSys.updateHVars();
         return null;
     }
 }
@@ -383,7 +456,6 @@ class MinEJournal{
     SBinSerializer jSerial;
     const char[] jVersion="MinEJournal v1.0";
     struct MainPointAdd(T){
-        ulong nr;
         Point point;
         PSysWriter!(T) pos;
         T stepSize;
@@ -453,13 +525,14 @@ class MinHeapSync(T){
     }
 }
 
-struct PointAndEnergy{
-    double energy;
-    Point point;
+struct PointDirAndEnergy{
+    Real energy;
+    PointAndDir point;
+    mixin(serializeSome("dchem.PointDirAndEnergy","energy|point"));
 }
 
 interface ActiveExplorer(T){
-    /// stops all explorers (at the moent there is no support for dynamic adding/removal of explorers, worth adding???)
+    /// stops all explorers (at the moment there is no support for dynamic adding/removal of explorers, worth adding???)
     void shutdown(EKey);
 
     /// key of this explorer
@@ -478,7 +551,7 @@ interface ActiveExplorer(T){
     void dropPoint(EKey,Point);
     
     /// returns the position of the given point
-    
+    /// Pos
 }
 alias HashSet Set;
 enum { batchSize=512 }
@@ -532,8 +605,8 @@ class MinEExplorer(T): Sampler,ActiveExplorer!(T){
     MinHeapSync!(PointAndEnergy) toExploreMore;
     /// list of all the currently active explorers (including this one)
     ActiveExplorer!(T)[] activeExplorers;
-    BatchGrowableArray!(Point,batchSize) localPointsKeys; // indexes for local points
-    EKey[Point] owner;
+    BatchGrowableArray!(Point,batchSize) localPointsKeys; // indexes for local owned points
+    HashMap!(Point,EKey) owner;
     CalculationInstance[Point] localCalcInProgress;
     Set!(Point) calcInProgress;
     Random randLocal;
