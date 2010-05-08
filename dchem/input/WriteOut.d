@@ -45,7 +45,9 @@ struct SegArrWriter(T){
     T[] data;
     mixin(serializeSome("dchem.SegArray!("~T.stringof~")","kRange|kindStarts|data"));
     mixin printOut!();
-    
+    bool ownsData=true; // careful with positioning this, as it is the target of atomi ops...
+    /// returns a writer that writes out the given array.
+    /// memory is shared, so it reinteprets is as of type T
     static SegArrWriter opCall(V)(SegmentedArray!(V) sarr){
         SegArrWriter res;
         static assert((V.sizeof % T.sizeof)==0,"type of the array ("~V.stringof~") is not commensurate with "~T.stringof);
@@ -62,10 +64,18 @@ struct SegArrWriter(T){
         auto mdata=sarr.data.data;
         res.data=(cast(T*)mdata.ptr)[0..mdata.length*dimMult];
         res.kRange=sarr.kRange;
+        res.ownsData=false;
         return res;
     }
-    
-    SegmentedArray!(V) toSegArr(V=T)(SysStruct sysStruct){
+    /// destroys the memory used by this object if it owns it
+    void destroy(){
+        if (atomicCAS(ownsData,false,true)){
+            delete data;
+        }
+    }
+    /// returns a segmented array with this data as contents, if steal is true then the data will remain valid 
+    /// also after the destruction of this. Memory is reinterpreted (no cast/conversion)
+    SegmentedArray!(V) toSegArr(V=T)(SysStruct sysStruct,bool steal=false){
         static assert((V.sizeof % T.sizeof)==0,"type of the array ("~V.stringof~") is not commensurate with "~T.stringof);
         uint dimMult=V.sizeof/T.sizeof;
         if (kindStarts.length==0) return null;
@@ -79,10 +89,10 @@ struct SegArrWriter(T){
             if (kDims[i]==0) flags=0;
         }
         auto aStruct=new SegmentedArrayStruct(name,sysStruct.fullSystem,kRange,kDims,flags);
-        return new SegmentedArray!(V)(aStruct,BulkArray!(V)((cast(V*)data.ptr)[0..data.length/dimMult],kRange));
+        return new SegmentedArray!(V)(aStruct,BulkArray!(V)((cast(V*)data.ptr)[0..data.length/dimMult],kRange),steal);
     }
-    
-    SegmentedArray!(V) toSegArr(V=T)(SegmentedArrayStruct aStruct){
+    /// ditto
+    SegmentedArray!(V) toSegArr(V=T)(SegmentedArrayStruct aStruct,bool steal=false){
         static assert((V.sizeof % T.sizeof)==0,"type of the array ("~V.stringof~") is not commensurate with "~T.stringof);
         uint dimMult=V.sizeof/T.sizeof;
         if (kindStarts.length==0) return null;
@@ -97,7 +107,43 @@ struct SegArrWriter(T){
             if (kDims[i]==0 && (aStruct.flags&SegmentedArrayStruct.Flags.Min1)!=0)
                 throw new Exception("Min1 flags when not expected",__FILE__,__LINE__);
         }
-        return new SegmentedArray!(V)(aStruct,BulkArray!(V)((cast(V*)data.ptr)[0..data.length/dimMult],kRange));
+        auto newData=(cast(V*)data.ptr)[0..data.length/dimMult];
+        BulkArray!(V) b;
+        if (!atomicCAS(ownsData,false,true)) {
+            b=BulkArray!(V)(newData.length);
+            b.data()[]=newData;
+        } else {
+            b=BulkArray!(V)(newData);
+        }
+        return new SegmentedArray!(V)(aStruct,b,kRange);
+    }
+    /// copies to an array of the given type, this might cast (checks kindStarts to decide if reinterpret the memory or cast/convert)
+    void copyTo(V)(SegmentedArray!(V) s){
+        assert(s!is null,"copy to only to allocated arrays");
+        if (cast(void*)s.data.ptr is cast(void*)data.ptr) {
+            assert(s.data.length*V.sizeof==data.length*T.sizeof,"unexpected length");
+            return;
+        }
+        static if(is(T==V)){
+            assert(kindStarts==s.kindStarts,"different kindStarts");
+            s.data.data[]=data;
+        } else static if (is(SegmentedArray!(V).basicDtype==T)){
+            assert(data.length==s.data.basicData.length,"same basictype, but different lengths");
+            s.data.basicData()[]=data;
+        } else {
+            if (kindStarts==s.kindStarts){
+                selfArr=toSegArr(s.arrayStruct);
+                s[]=selfArr;
+            } else {
+                if (s.data.length*V.sizeof==data.length*T.sizeof){
+                    void*sPtr=s.data.ptr;
+                    void*myPtr=data.ptr;
+                    sPtr[0..data.length*T.sizeof]=myPtr[0..data.length*T.sizeof];
+                } else {
+                    assert(0,"could not copy to the array");
+                }
+            }
+        }
     }
 }
 
@@ -109,7 +155,17 @@ struct DynPVectorWriter(T){
     SegArrWriter!(T) dof;
     mixin(serializeSome("dchem.DynPVectorWriter!("~T.stringof~")","cell|pos|orient|dof"));
     mixin printOut!();
-    
+    /// true if this represents a non null the DynPVector
+    bool isNonNull(){
+        return pos.kindStarts.length!=0 || orient.kindStarts.length!=0 || dof.kindStarts.length!=0;
+    }
+    /// destroys the memory used by this object if it owns it
+    void destroy(){
+        pos.destroy();
+        orient.destroy();
+        dof.destroy();
+    }
+    /// greates a writer for the given vector
     static DynPVectorWriter opCall(DynPVector!(T) v){
         DynPVectorWriter res;
         if (v.cell!is null) res.cell=v.cell.h.cell;
@@ -118,30 +174,48 @@ struct DynPVectorWriter(T){
         res.dof=SegArrWriter!(T)(v.dof);
         return res;
     }
-    
-    DynPVector!(T) toDynPVector(V)(ParticleSys!(V) pSys){
+    /// returns a DynPVector of type V , if steal is true then the data will remain valid 
+    /// also after the destruction of this. Memory is reinterpreted (no cast/conversion)
+    DynPVector!(T) toDynPVector(V)(ParticleSys!(V) pSys,bool steal=false){
         DynPVector!(T) res;
         if (cell.length!=0){
             assert(cell.length==9,"invalid cell length");
             auto period=[0,0,0];
             if (pSys.dynVars.x.cell !is null) period=pSys.dynVars.x.cell.period;
-            res.cell=Cell(Matrix!(T,3,3)(cell),period);
+            res.cell=new Cell(Matrix!(T,3,3)(cell),period);
         }
         if (pSys.dynVars.posStruct!is null){
-            res.pos=pos.toSegArr!(Vector!(T,3))(pSys.dynVars.posStruct);
+            res.pos=pos.toSegArr!(Vector!(T,3))(pSys.dynVars.posStruct,steal);
         } else {
-            res.pos=pos.toSegArr!(Vector!(T,3))(pSys.sysStruct);
+            res.pos=pos.toSegArr!(Vector!(T,3))(pSys.sysStruct,steal);
         }
         if (pSys.dynVars.orientStruct!is null){
-            res.orient=orient.toSegArr!(Vector!(T,3))(pSys.dynVars.orientStruct);
+            res.orient=orient.toSegArr!(Vector!(T,3))(pSys.dynVars.orientStruct,steal);
         } else {
-            res.orient=orient.toSegArr!(Vector!(T,3))(pSys.sysStruct);
+            res.orient=orient.toSegArr!(Vector!(T,3))(pSys.sysStruct,steal);
         }
         if (pSys.dynVars.dofStruct!is null){
-            res.dof=dof.toSegArr!(Vector!(T,3))(pSys.dynVars.dofStruct);
+            res.dof=dof.toSegArr!(Vector!(T,3))(pSys.dynVars.dofStruct,steal);
         } else {
-            res.dof=dof.toSegArr!(Vector!(T,3))(pSys.sysStruct);
+            res.dof=dof.toSegArr!(Vector!(T,3))(pSys.sysStruct,steal);
         }
+        return res;
+    }
+    /// copies to an array of the given type, this might cast (checks kindStarts to decide if reinterpret the memory or cast/convert)
+    void copyTo(V)(ref DynPVectorWriter!(V)v){
+        if (cell.length!=0){
+            assert(cell.length==9,"invalid cell length");
+            auto period=[0,0,0];
+            if (v.cell is null){
+                throw new Exception("cannot copy to null cell",__FILE__,__LINE__);
+            }
+            // create a new cell instead
+            v.cell.h=Matrix!(T,3,3)(cell);
+            v.cell.hInv=v.cell.h.inverse;
+        }
+        pos.copyTo(v.pos);
+        orient.copyTo(v.orient);
+        dof.copyTo(v.dof);
     }
 }
 /// helper function to write out a DynPVector
@@ -155,21 +229,45 @@ struct PSysWriter(T){
     DynPVectorWriter!(T) x;
     DynPVectorWriter!(T) dx;
     DynPVectorWriter!(T) mddx;
+    Real potentialEnergy;
     Serializable hVars;
-    mixin(serializeSome("dchem.PSysWriter!("~T.stringof~")","x|dx|mddx|hVars"));
+    mixin(serializeSome("dchem.PSysWriter!("~T.stringof~")","potentialEnergy|x|dx|mddx|hVars"));
     mixin printOut!();
-    
+    /// creates a writer for the given ParticleSys
     static PSysWriter opCall(ParticleSys!(T) pSys){
         PSysWriter res;
+        res.potentialEnergy=pSys.potentialEnergy;
         res.x=dynPVectorWriter(pSys.dynVars.x);
         res.dx=dynPVectorWriter(pSys.dynVars.dx);
         res.mddx=dynPVectorWriter(pSys.dynVars.mddx);
         res.hVars=pSys.hVars;
         return res;
     }
+    /// copies to an ParticleSys of the given type, this might cast 
+    /// (checks kindStarts to decide if reinterpret the memory or cast/convert)
+    void copyTo(V)(ParticleSys!(V) pSys){
+        assert(pSys!is null,"cannot copy to null pSys");
+        pSys.potentialEnergy=potentialEnergy;
+        // could be smarter about reusing memory...
+        if (x.isNonNull()) {
+            pSys.checkX();
+            pSys.dynVars.x[]=x;
+        }
+        if (dx.isNonNull()){
+            pSys.checkDx();
+            pSys.dynVars.dx[]=dx;
+        }
+        if (mddx.isNonNull()){
+            pSys.checkMddx();
+            pSys.dynVars.mddx[]=mddx;
+        }
+        if (pSys.hVars !is null){
+            pSys.hVars[]=hVars;
+        }
+    }
 }
 
-/// return a struct that dumps the given ParticleSys
+/// helper function, returns a struct that dumps the given ParticleSys
 PSysWriter!(T) pSysWriter(T)(ParticleSys!(T) pSys){
     return PSysWriter!(T)(pSys);
 }

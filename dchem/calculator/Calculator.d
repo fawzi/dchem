@@ -362,6 +362,10 @@ class CalcContext:CalculationContext{
     Real maxChange;
     MultiConstraint _constraints;
     
+    void localExec(RemoteTask r){
+        r.execute(Variant(this));
+    }
+
     this(CalculationInstance cInstance,char[] contextId){
         this._cInstance=cInstance;
         this._contextId=contextId;

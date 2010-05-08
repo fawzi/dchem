@@ -893,11 +893,17 @@ class ParticleSys(T): CopiableObjectI,Serializable
             nCenter.notify("cellChanged",Variant(this));
     }
     /// copy op
-    void opSliceAssign(V)(ParticleSys!(V) p){
-        iteration=p.iteration;
-        sysStruct=p.sysStruct;
-        dynVars[]=p.dynVars;
-        if (hVars!is null) hVars[]=p.hVars;
+    void opSliceAssign(V)(V p){
+        static if(is(V U:ParticleSys!(U))){
+            iteration=p.iteration;
+            sysStruct=p.sysStruct;
+            dynVars[]=p.dynVars;
+            if (hVars!is null) hVars[]=p.hVars;
+        } else static if (is(typeof(p.copyTo(this)))){
+            p.copyTo(this);
+        } else {
+            static assert(0,"no assignment possible from type "~V.stringof);
+        }
     }
     
     /// returns a vector in the tangential space (derivative space) equivalent (to first order)
@@ -942,6 +948,7 @@ class ParticleSys(T): CopiableObjectI,Serializable
         if (!derivOverlap.specialOverlap) return null;
         return derivOverlap.overlapInv;
     }
+    /// returns true if the overlap of derivatives is not the unit matrix
     bool specialDerivOverlap(){
         bool specOv=false;
         foreach(pKind;sysStruct.particleKinds.data){
@@ -951,6 +958,7 @@ class ParticleSys(T): CopiableObjectI,Serializable
         }
         return false;
     }
+    /// sets the overlap matrix (should be initialized with 0 at the beginnng)
     void setDerivOverlap(DynPMatrix!(dtypeBlas,1,2) overlap){
         foreach(pKind;sysStruct.particleKinds.data){
             pKind.setOverlap(overlap);
@@ -975,7 +983,35 @@ class ParticleSys(T): CopiableObjectI,Serializable
             deriv.axpby(dualDeriv.toGroup!(1)(),scaleRes,scaleDeriv);
         }
     }
-    /// updates the hidden vars
+    /// projects into the correct movement space (back & forth from the direct space).
+    /// useful to get rid of the components in the null space
+    void projectInDualTSpace(DynPVector!(T,2)dualDeriv){
+        auto overlap=maybeDerivOverlap();
+        if (overlap!is null){
+            scope newDirDirect=dynVars.emptyDx();
+            fromDualTSpace(dualDeriv,newDirDirect);
+            toDualTSpace(newDirDirect,dualDeriv);
+        }
+    }
+    /// projects into the correct movement space (back & forth from the dual space).
+    /// useful to get rid of the components in the null space
+    void projectInTSpace(DynPVector!(T,1)deriv){
+        auto overlap=maybeDerivOverlap();
+        if (overlap!is null){
+            auto dualDeriv=dynVars.emptyDualDx();
+            toDualTSpace(deriv,dualDeriv);
+            fromDualTSpace(dualDeriv,deriv);
+            dualDeriv.giveBack();
+        }
+    }
+    /// perform scalar product in the tangential (derivative) space
+    T dotInTSpace(DynPVector!(T,1)v1,DynPVector!(T,2)v2){
+        assert(v1.pos.arrayStruct==v2.pos.arrayStruct,"redistribution of vectors not implemented");
+        assert(v1.orient.arrayStruct==v2.orient.arrayStruct,"redistribution of vectors not implemented");
+        assert(v1.dof.arrayStruct==v2.dof.arrayStruct,"redistribution of vectors not implemented");
+        return v1.opDot(v2.toGroup!(1)());
+    }
+    /// updates the hidden vars to the current position
     void updateHVars(){
         if (hVars!is null){
             static if (is(T==Real)||is(T==LowP)){

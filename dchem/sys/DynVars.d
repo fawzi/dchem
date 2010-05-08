@@ -15,6 +15,7 @@ import blip.t.math.Math:sqrt;
 import blip.t.core.sync.Mutex;
 import blip.narray.NArray;
 import blip.t.core.Traits: ctfe_i2a;
+import blip.sync.Atomic;
 
 /// a pool for dynamical properties
 /// setup as follow: init, update *Structs, possibly consolidateStructs, allocPools, possibly consolidate
@@ -129,118 +130,6 @@ class DynPPool(T){
         res.convexHull(orientStruct.kRange);
         res.convexHull(dofStruct.kRange);
         return res;
-    }
-}
-
-/// matrix going from vectors in g1 to vectors in g2
-class DynPMatrix(T,int g1,int g2){
-    alias T dtype;
-    enum{ rowGroupId=g1, colGroupId=g2 }
-    NArray!(T,2) data;
-    NArray!(T,2)[3][3] blocks;
-    index_type[4] rowIdxs,colIdxs;
-    DynPPool!(T) rowGroup;
-    DynPPool!(T) colGroup;
-    this(DynPPool!(T)rowGroup,DynPPool!(T)colGroup,NArray!(T,2) data=null){
-        this.rowGroup=rowGroup;
-        this.colGroup=colGroup;
-        rowIdxs[0]=0;
-        rowIdxs[1]=3*rowGroup.posStruct.dataLength;
-        rowIdxs[2]=rowIdxs[1]+4*rowGroup.orientStruct.dataLength;
-        rowIdxs[3]=rowIdxs[2]+rowGroup.dofStruct.dataLength;
-        colIdxs[0]=0;
-        colIdxs[1]=3*colGroup.posStruct.dataLength;
-        colIdxs[2]=colIdxs[1]+4*colGroup.orientStruct.dataLength;
-        colIdxs[3]=colIdxs[2]+colGroup.dofStruct.dataLength;
-        if (data is null){
-            this.data=empty!(T)([rowIdxs[3],colIdxs[3]],true); // fortran storage is more efficent for multiplication from the right
-        } else {
-            this.data=data;
-            assert(data.shape[0]==rowIdxs[3],"invalid row size");
-            assert(data.shape[1]==colIdxs[3],"invalid row size");
-        }
-        for (int iStripe=0;iStripe<3;++iStripe)
-        for (int jStripe=0;jStripe<3;++jStripe){
-            blocks[iStripe][jStripe]=data[Range(colIdxs[iStripe],colIdxs[iStripe+1]),Range(colIdxs[jStripe],colIdxs[jStripe+1])];
-        }
-    }
-    /// matrix times the vector v1 in v2: v2 = scaleV2*v2+scaleRes*M*v1
-    void matVectMult(V,U)(DynPVector!(V,g2)v1,DynPVector!(U,g1)v2,U scaleRes=1,U scaleV2=0){
-        size_t[4] idxs;
-        assert(v2.pos!is null && v2.orient!is null && v2.dof!is null,"target vector must be fully allocated");
-        assert(rowIdxs[1]==3*v2.pos.length,"unexpected size of v2.pos");
-        assert(rowIdxs[2]-rowIdxs[1]==4*v2.orient.length,"unexpected size of v2.orient");
-        assert(rowIdxs[3]-rowIdxs[2]==v2.dof.length,"unexpected size of v2.dof");
-        scope v2Pos=a2NA(v2.pos.data.basicData);
-        scope v2Orient=a2NA(v2.orient.data.basicData);
-        scope v2Dof=a2NA(v2.dof.data.basicData);
-        T myscaleV2=scaleV2;
-        if (v1.pos!is null){
-             assert(3*v1.pos.data.length==colIdxs[1],"unexpected size of v1.pos");
-             scope v0=a2NA(v1.pos.data.basicData);
-             dot!(T,2,V,1,U,1)(blocks[0][0],v0,v2Pos,scaleRes,myscaleV2);
-             dot!(T,2,V,1,U,1)(blocks[1][0],v0,v2Orient,scaleRes,myscaleV2);
-             dot!(T,2,V,1,U,1)(blocks[2][0],v0,v2Dof,scaleRes,myscaleV2);
-             myscaleV2=1;
-         }
-         if (v1.orient!is null){
-             assert(3*v1.orient.data.length==colIdxs[2]-colIdxs[1],"unexpected size of v1.orient");
-             scope v0=a2NA(v1.orient.data.basicData);
-             dot!(T,2,V,1,U,1)(blocks[0][1],v0,v2Pos,scaleRes,myscaleV2);
-             dot!(T,2,V,1,U,1)(blocks[1][1],v0,v2Orient,scaleRes,myscaleV2);
-             dot!(T,2,V,1,U,1)(blocks[2][1],v0,v2Dof,scaleRes,myscaleV2);
-             myscaleV2=1;
-         }
-         if (v1.pos!is null){
-             assert(v1.dof.data.length==colIdxs[3]-colIdxs[2],"unexpected size of v1.pos");
-             scope v0=a2NA(v1.dof.data.basicData);
-             dot!(T,2,V,1,U,1)(blocks[0][2],v0,v2Pos,scaleRes,myscaleV2);
-             dot!(T,2,V,1,U,1)(blocks[1][2],v0,v2Orient,scaleRes,myscaleV2);
-             dot!(T,2,V,1,U,1)(blocks[2][2],v0,v2Dof,scaleRes,myscaleV2);
-             myscaleV2=1;
-         }
-        if (myscaleV2!=1){
-            v2*=myscaleV2;
-        }
-    }
-    /// transposed matrix times the vector v1 in v2: v2 = scaleV2*v2+scaleRes*M^T*v1
-    void matTVectMult(V,U)(DynPVector!(V,g1)v1,DynPVector!(U,g2)v2,U scaleRes=1,U scaleV2=0){
-        size_t[4] idxs;
-        assert(v2.pos!is null && v2.orient!is null && v2.dof!is null,"target vector must be fully allocated");
-        assert(colIdxs[1]==3*v2.pos.length,"unexpected size of v2.pos");
-        assert(colIdxs[2]-colIdxs[1]==4*v2.orient.length,"unexpected size of v2.orient");
-        assert(colIdxs[3]-colIdxs[2]==v2.dof.length,"unexpected size of v2.dof");
-        scope v2Pos=a2NA(v2.pos.data.basicData);
-        scope v2Orient=a2NA(v2.orient.data.basicData);
-        scope v2Dof=a2NA(v2.dof.data.basicData);
-        T myscaleV2=scaleV2;
-        if (v1.pos!is null){
-            assert(3*v1.pos.data.length==colIdxs[1],"unexpected size of v1.pos");
-            scope v0=a2NA(v1.pos.data.basicData);
-            dot(blocks[0][0],v0,v2Pos,scaleRes,myscaleV2,0,0);
-            dot(blocks[0][1],v0,v2Orient,scaleRes,myscaleV2,0,0);
-            dot(blocks[0][2],v0,v2Dof,scaleRes,myscaleV2,0,0);
-            myscaleV2=1;
-        }
-        if (v1.orient!is null){
-            assert(3*v1.orient.data.length==colIdxs[2]-colIdxs[1],"unexpected size of v1.orient");
-            scope v0=a2NA(v1.orient.data.basicData);
-            dot(blocks[1][0],v0,v2Pos,scaleRes,myscaleV2,0,0);
-            dot(blocks[1][1],v0,v2Orient,scaleRes,myscaleV2,0,0);
-            dot(blocks[1][2],v0,v2Dof,scaleRes,myscaleV2,0,0);
-            myscaleV2=1;
-        }
-        if (v1.pos!is null){
-            assert(v1.dof.data.length==colIdxs[3]-colIdxs[2],"unexpected size of v1.pos");
-            scope v0=a2NA(v1.dof.data.basicData);
-            dot(blocks[2][0],v0,v2Pos,scaleRes,myscaleV2,0,0);
-            dot(blocks[2][1],v0,v2Orient,scaleRes,myscaleV2,0,0);
-            dot(blocks[2][2],v0,v2Dof,scaleRes,myscaleV2,0,0);
-            myscaleV2=1;
-        }
-        if (myscaleV2!=1){
-            v2*=myscaleV2;
-        }
     }
 }
 
@@ -486,9 +375,20 @@ struct DynPVector(T,int group){
         return len;
     }
     
-    U opDot(V,U=typeof(T.init+V.init))(DynPVector!(V,group) v2){ // could overlap the various loops...
+    U opDot(V,U=typeof(T.init+V.dtype.init))(V v2){ // could overlap the various loops...
+        static assert(is(typeof(V.vGroup)),"V has to be a DynPVector");
+        static assert(V.vGroup==group,"dot product only between same group");
         U res=0;
         Exception e=null;
+        void addRes(U inc){
+            static if(is(typeof(atomicAdd(res,inc)))){
+                atomicAdd(res,inc);
+            } else {
+                synchronized{
+                    res+=inc;
+                }
+            }
+        }
         void doPosLoop(){
             try{
                 if (e!is null) return;
@@ -497,7 +397,7 @@ struct DynPVector(T,int group){
                 auto d1=a2NA(pos.data.basicData);
                 auto d2=a2NA(v2.pos.data.basicData);
                 auto rAtt=dot(d1,d2);
-                atomicAdd(res,cast(U)rAtt);
+                addRes(cast(U)rAtt);
             } catch (Exception eTmp){
                 e=new Exception("exception in doPosLoop",__FILE__,__LINE__,eTmp);
             }
@@ -509,9 +409,9 @@ struct DynPVector(T,int group){
                 assert(v2.dof.arrayStruct is dof.arrayStruct,"Different array structs in opDot");
                 if (dof.length==0) return;
                 auto d1=a2NA(dof.data.data);
-                auto d2=a2NA(v2.dof.data);
+                auto d2=a2NA(v2.dof.data.data);
                 auto rAtt=dot(d1,d2);
-                atomicAdd(res,cast(U)rAtt);
+                addRes(cast(U)rAtt);
             } catch(Exception eTmp){
                 e=new Exception("exception in doDofLoop",__FILE__,__LINE__,eTmp);
             }
@@ -523,11 +423,11 @@ struct DynPVector(T,int group){
                 assert(v2.orient.arrayStruct is orient.arrayStruct,"Different array structs in opDot");
                 if (orient.length==0) return;
                 auto d1=NArray!(T,2)([cast(index_type)4*T.sizeof,T.sizeof],[cast(index_type)orient.data.length,3],
-                    cast(index_type)0,(cast(T*)orient.data.ptr)[4*orient.data.length],0);
+                    cast(index_type)0,(cast(T*)orient.data.ptr)[0..4*orient.data.length],0);
                 auto d2=NArray!(T,2)([cast(index_type)4*T.sizeof,T.sizeof],[cast(index_type)v2.orient.data.length,3],
-                    cast(index_type)0,(cast(T*)v2.orient.data.ptr)[4*v2.orient.data.length],0);
-                auto rAtt=dot(d1,d2);
-                atomicAdd(res,cast(U)rAtt);
+                    cast(index_type)0,(cast(T*)v2.orient.data.ptr)[0..4*v2.orient.data.length],0);
+                auto rAtt=dotAll(d1,d2);
+                addRes(cast(U)rAtt);
             } catch(Exception eTmp){
                 e=new Exception("exception in doOrientLoop",__FILE__,__LINE__,eTmp);
                 res=-1;
@@ -547,7 +447,7 @@ struct DynPVector(T,int group){
                     for(int i=0;i<9;++i){
                         resTmp+=c1[i]*c2[i];
                     }
-                    atomicAdd(res,resTmp);
+                    addRes(resTmp);
                 } else {
                     assert(v2.cell is null,"different vectors in opDot");
                 }
@@ -564,6 +464,12 @@ struct DynPVector(T,int group){
             }
         ).autorelease.executeNow();
         if (e!is null) throw e;
+        return res;
+    }
+
+    /// utility method for the squared euclidean (2-norm) of the vector: (this.dot(*this))
+    T norm2(){
+        return this.opDot(*this);
     }
     
     int opApply(int delegate(ref T)loopBody){
@@ -686,6 +592,127 @@ struct DynPVector(T,int group){
     mixin printOut!();
 }
 
+/// matrix going from vectors in g1 to vectors in g2
+class DynPMatrix(T,int g1,int g2){
+    alias T dtype;
+    enum{ rowGroupId=g1, colGroupId=g2 }
+    NArray!(T,2) data;
+    NArray!(T,2)[3][3] blocks;
+    index_type[4] rowIdxs,colIdxs;
+    DynPPool!(T) rowGroup;
+    DynPPool!(T) colGroup;
+    this(DynPPool!(T)rowGroup,DynPPool!(T)colGroup,NArray!(T,2) data=null){
+        this.rowGroup=rowGroup;
+        this.colGroup=colGroup;
+        rowIdxs[0]=0;
+        rowIdxs[1]=3*rowGroup.posStruct.dataLength;
+        rowIdxs[2]=rowIdxs[1]+4*rowGroup.orientStruct.dataLength;
+        rowIdxs[3]=rowIdxs[2]+rowGroup.dofStruct.dataLength;
+        colIdxs[0]=0;
+        colIdxs[1]=3*colGroup.posStruct.dataLength;
+        colIdxs[2]=colIdxs[1]+4*colGroup.orientStruct.dataLength;
+        colIdxs[3]=colIdxs[2]+colGroup.dofStruct.dataLength;
+        if (data is null){
+            this.data=empty!(T)([rowIdxs[3],colIdxs[3]],true); // fortran storage is more efficent for multiplication from the right
+        } else {
+            this.data=data;
+            assert(data.shape[0]==rowIdxs[3],"invalid row size");
+            assert(data.shape[1]==colIdxs[3],"invalid row size");
+        }
+        for (int iStripe=0;iStripe<3;++iStripe)
+        for (int jStripe=0;jStripe<3;++jStripe){
+            blocks[iStripe][jStripe]=data[Range(colIdxs[iStripe],colIdxs[iStripe+1]),Range(colIdxs[jStripe],colIdxs[jStripe+1])];
+        }
+    }
+    /// matrix times the vector v1 in v2: v2 = scaleV2*v2+scaleRes*M*v1
+    void matVectMult(V,U)(DynPVector!(V,g2)v1,DynPVector!(U,g1)v2,U scaleRes=1,U scaleV2=0){
+        size_t[4] idxs;
+        assert(v2.pos!is null && v2.orient!is null && v2.dof!is null,"target vector must be fully allocated");
+        assert(rowIdxs[1]==3*v2.pos.length,"unexpected size of v2.pos");
+        assert(rowIdxs[2]-rowIdxs[1]==4*v2.orient.length,"unexpected size of v2.orient");
+        assert(rowIdxs[3]-rowIdxs[2]==v2.dof.length,"unexpected size of v2.dof");
+        scope v2Pos=a2NA(v2.pos.data.basicData);
+        scope v2Orient=a2NA(v2.orient.data.basicData);
+        scope v2Dof=a2NA(v2.dof.data.basicData);
+        T myscaleV2=scaleV2;
+        if (v1.pos!is null){
+             assert(3*v1.pos.data.length==colIdxs[1],"unexpected size of v1.pos");
+             scope v0=a2NA(v1.pos.data.basicData);
+             dot!(T,2,V,1,U,1)(blocks[0][0],v0,v2Pos,scaleRes,myscaleV2);
+             dot!(T,2,V,1,U,1)(blocks[1][0],v0,v2Orient,scaleRes,myscaleV2);
+             dot!(T,2,V,1,U,1)(blocks[2][0],v0,v2Dof,scaleRes,myscaleV2);
+             myscaleV2=1;
+         }
+         if (v1.orient!is null){
+             assert(3*v1.orient.data.length==colIdxs[2]-colIdxs[1],"unexpected size of v1.orient");
+             scope v0=a2NA(v1.orient.data.basicData);
+             dot!(T,2,V,1,U,1)(blocks[0][1],v0,v2Pos,scaleRes,myscaleV2);
+             dot!(T,2,V,1,U,1)(blocks[1][1],v0,v2Orient,scaleRes,myscaleV2);
+             dot!(T,2,V,1,U,1)(blocks[2][1],v0,v2Dof,scaleRes,myscaleV2);
+             myscaleV2=1;
+         }
+         if (v1.pos!is null){
+             assert(v1.dof.data.length==colIdxs[3]-colIdxs[2],"unexpected size of v1.pos");
+             scope v0=a2NA(v1.dof.data.basicData);
+             dot!(T,2,V,1,U,1)(blocks[0][2],v0,v2Pos,scaleRes,myscaleV2);
+             dot!(T,2,V,1,U,1)(blocks[1][2],v0,v2Orient,scaleRes,myscaleV2);
+             dot!(T,2,V,1,U,1)(blocks[2][2],v0,v2Dof,scaleRes,myscaleV2);
+             myscaleV2=1;
+         }
+        if (myscaleV2!=1){
+            v2*=myscaleV2;
+        }
+    }
+    /// transposed matrix times the vector v1 in v2: v2 = scaleV2*v2+scaleRes*M^T*v1
+    void matTVectMult(V,U)(DynPVector!(V,g1)v1,DynPVector!(U,g2)v2,U scaleRes=1,U scaleV2=0){
+        size_t[4] idxs;
+        assert(v2.pos!is null && v2.orient!is null && v2.dof!is null,"target vector must be fully allocated");
+        assert(colIdxs[1]==3*v2.pos.length,"unexpected size of v2.pos");
+        assert(colIdxs[2]-colIdxs[1]==4*v2.orient.length,"unexpected size of v2.orient");
+        assert(colIdxs[3]-colIdxs[2]==v2.dof.length,"unexpected size of v2.dof");
+        scope v2Pos=a2NA(v2.pos.data.basicData);
+        scope v2Orient=a2NA(v2.orient.data.basicData);
+        scope v2Dof=a2NA(v2.dof.data.basicData);
+        T myscaleV2=scaleV2;
+        if (v1.pos!is null){
+            assert(3*v1.pos.data.length==colIdxs[1],"unexpected size of v1.pos");
+            scope v0=a2NA(v1.pos.data.basicData);
+            dot(blocks[0][0],v0,v2Pos,scaleRes,myscaleV2,0,0);
+            dot(blocks[0][1],v0,v2Orient,scaleRes,myscaleV2,0,0);
+            dot(blocks[0][2],v0,v2Dof,scaleRes,myscaleV2,0,0);
+            myscaleV2=1;
+        }
+        if (v1.orient!is null){
+            assert(3*v1.orient.data.length==colIdxs[2]-colIdxs[1],"unexpected size of v1.orient");
+            scope v0=a2NA(v1.orient.data.basicData);
+            dot(blocks[1][0],v0,v2Pos,scaleRes,myscaleV2,0,0);
+            dot(blocks[1][1],v0,v2Orient,scaleRes,myscaleV2,0,0);
+            dot(blocks[1][2],v0,v2Dof,scaleRes,myscaleV2,0,0);
+            myscaleV2=1;
+        }
+        if (v1.pos!is null){
+            assert(v1.dof.data.length==colIdxs[3]-colIdxs[2],"unexpected size of v1.pos");
+            scope v0=a2NA(v1.dof.data.basicData);
+            dot(blocks[2][0],v0,v2Pos,scaleRes,myscaleV2,0,0);
+            dot(blocks[2][1],v0,v2Orient,scaleRes,myscaleV2,0,0);
+            dot(blocks[2][2],v0,v2Dof,scaleRes,myscaleV2,0,0);
+            myscaleV2=1;
+        }
+        if (myscaleV2!=1){
+            v2*=myscaleV2;
+        }
+    }
+    
+    /// scalar product defined by this matrix: v1^T*M*v2
+    /// could be optimized to avoid the use of a temporary
+    T scalarProduct(V,U)(DynPVector!(V,g1)v1,DynPVector!(U,g2)v2){
+        auto tmp=v1.emptyCopy;
+        matVectMult(v2,tmp);
+        assert(v1.arrayStruct==v2.arrayStruct,"redistribution of vectors not implemented");
+        return v1.dot(v2.toGroup!(g1)());
+    }
+}
+
 /// variables that normally an integrator should care about
 // (put here mainly for tidiness reasons)
 struct DynamicsVars(T){
@@ -707,6 +734,18 @@ struct DynamicsVars(T){
     /// forces vector
     DynPVector!(T,1) mddx;
     
+    /// utility method, returns an empty position vector (like x)
+    DynPVector!(T,0) emptyX(bool allocCell=false){
+        return DynPVector!(T,0).allocFromPool(xGroup,allocCell);
+    }
+    /// utility method, returns an empty derivative vector (like dx,mddx)
+    DynPVector!(T,1) emptyDx(bool allocCell=false){
+        return DynPVector!(T,1).allocFromPool(dxGroup,allocCell);
+    }
+    /// utility method, returns an empty dual derivative vector
+    DynPVector!(T,2) emptyDualDx(bool allocCell=false){
+        return DynPVector!(T,2).allocFromPool(dualDxGroup,allocCell);
+    }
     /// reallocates the segmented array structures, invalidates everything (normally called by 
     /// ParticleSys.SysStruct.reallocDynVarsStructs)
     void reallocStructs(SubMapping fullSystem,KindRange kRange){
@@ -750,6 +789,12 @@ struct DynamicsVars(T){
             if (v.orient is null) v.orient=new SegmentedArray!(Quaternion!(V))(pool.orientStruct);
             if (v.dof is null)    v.dof=new SegmentedArray!(V)(pool.dofStruct);
         }
+    }
+    /// returns a vector of the given type
+    DynPVector!(V,i) dynPVector(int i)(){
+        DynPVector!(V,i) res;
+        checkAllocDynPVect(res);
+        return res;
     }
     
     /// ensures that the positions are allocated

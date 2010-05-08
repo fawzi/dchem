@@ -3,7 +3,7 @@ module dchem.util.Rotate;
 import tango.math.IEEE;
 import blip.narray.NArray;
 
-/// rotation from one *unit* vector v1 to a *unit* vector v2
+/// rotation from one *unit* vector v1 to a *unit* vector v2, modifies m, and returns it
 M rotateVV(V,M)(V v1,V v2,M m)
 in{
     alias typeof(dot(v1,v2)) S;
@@ -30,7 +30,7 @@ body{
     return m;
 }
 
-/// rotation from one delta i vector to a *unit* vector v2
+/// rotation from one delta i vector to a *unit* vector v2, modifies m, and returns it
 M rotateEiV(V,M)(size_t i,V v2,M m)
 in{
     alias typeof(dot(v2,v2)) S;
@@ -64,7 +64,7 @@ body{
     return m;
 }
 
-/// rotation from one *unit* vector v2 to the vector delta_i (transpose of the previous one)
+/// rotation from one *unit* vector v2 to the vector delta_i (transpose of the previous one), modifies m, and returns it
 M rotateVEi(V,M)(V v2,size_t i,M m)
 in{
     alias typeof(dot(v2,v2)) S;

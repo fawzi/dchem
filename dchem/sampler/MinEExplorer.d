@@ -10,6 +10,8 @@ import blip.t.math.Math:max;
 import tango.util.container.more.Heap;
 import blip.container.BatchedGrowableArray;
 import tango.util.container.HashSet;
+import dchem.input.RootInput;
+import blip.container.Deque;
 
 /// unique key for a point, dimensions might change
 /// key might have some special values,
@@ -119,11 +121,12 @@ struct PointAndDir{
 alias ulong EKey; /// key of a MinEExplorer instance, 0 is an invalid key
 
 /// flags about a direction
+/// after the rewrite there is one bit free here...
 enum DirFlags{
-    Free=0,
-    ExploredByOthers=1,
-    ExploredLocal=2,
-    ExploredAndSpawn=3
+    Free=0, /// the direction has not been explored
+    Explored=1, /// the direction is being explored
+    BlockedByMethod=2, /// declared as explored because the current method does not want to explore this direction
+    BlockedStruct=3 /// declared as explored because constraints, coordinates choice or potential energy surface makes us skip it
 }
 
 /// prints the bit pattern of a, at least minBits are printed (minBits can be at most 64)
@@ -148,6 +151,9 @@ char[] printBits(size_t a,int minBits=1){
 
 /// an array with flags for each direction, does not use BitArray to have a fast earch of free directions
 /// in large almost full arrays
+///
+/// At the moment it seems that only one bit per direction would be enough with the current setup, but
+/// I am waiting for removing the support for two bits as it is tested and not fully trivial...
 class FlagsArray{
     enum{ 
         usedBits=2,
@@ -166,6 +172,7 @@ class FlagsArray{
         }
     }
     size_t nFlags;
+    size_t nCheckLast;
     size_t[] data;
     this(){}
     /// construct an array with the given size
@@ -247,7 +254,8 @@ class FlagsArray{
     }
     /// looks for a free (00) index starting at startPos.
     /// wraps around, looks at nFlags-1 as last direction, returns nFlags if no direction was found
-    size_t findFreeAndSet(size_t startPos,uint newVal=0){
+    /// if last last is true then the last direction is checked in any case as last
+    size_t findFreeAndSet(size_t startPos,uint newVal=0,bool lastLast=true){
         if (nFlags==0) return 0;
         if (nFlags==1) {
             if (atomicCAS(0,newVal,0)==0){
@@ -262,7 +270,12 @@ class FlagsArray{
         auto val=(data[blockIdx])>>(rest*usedBits);
         rest=bitsPerEl-rest;
         blockIdx+=1;
-        auto last=((nFlags>startPos+2)?(nFlags-2):startPos);
+        size_t last;
+        if (lastLast) {
+            last=((nFlags>startPos+2)?(nFlags-2):startPos);
+        } else {
+            last=((nFlags>startPos+1)?(nFlags-1):startPos);
+        }
         auto stopBlock=last/bitsPerEl;
         bool wasReset=false;
         while (1){
@@ -326,18 +339,6 @@ class FlagsArray{
     }
 }
 
-/// scale factors, put like this, so that they can be catched by the serializer, * to remove *
-class ScaleFactors(T){
-    char[] idName;
-    BulkArray!(T) data;
-    this(char[]idName,size_t dim){
-        this.idName=idName;
-        this.data=BulkArray!(T)(dim);
-    }
-    mixin(serializeSome("dchem.MinE.ScaleFactors("~T.stringof~")","data"));
-    mixin printOut!();
-}
-
 struct LocalPoint(T){
     Point point;
     PointAndDir generator;
@@ -356,13 +357,15 @@ struct LocalPoint(T){
 /// a main evaluation point
 class MainPoint(T){
     enum GFlags{
-        EnergyOnly=(1<<0), /// only energy, no gradient (tipically results of explorations with other methods)
-        Evaluated=(1<<1),  /// the energy and gradient were evaluated, frame of reference is established
-        DoNotExplore=(1<<2),   /// no further exploration should be performed starting from this point
-        FullyExplored=(1<<2),  /// all directions around this point have been explored
-        FullyEvaluated=(1<<3), /// all directions around this point have been explored and evaluated
-        OldApprox=(1<<4),      /// energy/gradient are based on old data, newer better data should be available
-        LocalCopy=(1<<5),      /// this MainPoint is a local copy done for efficency reasons
+        None=0,/// no flags
+        InProgress=(1<<0),        /// a calculation at this point is in progress
+        EvaluatedEnergy=(1<<1),   /// the energy was evaluated
+        EvaluatedGradient=(1<<2), /// gradient was evaluated, frame of reference is established
+        DoNotExplore=(1<<3),   /// no further exploration should be performed starting from this point
+        FullyExplored=(1<<4),  /// all directions around this point have been explored
+        FullyEvaluated=(1<<5), /// all directions around this point have been explored and evaluated
+        OldApprox=(1<<6),      /// energy/gradient are based on old data, newer better data should be available
+        LocalCopy=(1<<7),      /// this MainPoint is a local copy done for efficency reasons (localContext is not the owner)
     }
     MinEExplorer!(T) localContext;
     Point point;
@@ -371,17 +374,13 @@ class MainPoint(T){
     /// direction of the minimum in the dual space with norm 1 wrt. euclidische norm
     /// (frame of reference for minimization)
     DynPVect!(T,2) minDir;
-    /// directions, at index 0- core, index i, direction i of the derivatives in the dual space (DynPVect!(T,2))
-    /// flags values are the DirFlags: 0-not explored, 1- explored by others, 2- explored local, 3- explored &spawn
+    /// directions, at index 0-core Energy 1-core Gradient, index i, direction i/2 of the derivatives in the dual space (DynPVect!(T,2))
+    /// (i&1)==0 if positive, 1 if negative, the last index is of direction 0 again.
+    /// flags values are the DirFlags: 0-not explored, 1- explored
     FlagsArray dirFlags;
-    /// localNeighbors, point is the evaluation point, dir the direction with respect to this point to generate it
-    /// energy its energy
-    GrowableArray!(PointDirAndEnergy) localNeighbors;
-    /// external neighbors, and the direction with respect to this point in which they are
-    GrowableArray!(PointAndDir) externalNeighbors;
-    /// energy of this point
-    Real energy0;
-    /// scale of mindir to recover the dual gradient
+    /// neighbors, and the direction with respect to this point in which they are
+    LocalGrowableArray!(PointAndDir) neighbors;
+    /// scale of mindir to recover the dual gradient (useful??)
     T minDirScale;
     /// repulsion size (useful to block out regions)
     T repulsionSize;
@@ -390,25 +389,60 @@ class MainPoint(T){
     /// bit or of GFlags of the current point
     uint gFlags;
     
+    /// structure to encode a main point efficienly (useful to transfer it o another context)
+    struct DriedPoint{
+        Point point;
+        ParticleSys!(T) pos;
+        DynPVect!(T,2) minDir;
+        FlagsArray dirFlagsTopo; /// topological direction flags
+        FlagsArray[MKey] dirFlagsMethods;
+        LocalGrowableArray!(PointAndDir) neighbors;
+        T minDirScale;
+        T repulsionSize;
+        T explorationSize;
+        uint gFlags;
+        
+    }
+    
+    /// constructor
+    this(MinEExplorer!(T) localContext,Point point,ParticleSys!(T) pos,uint gFlags=GFlags.None,
+        T repulsionSize=-1,T explorationSize=-1,DynPVect!(T,2) minDir=null,T minDirScale=T.init,
+        FlagsArray dirFlags=null,PointAndDir[] neighbors=null)
+    {
+        this.localContext=localContext;
+        this.point=point;
+        this.pos=pos;
+        this.gFlags=gFlags;
+        this.repulsionSize=repulsionSize;
+        this.explorationSize=explorationSize;
+        if (this.repulsionSize<0) this.repulsionSize=localContext.repulsionSize;
+        if (this.explorationSize<=0) this.explorationSize=localContext.explorationSize;
+        this.minDir=minDir;
+        this.minDirScale=minDirScale;
+        this.dirFlags=dirFlags;
+        if (this.dirFlags is null){
+            this.dirFlags=new FlagsArray(localContext.nDirs);
+        }
+        this.neighbors=lGrowableArray(neighbors,neighbors.length,GASharing.Global);
+    }
+    
     /// explores the next direction, immediately marks it as in exploration
     /// returns an invalid point only if all direction are explored, and an invalid direction but this point if a
     /// frame of exploration is not yet defined
     PointAndDir exploreNext(bool cheapGrad){
         auto exploreFlags=DirFlags.ExploredLocal;
-        if (cheapGrad) exploreFlags=DirFlags.ExploredAndSpawn;
         if ((gFlags&GFlags.DoNotExplore)!=0){
             return PointAndDir(0,uint.max);
         }
-        if ((gFlags&GFlags.Evaluated)==0){
-            if (!localContext.isInProgress(PointAndDir(point,0))){
-                synchronized(this){
-                    if ((gFlags&GFlags.Evaluated)==0){
-                        throw new Exception(collectAppender(delegate void(CharSink s){
-                            dumper(s)("non evaluated and non in progress ")(point)(" in ")(localContext.nameId);
-                        }));
-                    }
+        if ((gFlags&GFlags.EvaluatedGradient)==0){
+            synchronized(this){
+                if ((gFlags&(GFlags.InProgress|GFlags.EvaluatedGradient))==0){
+                    gFlags|=GFlags.InProgress;
+                    return PointAndDir(point,0);
                 }
             }
+        }
+        if ((gFlags&GFlags.InProgress)!=0){
             return PointAndDir(this.point,uint.max); // needs to wait evaluation
         }
         if ((gFlags&GFlags.FullyExplored)==0){
@@ -421,31 +455,256 @@ class MainPoint(T){
                         auto nextDir=dirFlags.findFreeAndSet(start,exploreFlags);
                     }
                     if (nextDir!=dirFlags.length) return PointAndDir(this.point,nextDir);
+                    gFlags|=GFlags.FullyExplored;
                 }
             }
         }
         return PointAndDir(0,0);
     }
-    
-    /// calculates the point in the given direction
-    ParticleSys!(T) posInDir(uint dir){
+    /// returns the dir value for the given dimension and sign
+    uint toDir(uint idim,bool neg){
+        assert(idim<dirFlags.length/2,"dim out of bounds");
+        if (idim==0 && neg) return dirFlags.length-1;
+        return 2*idim+1-(neg?1:0);
+    }
+    /// transforms a non core (i.e. non 0) dir to dimension and sign
+    void fromDir(uint dir,out uint dim,out bool neg){
+        assert(dir>0,"special core direction not mappable");
+        assert(dir<dirFlags.length,"dir is too large");
+        dim=dir/2;
+        if(dir==dirFlags.length-1) dir=0;
+        neg=((dir&1)==0);
+    }
+    /// direction
+    DynPVector!(T,2) dualDir(uint dir){
         if (dir==0) return pos;
-        rDir=(dir-1)/2;
-        T val=1;
-        if ((dir&1)==0) val=-1;
-        if (dir==dirFlags.length-1){
-            rDir=0;
-            val=-1;
-        }
+        uint rDir; bool neg;
+        fromDir(dir,rDir,neg);
+        T val=(neg?-1:1);
         auto v0=minDir.emptyCopy;
         v0[]=0;
-        v0[dir]=1;
+        v0[rDir]=val;
         auto newDir=rotateEiV(V,M)(0,minDir,v0);
-        newDir*=explorationSize;
+        return newDir;
+    }
+    /// calculates the point in the given direction
+    ParticleSys!(T) posInDir(uint dir){
+        auto newDir=dualDir(dir);
+        pos.projectInDualTSpace(newDir);
+        auto nAtt=newDir.norm();
+        if (nAtt<localContext.minProjectionResidual){
+            localContext.logMsg(delegate(CharSink s){
+                dumper(s)("exploration in direction ")(dir)(" of point ")(point)("discarded because direction is mostly in null space");
+            });
+            /// try to get rid of all null diretions checking the diagonal of the rotated overlap???
+            return null; // continue all the same or return pos???
+        }
+        /// immediately check expected cartesian norm change and possibly increase length? could be wrong for periodic directions
+        newDir*=explorationSize/nAtt;
+        
         auto resPSys=pos.dup(PSDupLevel.DynProperties|PSDupLevel.DynPNullDx|PSDupLevel.DynPNullMddx|PSDupLevel.HiddenVars);
-        void addFromDualTSpace(T)(newDir,resPSys.dynVars.x);
+        pos.addFromDualTSpace(T)(newDir,resPSys.dynVars.x);
+        newDir.giveBack();
+        auto err=localContext.constraints.applyR(resPSys);
+        if (err>0.1){
+            localContext.logMsg(delegate(CharSink s){
+                dumper(s)("exploration in direction ")(dir)(" of point ")(point)("discarded because we might have a constraint clash");
+            });
+            return null;
+        }
         resPSys.updateHVars();
-        return null;
+    }
+    /// returns if the given direction is acceptable. If it is accepted sets the local directions covered
+    /// and returns a valid Point for it.
+    Point acceptNewDirection(DynPVector!(T,0) newPos,uint dir){
+        if (dir==0) return point; // check that newPos and pos are very close???
+        uint rDir; bool neg;
+        fromDir(dir,rDir,neg);
+        Point newPoint=Point(0);
+        /// verify pos:
+        auto diff=newPos.dup();
+        diff.axpby(pos.dynVars.x,-1,1);
+        if (localContext.minMoveInternal>0 && sqrt(diff.norm2())<localContext.minMoveInternal){
+            localContext.logMsg(delegate void(CharSink s){
+                dumper(s)("norm in the internal coordinates of exploration direction ")(dir)(" of point ")
+                    (point)(" is too small in internal coordinates ")(sqrt(diff.norm2()))(", discarding evaluation");
+            });
+            return newPoint;
+        }
+        auto deriv1=pos.dynVars.emptyDx();
+        deriv1[]=0;
+        pos.addToTSpace(diff,deriv1);
+        diff.giveBack();
+        // make an optimized version when the overlap is the identity??
+        auto deriv1Dual=pos.toDualTSpace(deriv1,deriv1Dual);
+        // original norm in dual space
+        auto origNorm=sqrt(deriv1Dual.norm2());
+        if (origNorm<localContext.minNormDualSelf()*explorationSize){
+            localContext.logMsg(delegate void(CharSink s){
+                dumper(s)("norm in dual space of exploration in direction ")(dir)(" of point ")(point)
+                    (" is too small:")(origNorm)(", discarding evaluation");
+            });
+            return newPoint;
+        }
+        if (origNorm>maxNormDual*explorationSize || origNorm<localContext.minNormDual*explorationSize){
+            localContext.logMsg(delegate void(CharSink s){
+                dumper(s)("norm in dual space of exploration in direction ")(dir)(" of point ")(point)
+                    (" is outside the exploration zone with length ")(origNorm)("*")(explorationSize)
+                    (", continuing evaluation");
+            });
+        }
+        // norm in cartesian units
+        normCartesian=sqrt(pos.dotInTSpace(deriv1,deriv1Dual));
+        if (normCartesian<localContext.minRealNormSelf){
+            localContext.logMsg(delegate void(CharSink s){
+                dumper(s)("norm in real space of exploration in direction ")(dir)(" of point ")(point)
+                    (" is too small:")(normCartesian)(", discarding evaluation");
+            });
+        }
+        /// checking which direction of the dual space we are really exploring
+        auto deriv2Dual=rotateVEi(minDir,0,deriv1Dual);
+        volatile T maxVal=0;
+        size_t iMax;
+        foreach (i,v;deriv2Dual.pLoop){
+            auto vp=abs(v);
+            if (vp>maxVal){
+                synchronized{
+                    if (vp>maxVal){
+                        maxVal=vp;
+                        iMax=i;
+                    }
+                }
+            }
+        }
+        auto dirMax=toDir(iMax,deriv2Dual[iMax]<0);
+        if (dirMax!=dir){
+            if (maxVal>origNorm/sqrt(2)){
+                auto actualDirFlags=dirFlags.atomicCAS(iMax,GFlags.Explored,GFlags.Free);
+                if (actualDirFlags == GFlags.Free){
+                    localContext.logMsg(delegate void(CharSink s){
+                        dumper(s)("exploration in direction ")(dir)(" of point ")(point)
+                            (" is not mostly in the expected direction in the dual space, but in dir ")
+                            (iMax)(", continuing evaluation declaring also it as visited (check distances also???)");
+                    });
+                } else {
+                    localContext.logMsg(delegate void(CharSink s){
+                        dumper(s)("exploration in direction ")(dir)(" of point ")(point)
+                            (" is not mostly in the expected direction in the dual space, but in dir ")
+                            (iMax)(", and that was already visited, discarding evaluation");
+                    });
+                    return newPoint;
+                }
+            } else {
+                localContext.logMsg(delegate void(CharSink s){
+                    dumper(s)("exploration in direction ")(dir)(" of point ")(point)
+                        (" is not mostly in the expected direction in the dual space, but in dir ")
+                        (iMax)(", but with angle larger than 45°, continuing evaluation");
+                });
+            }
+        }        
+        auto deriv2=rotateVEi(minDir,0,deriv1);
+        deriv2Dual.giveBack();
+        // length of the directions in cartesian units
+        auto ov=pos.maybeOverlap();
+        scope rotOv=rotateVEi(minDir,0,ov.data.T.dup(true));
+        auto lenDirs=diag(rotOv);
+        unaryOpStr!("*aPtr0=sqrt(*aPtr0);")(lenDirs);
+        
+        // adds new point
+        newPoint=localContext.nextPointId();
+        localContext.addLocalPoint(new MainPoint!(T)(localContext,newPoint,newPos));
+        
+        PointAndDir[128] buf;
+        auto neighAtt=lGrowableArray(buf,0);
+        neighAtt.append(PointAndDir(newPoint,dir));
+        if (dirMax!=dir)
+            neighAtt.append(PointAndDir(newPoint,dirMax));
+        
+        // check that we are still mostly in the dir direction in the cartesian metric
+        if (abs(deriv2[rdir])<sameDirCosAngle*normCartesian*lenDirs[rdir] || (deriv2[rdir]<0 && (dir&1)==1)){
+            localContext.logMsg(delegate void(CharSink s){
+                dumper(s)("exploration in direction ")(dir)(" of point ")(point)
+                    (" is not mostly in the expected direction in the cartesian space: cos(angle):")
+                    (abs(deriv2[rdir])/normCartesian*lenDirs[rdir])(", continuing evaluation");
+            });
+        }
+        // check other directions that we might cover in cartesian units
+        auto ndir=dirFlags.length/2;
+        for(idir=0;idir<ndir;++idir){
+            if (abs(deriv2[idir])>=sameDirCosAngle*explorationSize*lenDirs[i]){
+                auto dirAtt=toDir(idir,deriv2[idir]<0);
+                if (dirAtt != dir && dirAtt!= iMaxDir){
+                    dirFlags.atomicCAS(dirAtt,DirFlags.Explored,DirFlags.Free);
+                    if (deriv2[idir]!=0){ // don't store directions for invalid dirs
+                        neighAtt.append(PointAndDir(newPoint,dirAtt));
+                    }
+                }
+            }
+        }
+        synchronized(this){
+            neighbors.appendArr(neighAtt.data); // duplicates are stored contiguously, first el is original search dir
+        }
+        return newPoint;
+    }
+    /// the various kinds of neighbors
+    enum NeighKind{
+        NoNeigh, /// not a neighbor
+        NeighInDir, /// a neighbor that explores one or more directions of this point
+        NeighNoDir, /// a neighbor that does not explore a direction of this point
+        NeighVeryClose, /// a point very close to this point
+    }
+    /// checks if the point passed is a neighbor of this point, if it is checks the directions blocked by this
+    /// point. Returns the kind of neighbor that the new point is
+    NeighKind checkNeighbors(DynPVector!(T,0)newPos,Point p) {
+        assert(0,"to do");
+        return NeighKind.NoNeigh;
+    }
+    bool evalWithContext(CalculationContext c){
+        bool calcE=(gFlags&GFlags.EvaluatedEnergy)==0;
+        bool calcF=((gFlags&GFlags.EvaluatedGradient)==0 || cheapGrad());
+        if (calcE||calcF){
+            Real e=pSys.dynVars.potentialEnergy;
+            mixin(withPSys(`pSys[]=pos;`,"c."));
+            c.updateEF(calcE,calcF);
+            mixin(withPSys(`pos[]=pSys;`,"c."));
+            if (isNAN(pos.dynVars.potentialEnergy)) {
+                pos.dynVars.potentialEnergy=e; // replace with if(!calcE) ?
+            } else {
+                e=pos.dynVars.potentialEnergy;
+            }
+            if (!calcF){
+                if (pos.potentialEnergy<=localContext.toExploreMore.peek.energy){
+                    calcF=true;
+                    c.updateEF(false,true);
+                    if (isNAN(pos.dynVars.potentialEnergy)) {
+                        pos.dynVars.potentialEnergy=e; // replace with if(!calcE) ?
+                    } else {
+                        e=pos.dynVars.potentialEnergy;
+                    }
+                }
+            }
+            auto target=localContext.activeExplorers[localContext.owner];
+            if (calcF){
+                if ((gFlags&GFlags.LocalCopy)!=0){
+                    assert(target is activeExplorers[localContext.key],"non local copy and not local");
+                    target.addGradEvalLocal(point,pSysWriter(pos));
+                } else {
+                    synchronized(this){
+                        if (calcF) {
+                            localContext.didGradEval(localContext.key,point);
+                            gFlags|=GFlags.EvaluatedEnergy|GFlags.EvaluatedGradient;
+                        } else {
+                            gFlags|=GFlags.EvaluatedEnergy;
+                        }
+                    }
+                }
+            } else { // just updated energy
+                target.addEnergyEvalLocal(point,e);
+            }
+            return true;
+        } else {
+            return false;
+        }
     }
 }
 
@@ -513,7 +772,7 @@ class MinHeapSync(T){
             return heap.pop();
         }
     }
-    /// returns the minimal energy elements, waits if no elements is available until some becomes available
+    /// returns the minimal energy elements, waits if no elements is available until some becomese available
     T waitPop(){
         while (1){
             synchronized(this){
@@ -525,33 +784,44 @@ class MinHeapSync(T){
     }
 }
 
-struct PointDirAndEnergy{
-    Real energy;
-    PointAndDir point;
-    mixin(serializeSome("dchem.PointDirAndEnergy","energy|point"));
-}
-
 interface ActiveExplorer(T){
     /// stops all explorers (at the moment there is no support for dynamic adding/removal of explorers, worth adding???)
     void shutdown(EKey);
-
     /// key of this explorer
     EKey key();
     /// where the journal is kept
     char[] journalPos();
+    /// load in some arbitrary units
+    Real load();
     
-    /// adds energy to the evaluated ones (and removes from the inProgress)
-    void addEnergyEval(EKey,PointAndEnergy p);
+    /// adds energy (and removes from the inProgress) for a local point, then bCasts addEnergyEval
+    void addEnergyEvalLocal(Point p,Real energy);
+    /// adds energy to the evaluated ones
+    void addEnergyEval(Point p,Real energy);
+    /// adds gradient value to a point that should be owned. Energy if not NAN replaces the previous value
+    void addGradEvalLocal(Point p,PSysWriter!(T) pSys);
     /// communicates that the given point is being expored
     /// flags: communicate doubleEval?
-    void addExploredPoint(EKey,Point key,PSysWriter!(T) pos,uint flags);
-    /// finished exploring the given point
-    void finishedExploringPoint(EKey,Point);
-    /// drops all calculation/storage connected with the given point (called upon collisions)
+    void addExploredPoint(EKey owner,Point point,PSysWriter!(T) pos,uint flags);
+    
+    void finishedExploringPointLocal(Point);
+    /// finished exploring the given point (remove it from the active points)
+    void finishedExploringPoint(Point);
+    /// drops all calculation/storage connected with the given point, the point will be added with another key
+    /// (called upon collisions)
     void dropPoint(EKey,Point);
     
+    // /// if the given point is still active
+    // bool pointIsExplorable(EKey,Point);
+    
     /// returns the position of the given point
-    /// Pos
+    PSysWriter!(T)pointPos(Point);
+    /// energy for the point (NAN if not yet known)
+    Real energyForPoint(Point);
+    /// returns a point to evaluate
+    Point pointToEvaluate();
+    /// called when an evaluation fails, flags: attemptRetry/don't Retry
+    void evaluationFailed(Point,uint flags);
 }
 alias HashSet Set;
 enum { batchSize=512 }
@@ -595,6 +865,86 @@ class DenseLocalPointArray(T){
     }+/
 }
 
+/// a structure to keep point and its energy together
+struct PointAndEnergy{
+    Point point;
+    Real energy;
+    mixin(serializeSome("PointAndEnergy","point|energy"));
+    mixin printOut!();
+}
+
+struct LoadStats{
+    Real load;
+    EKey explorer;
+    mixin(serializeSome("LoadStats","load|explorer"));
+    mixin printOut!();
+}
+
+class RemotePointEval(T):RemoteTask{
+    Point point;
+    char[] ownerUrl;
+    CalculationContext ctx;
+    mixin(serializeSome("dchem.minEE.RemotePointEval!("~T.stringof~")","point|ownerUrl"));
+    
+    this(){}
+    this(Point p,char[]oUrl){
+        point=p;
+        ownerUrl=oUrl;
+    }
+    void execute(Variant args){
+        auto ctx=cast(ActiveExplorer!(T))cast(Object)ProtocolHandler.proxyForUrl(ownerUrl);
+        auto pPos=ctx.pointPos(point); // get real point
+        ctx=args.get!(CalculationContext)();
+    }
+    void stop(){
+        if (ctx!is null) ctx.stop();
+        ctx=null;
+    }
+    
+}
+class MasterCalculator{
+    Set!(PointAndDir) inExploration; /// point directions that are in exploration
+    Set!(Point) inEvaluation; /// points that are in evaluation
+    Set!(Point) toEvaluate; /// points that should be avaluated
+    Deque!(CalculationContext) waitingContexts;
+    size_t overPrepare=0;
+    /// adds a context that can calculate something
+    void addContext(CalculationContext c){
+        synchronized(this){
+            waitingContexts.append(c);
+        }
+        update();
+    }
+    /// adds a point to evaluate coming from PointAndDir
+    void addPointForPointDir(Point p,PointAndDir origin){
+        synchronized(this){
+            if (p.isValid){
+                toEvaluate.add(p);
+            }
+            inExploration.remove(origin);
+        }
+        update();
+    }
+    /// updates the calculator: tries to give work to waitingContexts and
+    void update(){
+        Point p;
+        CalculationContext ctx;
+        while(1){
+            ctx=null;
+            synchronized(this){
+                if (!toEvaluate.take(p)) break;
+                if (!waitingContexts.popFront(ctx)) break;
+            }
+            // ctx.remoteExe...
+        }
+        if (p.isValid && ctx is null) {
+            synchronized(this){
+                toEvaluate.add(p);
+            }
+        }
+    }
+}
+
 class MinEExplorer(T): Sampler,ActiveExplorer!(T){
     static UniqueNumber!(ulong) nextLocalId;
     static UniqueNumber!(ulong) nextPntNr;
@@ -604,11 +954,13 @@ class MinEExplorer(T): Sampler,ActiveExplorer!(T){
     /// this could be either distribued, or limited to a given max size + refill upon request
     MinHeapSync!(PointAndEnergy) toExploreMore;
     /// list of all the currently active explorers (including this one)
-    ActiveExplorer!(T)[] activeExplorers;
+    ActiveExplorer!(T)[EKey] activeExplorers;
+    MinHeapSync!(LoadStats) loads; 
     BatchGrowableArray!(Point,batchSize) localPointsKeys; // indexes for local owned points
     HashMap!(Point,EKey) owner;
     CalculationInstance[Point] localCalcInProgress;
     Set!(Point) calcInProgress;
+    DenseLocalPointArray!(MainPoint!(T)) localPoints; /// local points (position,...)
     Random randLocal;
     RandomSync rand;
     /// step used for the discretization
@@ -617,7 +969,83 @@ class MinEExplorer(T): Sampler,ActiveExplorer!(T){
     char[] trajDir;
     /// the current method for energy evaluation
     InputField evaluator;
+    /// constraints (taken from the evaluator)
+    MultiConstraint _constraints;
+    /// place to log messages
+    CharSink log;
+    /// notification center
+    NotificationCenter nCenter;
+    /// unit of measurement for 
     
+    /// adds the computed gradient to the point p
+    void addGradEval(Point p,PSysWriter!(T) pSys){
+        auto mp=localPoints[p];
+        auto e=mp.pos.dynVars.potentialEnergy;
+        synchronized(mp){
+            mp.pos[]=pSys;
+            if (isNAN(mp.pos.dynVars.potentialEnergy)) mp.pos.dynVars.potentialEnergy=e;
+            gFlags|=GFlags.EvaluatedEnergy|GFlags.EvaluatedGradient;
+        }
+    }
+    /// writes out a log message
+    void logMsg(void delegate(CharSink)writer){
+        char[512] buf;
+        auto gArr=lGrowableArray(buf,0);
+        auto s=dumper(&gArr.appendArr);
+        s("<MinEELog id=\"")(key)("\" time=\"")(toString(Clock.now()))("\">");
+        writer(s.call);
+        s("</MinEELog>\n");
+    }
+    /// writes out a log message
+    void logMsg(char[]msg){
+        logMsg(delegate void(CharSink s){ s(msg); });
+    }
+    /// constraints of the current system
+    MultiConstraint constraints(){
+        return _constraints;
+    }
+    /// if the gradient is cheap to compute
+    bool cheapGrad(){
+        return false;
+    }
+    /// minimum norm of uint vector after projection of null direction to be considered as a valid direction
+    T minProjectionResidual(){
+        return 0.01;
+    }
+    /// radius in which to look for neighbors (in units of explorationSize)
+    T sameDirCosAngle(){
+        return 0.866;
+    }
+    /// minimum norm in the dual T space to accept an exploration (in units of explorationSize)
+    T minNormDual(){
+        return 0.4;
+    }
+    /// minimum norm in the dual T space to accept an exploration for a self generated direction 
+    /// (in units of explorationSize)
+    T minNormDualSelf(){
+        return 0.1;
+    }
+    /// minimum norm in the real (cartesian) space for a self generated direction to be accept
+    T minRealNormSelf(){
+        return 0.05;
+    }
+    /// max norm in the dual T space to accept an exploration (in units of explorationSize)
+    T maxNormDual(){
+        return 1.9;
+    }
+    /// explorationSize
+    T explorationSize(){ return discretizationStep; }
+    /// repulsionSize
+    T repulsionSize(){ return discretizationStep; }
+    bool pointIsExplorable(EKey eK,Point p){
+        MainPoint!(T) mainP;
+        synchronized(this){ // sync could be avoided most of the time 
+            mainP=localPoints[p];
+        }
+        if (mainP is null) throw new Exception("asked unknown point "~p.toString(),__FILE__,__LINE__);
+        auto flags=mainP.gFlags;
+        return (flags&GFlags.Evaluated)&&(!(flags&(GFlags.DoNotExplore|GFlags.FullyExplored|GFlags.FullyEvaluated|GFlags.OldApprox)));
+    }
     /// returns a globally unique string 
     char[] nextUniqueStr(){
         return collectAppender(delegate void(CharSinker s){
@@ -671,8 +1099,31 @@ class MinEExplorer(T): Sampler,ActiveExplorer!(T){
     /// evaluates the next computation
     PointAndDir nextComputation(){
         auto smallPoint=toExploreMore.waitPop();
-        
+        auto nextPDir=activeExplorers[owner[smallPoint.point]].exploreNext(cheapGrad);
+        if (nextPDir.isValid && nextPDir.dir!=0){
+            toExploreMore.push(smallPoint);
+        } // else other explorers have a point that is not executable as first, but that should create no problems
+        return nextPDir;
     }
+    
+    /// returns the key of the worker with the lowest expected load
+    EKey findNextWorker(){
+        auto w=loads.popWait();
+        mixin(mkActionMixin("updLoad","w|activeExplorers|loads",`
+        w.load=activeExplorers[w.key].load();
+        loads.push(w);`));
+        if (key==w.key){ // local update
+            updLoad();
+        } else {
+            Task("updLoad",&updLoad).autorelease.submitYield();
+        }
+        return w.key;
+    }
+    /// evaluates the given point and dir, and either request a real evaluation there, or communicates that it is blocked
+    Point evaluatePointAndDir(){
+        activeExplorers[findNextWorker()];
+    }
+    
     void stop(){
         
     }

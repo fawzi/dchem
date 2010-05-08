@@ -228,11 +228,9 @@ ParticleSys!(T) readIn2PSys(T)(ReadSystem rIn,
     
     if (nCenter is null) nCenter=new NotificationCenter();
     
-    // first setup of particle kinds
-    pSys.pKindsInitialSetup();
-    
     // particleSystem
     auto pSys=new ParticleSys!(T)(0,rIn.name,sysStruct,nCenter);
+    pSys.pKindsInitialSetup(); // first setup of particle kinds
     pSys.sysStructChanged();
     
     pSys.checkX();
