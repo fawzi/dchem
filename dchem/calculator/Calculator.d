@@ -14,7 +14,6 @@ import dchem.input.ReadIn;
 import dchem.input.RootInput;
 import dchem.sys.ParticleSys;
 import dchem.sys.SegmentedArray;
-import blip.container.BitArray;
 import blip.container.Deque;
 import dchem.sys.Constraints;
 import tango.sys.Process;

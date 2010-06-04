@@ -17,10 +17,11 @@ import blip.narray.NArray;
 import blip.t.core.Traits: ctfe_i2a;
 import blip.sync.Atomic;
 
-/// a pool for dynamical properties
+/// this is at the same time a pool and a structure for a DynPVector
 /// setup as follow: init, update *Structs, possibly consolidateStructs, allocPools, possibly consolidate
-class DynPPool(T){
+class DynPVectStruct(T){
     char[] name;
+    int[3] cellPeriod;
     SegmentedArrayStruct posStruct;
     SegmentedArrayStruct orientStruct;
     SegmentedArrayStruct dofStruct;
@@ -28,6 +29,13 @@ class DynPPool(T){
     SegArrPool!(Vector!(T,3)) poolPos;
     SegArrPool!(Quaternion!(T)) poolOrient;
     SegArrPool!(T) poolDof;
+    
+    /// equal if it has the same structures
+    override equal_t opEquals(Object o){
+        auto t=cast(DynPVectStruct)o;
+        if (t is null) return 0;
+        return (posStruct==t.posStruct && orientStruct==t.orientStruct && dofStruct==t.dofStruct);
+    }
     
     /// constructor, sets up the structures
     this(char[]name,SubMapping submapping,KindRange kRange,SegmentedArrayStruct.Flags f=SegmentedArrayStruct.Flags.None){
@@ -49,7 +57,7 @@ class DynPPool(T){
     /// constructor for internal use only
     this(){}
     /// alloc pools, reusing baseVal pools if possible
-    void allocPools(DynPPool!(T) baseVal=null)
+    void allocPools(DynPVectStruct!(T) baseVal=null)
     {
         posStruct.freeze();
         orientStruct.freeze();
@@ -71,7 +79,7 @@ class DynPPool(T){
         }
     }
     /// consolidates pools
-    void consolidate(DynPPool!(T) baseVal)
+    void consolidate(DynPVectStruct!(T) baseVal)
     {
         if (baseVal!is null && baseVal.poolPos!is null && baseVal.poolPos.arrayStruct is posStruct){
             poolPos=baseVal.poolPos;
@@ -84,7 +92,7 @@ class DynPPool(T){
         }
     }
     /// consolidates the structures that are equivalent (struct names might get lost)
-    void consolidateStructs(DynPPool!(T) baseVal)
+    void consolidateStructs(DynPVectStruct!(T) baseVal)
     {
         assert(posStruct!is null&&orientStruct!is null && dofStruct!is null);
         if (baseVal!is null && baseVal.posStruct == posStruct){
@@ -138,6 +146,7 @@ class DynPPool(T){
 /// when some of the arrays are null and other aren't
 /// if cell is false does the operation only on the SegmentedArray.
 /// if nonEq is true checks that the first variable (namesLocal[0].*) is different from all the others
+/// switch to storing a pointer to a DynPVectStruct?
 char[] dynPVectorOp(char[][]namesLocal,char[] op,bool cell=true,bool nonEq=false)
 {
     char[] res;
@@ -208,6 +217,7 @@ char[] dynPVectorOp(char[][]namesLocal,char[] op,bool cell=true,bool nonEq=false
 struct DynPVector(T,int group){
     alias T dtype;
     enum{ vGroup=group }
+
     Cell!(T) cell;
     /// position in 3D space
     SegmentedArray!(Vector!(T, 3)) pos;
@@ -215,6 +225,11 @@ struct DynPVector(T,int group){
     SegmentedArray!(Quaternion!(T)) orient;
     // other degrees of freedom to be integrated (internal coords, extended lagrangian,...)
     SegmentedArray!(T) dof;
+    
+    /// the vector is dummy
+    bool isDummy(){
+        return cell is null && pos is null && orient is null && dof is null;
+    }
     
     /// returns a copy with a nullified cell
     DynPVector nullCell(){
@@ -580,7 +595,7 @@ struct DynPVector(T,int group){
         return res;
     }
     /// allocates an empty vector from the given pool
-    static DynPVector allocFromPool(DynPPool!(T) p,bool allocCell=false){
+    static DynPVector allocFromPool(DynPVectStruct!(T) p,bool allocCell=false){
         DynPVector res;
         if (allocCell) res.cell=new Cell!(T)(Matrix!(T,3,3).identity,[0,0,0]);
         res.pos=p.newPos();
@@ -599,9 +614,9 @@ class DynPMatrix(T,int g1,int g2){
     NArray!(T,2) data;
     NArray!(T,2)[3][3] blocks;
     index_type[4] rowIdxs,colIdxs;
-    DynPPool!(T) rowGroup;
-    DynPPool!(T) colGroup;
-    this(DynPPool!(T)rowGroup,DynPPool!(T)colGroup,NArray!(T,2) data=null){
+    DynPVectStruct!(T) rowGroup;
+    DynPVectStruct!(T) colGroup;
+    this(DynPVectStruct!(T)rowGroup,DynPVectStruct!(T)colGroup,NArray!(T,2) data=null){
         this.rowGroup=rowGroup;
         this.colGroup=colGroup;
         rowIdxs[0]=0;
@@ -713,27 +728,24 @@ class DynPMatrix(T,int g1,int g2){
     }
 }
 
-/// variables that normally an integrator should care about
+/// structure of the variables that normally an integrator should care about
 // (put here mainly for tidiness reasons)
-struct DynamicsVars(T){
+class DynamicsVarsStruct(T){
     alias T dtype;
-    Real potentialEnergy; /// potential energy of the system (NAN if unknown)
 
     /// structure (and pool) of the positions
-    DynPPool!(T) xGroup;
+    DynPVectStruct!(T) xGroup;
     /// structure (and pool) of the derivatives
-    DynPPool!(T) dxGroup;
+    DynPVectStruct!(T) dxGroup;
     /// structure (and pool) of the dual derivatives (this is an extra separate group because if the overlap matrix
     /// is distributed the local vectors will indeed be incompatible)
-    DynPPool!(T) dualDxGroup;
-    
-    /// position vector
-    DynPVector!(T,0) x;
-    /// velocities vector
-    DynPVector!(T,1) dx;
-    /// forces vector
-    DynPVector!(T,1) mddx;
-    
+    DynPVectStruct!(T) dualDxGroup;
+
+    override equal_t opEquals(Object o){
+        auto t=cast(DynamicsVarsStruct)o;
+        if (t is null) return 0;
+        return this is t || (xGroup==t.xGroup && dxGroup==t.dxGroup && dualDxGroup==t.dualDxGroup);
+    }
     /// utility method, returns an empty position vector (like x)
     DynPVector!(T,0) emptyX(bool allocCell=false){
         return DynPVector!(T,0).allocFromPool(xGroup,allocCell);
@@ -746,18 +758,23 @@ struct DynamicsVars(T){
     DynPVector!(T,2) emptyDualDx(bool allocCell=false){
         return DynPVector!(T,2).allocFromPool(dualDxGroup,allocCell);
     }
-    /// reallocates the segmented array structures, invalidates everything (normally called by 
-    /// ParticleSys.SysStruct.reallocDynVarsStructs)
-    void reallocStructs(SubMapping fullSystem,KindRange kRange){
-        if (xGroup!is null) xGroup.flush; // call stopCaching ?
-        if (dxGroup!is null) dxGroup.flush; // call stopCaching ?
-        if (dualDxGroup!is null) dualDxGroup.flush; // call stopCaching ?
-        xGroup=new DynPPool!(T)("xGroup",fullSystem,kRange,SegmentedArrayStruct.Flags.None);
-        dxGroup=new DynPPool!(T)("dxGroup",fullSystem,kRange,SegmentedArrayStruct.Flags.None);
-        dualDxGroup=new DynPPool!(T)("dualDxGroup",fullSystem,kRange,SegmentedArrayStruct.Flags.None);
-        x.clear();
-        dx.clear();
-        mddx.clear();
+    /// releases the cache of the groups
+    void flush(){
+        if (xGroup!is null) xGroup.flush;
+        if (dxGroup!is null) dxGroup.flush;
+        if (dualDxGroup!is null) dualDxGroup.flush;
+    }
+    /// releases the cache of the groups, and stops caching
+    void stopCaching(){
+        if (xGroup!is null) xGroup.stopCaching;
+        if (dxGroup!is null) dxGroup.stopCaching;
+        if (dualDxGroup!is null) dualDxGroup.stopCaching;
+    }
+    /// constructor, allocates the segmented array structures
+    void this(SubMapping fullSystem,KindRange kRange){
+        xGroup=new DynPVectStruct!(T)("xGroup",fullSystem,kRange,SegmentedArrayStruct.Flags.None);
+        dxGroup=new DynPVectStruct!(T)("dxGroup",fullSystem,kRange,SegmentedArrayStruct.Flags.None);
+        dualDxGroup=new DynPVectStruct!(T)("dualDxGroup",fullSystem,kRange,SegmentedArrayStruct.Flags.None);
     }
     /// the structures have been defined and can be consolidated (if possible)
     /// sets up the pools
@@ -771,6 +788,11 @@ struct DynamicsVars(T){
     
     /// checks that the given vector is allocated
     void checkAllocDynPVect(V,int i)(DynPVector!(V,i)* v){
+        if (v.dVarStruct is null) {
+            v.dVarStruct=this;
+        } else if (v.dVarStruct != this){
+            throw new Exception("different structure");
+        }
         static if (i==0){
             auto pool=xGroup;
         } else static if (i==1){
@@ -790,33 +812,56 @@ struct DynamicsVars(T){
             if (v.dof is null)    v.dof=new SegmentedArray!(V)(pool.dofStruct);
         }
     }
+    
     /// returns a vector of the given type
     DynPVector!(V,i) dynPVector(int i)(){
         DynPVector!(V,i) res;
         checkAllocDynPVect(res);
         return res;
     }
+}
+
+/// variables that normally an integrator should care about
+// (put here mainly for tidiness reasons)
+struct DynamicsVars(T){
+    alias T dtype;
+
+    /// structure of dynamic vars
+    DynamicsVarsStruct!(T) dVarStruct;
+    
+    /// potential energy of the system (NAN if unknown)
+    Real potentialEnergy;
+    /// position vector
+    DynPVector!(T,0) x;
+    /// velocities vector
+    DynPVector!(T,1) dx;
+    /// forces vector
+    DynPVector!(T,1) mddx;
     
     /// ensures that the positions are allocated
     void checkX(){
-        checkAllocDynPVect(&x);
+        dVarStruct.checkAllocDynPVect(&x);
     }
     /// ensures that the velocities are allocated
     void checkDx(){
-        checkAllocDynPVect(&dx);
+        dVarStruct.checkAllocDynPVect(&dx);
     }
     /// ensures that the forces are allocated
     void checkMddx(){
-        checkAllocDynPVect(&mddx);
+        dVarStruct.checkAllocDynPVect(&mddx);
     }
     
     void opSliceAssign(V)(ref DynamicsVars!(V) d2){
+        assert((dVarStruct is null && d2.dVarStruct is null)|| dVarStruct is d2.dVarStruct || dVarStruct == d2.dVarStruct,
+            "incompatible structures");
         potentialEnergy=d2.potentialEnergy;
         x[]=d2.x;
         dx[]=d2.dx;
         mddx[]=d2.mddx;
     }
     void opSliceAssign()(T val){
+        assert((dVarStruct is null && val.dVarStruct is null)|| dVarStruct is val.dVarStruct || dVarStruct == val.dVarStruct,
+            "incompatible structures");
         potentialEnergy=0;
         x[]=val;
         dx[]=val;
@@ -839,6 +884,7 @@ struct DynamicsVars(T){
     }
     DynamicsVars!(V) dupT(V=T)(){
         DynamicsVars!(V) res;
+        res.dVarStruct=dVarStruct;
         res.potentialEnergy=potentialEnergy;
         res.x=x.dupT!(V);
         res.dx=dx.dupT!(V);
@@ -887,6 +933,21 @@ struct DynamicsVars(T){
         assert(i<mddx.length,"index out of bounds");
         return mddx[i];
     }
+    /// gives back the vector (memory might be reused)
+    void giveBack(){
+        x.giveBack();
+        dx.giveBack();
+        mddx.giveBack();
+        clear();
+    }
+    /// clears the vector
+    void clear(){
+        potentialEnergy=T.init;
+        x=null;
+        dx=null;
+        mddx=null;
+        dVarStruct=null;
+    }
     mixin(serializeSome("dchem.sys.DynamicsVars("~T.stringof~")","potentialEnergy|x|dx|mddx"));
     mixin printOut!();
 }
@@ -895,7 +956,7 @@ struct DynamicsVars(T){
 version(InstantiateSome){
     pragma(msg,"DynVars InstantiateSome");
     private{
-        DynPPool!(double) a;
+        DynPVectStruct!(double) a;
         DynPVector!(double,1) v;
         DynPMatrix!(double,1,2) m;
         DynamicsVars!(double) dv;

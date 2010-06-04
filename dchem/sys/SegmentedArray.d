@@ -186,7 +186,7 @@ final class SegmentedArray(T){
     /// allocates a new SegmentedArray with the given kind dimensions
     /// min1 
     this(SegmentedArrayStruct arrayStruct, BulkArray!(T)data=BulkArray!(T).dummy,
-        KindRange kRange=KindRange.all,index_type[] kindStarts=null)
+        KindRange kRange=KindRange.all,index_type[] kindStarts=null,PoolI!(SegmentedArray) pool=null)
     in{
         assert(arrayStruct!is null,"arrayStruct must be valid");
         auto myKRange=kRange;
@@ -225,6 +225,7 @@ final class SegmentedArray(T){
             _data=BulkArray!(T)(this.kindStarts[this.kindStarts.length-1]-this.kindStarts[0]);
         }
         direct=(arrayStruct.flags&SegmentedArrayStruct.Flags.Direct)!=0;
+        this.pool=pool;
     }
     /// array of elements in the given range
     SegmentedArray!(T) opIndex(KindRange kr){

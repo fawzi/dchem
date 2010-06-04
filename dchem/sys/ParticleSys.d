@@ -647,7 +647,9 @@ class SysStruct: CopiableObjectI,Serializable
         return dup(PSDupLevel.SysStructContents);
     }
     void reallocDynVarsStructs(T)(ref DynamicsVars!(T) dV){
-        dV.reallocStructs(fullSystem,KindRange(levels[0].kStart,levels[$-1].kEnd));
+        dV.giveBack();
+        if (dV.dVarStruct !is null) dV.dVarStruct.flush(); // call stopCaching ?
+        dV.dVarStruct=new DynamicsVarsStruct(fullSystem,KindRange(levels[0].kStart,levels[$-1].kEnd));
     }
     mixin(serializeSome("dchem.sys.SysStruct",
         `name: the name of the system
@@ -733,9 +735,9 @@ class ParticleSys(T): CopiableObjectI,Serializable
                         auto rowGroup=pSys.dynVars.dxGroup;
                         auto colGroup=pSys.dynVars.dualDxGroup;
                         static if (! is(dtype==dtypeBlas)){
-                            auto rGroup=new DynPPool!(dtypeBlas)("blasDxGroup",rowGroup.posStruct,
+                            auto rGroup=new DynPVectStruct!(dtypeBlas)("blasDxGroup",rowGroup.posStruct,
                                 rowGroup.orientStruct,rowGroup.dofStruct);
-                            auto cGroup=new DynPPool!(dtypeBlas)("blasDualDxGroup",colGroup.posStruct,
+                            auto cGroup=new DynPVectStruct!(dtypeBlas)("blasDualDxGroup",colGroup.posStruct,
                                 colGroup.orientStruct,colGroup.dofStruct);
                             overlap=new DynPMatrix!(dtypeBlas,1,2)(rGroup,cGroup);
                         } else {
@@ -986,23 +988,35 @@ class ParticleSys(T): CopiableObjectI,Serializable
     /// projects into the correct movement space (back & forth from the direct space).
     /// useful to get rid of the components in the null space
     void projectInDualTSpace(DynPVector!(T,2)dualDeriv){
+        T res;
         auto overlap=maybeDerivOverlap();
         if (overlap!is null){
             scope newDirDirect=dynVars.emptyDx();
             fromDualTSpace(dualDeriv,newDirDirect);
             toDualTSpace(newDirDirect,dualDeriv);
+            res=dotInTSpace(newDirDirect,dualDeriv);
+            newDirDirect.giveBack();
+        } else {
+            res=deriv.norm2();
         }
+        return res;
     }
     /// projects into the correct movement space (back & forth from the dual space).
     /// useful to get rid of the components in the null space
-    void projectInTSpace(DynPVector!(T,1)deriv){
+    /// returns the norm of the vector
+    T projectInTSpace(DynPVector!(T,1)deriv){
+        T res;
         auto overlap=maybeDerivOverlap();
         if (overlap!is null){
             auto dualDeriv=dynVars.emptyDualDx();
             toDualTSpace(deriv,dualDeriv);
             fromDualTSpace(dualDeriv,deriv);
+            res=dotInTSpace(deriv,dualDeriv);
             dualDeriv.giveBack();
+        } else {
+            res=deriv.norm2();
         }
+        return res;
     }
     /// perform scalar product in the tangential (derivative) space
     T dotInTSpace(DynPVector!(T,1)v1,DynPVector!(T,2)v2){

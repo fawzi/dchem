@@ -68,7 +68,7 @@ struct SegArrWriter(T){
         return res;
     }
     /// destroys the memory used by this object if it owns it
-    void destroy(){
+    void deallocData(){
         if (atomicCAS(ownsData,false,true)){
             delete data;
         }
@@ -92,7 +92,7 @@ struct SegArrWriter(T){
         return new SegmentedArray!(V)(aStruct,BulkArray!(V)((cast(V*)data.ptr)[0..data.length/dimMult],kRange),steal);
     }
     /// ditto
-    SegmentedArray!(V) toSegArr(V=T)(SegmentedArrayStruct aStruct,bool steal=false){
+    SegmentedArray!(V) toSegArr(V=T)(SegmentedArrayStruct aStruct,bool steal=false,SegArrPool!(V) pool=null){
         static assert((V.sizeof % T.sizeof)==0,"type of the array ("~V.stringof~") is not commensurate with "~T.stringof);
         uint dimMult=V.sizeof/T.sizeof;
         if (kindStarts.length==0) return null;
@@ -115,7 +115,7 @@ struct SegArrWriter(T){
         } else {
             b=BulkArray!(V)(newData);
         }
-        return new SegmentedArray!(V)(aStruct,b,kRange);
+        return new SegmentedArray!(V)(aStruct,b,kRange,null,pool);
     }
     /// copies to an array of the given type, this might cast (checks kindStarts to decide if reinterpret the memory or cast/convert)
     void copyTo(V)(SegmentedArray!(V) s){
@@ -148,7 +148,7 @@ struct SegArrWriter(T){
 }
 
 /// structure to dump out a DynPVector
-struct DynPVectorWriter(T){
+struct DynPVectorWriter(T,int group){
     T[] cell;
     SegArrWriter!(T) pos;
     SegArrWriter!(T) orient;
@@ -160,13 +160,13 @@ struct DynPVectorWriter(T){
         return pos.kindStarts.length!=0 || orient.kindStarts.length!=0 || dof.kindStarts.length!=0;
     }
     /// destroys the memory used by this object if it owns it
-    void destroy(){
-        pos.destroy();
-        orient.destroy();
-        dof.destroy();
+    void deallocData(){
+        pos.deallocData();
+        orient.deallocData();
+        dof.deallocData();
     }
     /// greates a writer for the given vector
-    static DynPVectorWriter opCall(DynPVector!(T) v){
+    static DynPVectorWriter opCall(DynPVector!(T,group) v){
         DynPVectorWriter res;
         if (v.cell!is null) res.cell=v.cell.h.cell;
         res.pos=SegArrWriter!(T)(v.pos);
@@ -176,33 +176,21 @@ struct DynPVectorWriter(T){
     }
     /// returns a DynPVector of type V , if steal is true then the data will remain valid 
     /// also after the destruction of this. Memory is reinterpreted (no cast/conversion)
-    DynPVector!(T) toDynPVector(V)(ParticleSys!(V) pSys,bool steal=false){
-        DynPVector!(T) res;
+    DynPVector!(V,group) toDynPVector(V,int group2)(DynPVectorStruct!(V,group2) pVStruct,bool steal=false){
+        static assert(group2==group,"conversion only within the same group");
+        DynPVector!(T,group) res;
         if (cell.length!=0){
             assert(cell.length==9,"invalid cell length");
-            auto period=[0,0,0];
-            if (pSys.dynVars.x.cell !is null) period=pSys.dynVars.x.cell.period;
-            res.cell=new Cell(Matrix!(T,3,3)(cell),period);
+            res.cell=new Cell(Matrix!(T,3,3)(cell),pVStruct.cellPeriod);
         }
-        if (pSys.dynVars.posStruct!is null){
-            res.pos=pos.toSegArr!(Vector!(T,3))(pSys.dynVars.posStruct,steal);
-        } else {
-            res.pos=pos.toSegArr!(Vector!(T,3))(pSys.sysStruct,steal);
-        }
-        if (pSys.dynVars.orientStruct!is null){
-            res.orient=orient.toSegArr!(Vector!(T,3))(pSys.dynVars.orientStruct,steal);
-        } else {
-            res.orient=orient.toSegArr!(Vector!(T,3))(pSys.sysStruct,steal);
-        }
-        if (pSys.dynVars.dofStruct!is null){
-            res.dof=dof.toSegArr!(Vector!(T,3))(pSys.dynVars.dofStruct,steal);
-        } else {
-            res.dof=dof.toSegArr!(Vector!(T,3))(pSys.sysStruct,steal);
-        }
+        res.pos=pos.toSegArr!(Vector!(T,3))(pVStruct.posStruct,steal,pVStruct.poolPos);
+        res.orient=orient.toSegArr!(Vector!(T,3))(pVStruct.orientStruct,steal,pVStruct.poolOrient);
+        res.dof=dof.toSegArr!(Vector!(T,3))(pVStruct.dofStruct,steal,pVStruct.poolDof);
         return res;
     }
     /// copies to an array of the given type, this might cast (checks kindStarts to decide if reinterpret the memory or cast/convert)
-    void copyTo(V)(ref DynPVectorWriter!(V)v){
+    void copyTo(V,int group2)(ref DynPVectorWriter!(V,group2)v){
+        static assert(group2==group,"copy only to same group");
         if (cell.length!=0){
             assert(cell.length==9,"invalid cell length");
             auto period=[0,0,0];
@@ -219,16 +207,16 @@ struct DynPVectorWriter(T){
     }
 }
 /// helper function to write out a DynPVector
-DynPVectorWriter!(T) dynPVectorWriter(T)(DynPVector!(T) v){
-    DynPVectorWriter!(T) res=DynPVectorWriter!(T)(v);
+DynPVectorWriter!(T,group) dynPVectorWriter(T,int group)(DynPVector!(T,group) v){
+    DynPVectorWriter!(T,group) res=DynPVectorWriter!(T,group)(v);
     return res;
 }
 
 /// structure to dump out a ParticleSystem
 struct PSysWriter(T){
-    DynPVectorWriter!(T) x;
-    DynPVectorWriter!(T) dx;
-    DynPVectorWriter!(T) mddx;
+    DynPVectorWriter!(T,0) x;
+    DynPVectorWriter!(T,1) dx;
+    DynPVectorWriter!(T,1) mddx;
     Real potentialEnergy;
     Serializable hVars;
     mixin(serializeSome("dchem.PSysWriter!("~T.stringof~")","potentialEnergy|x|dx|mddx|hVars"));
