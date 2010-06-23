@@ -21,317 +21,143 @@ import blip.io.IOArray;
 import blip.io.NullStream;
 import tango.io.vfs.model.Vfs;
 
-/// keeps a list of the allocators for the various methods
-class MethodAllocators{
-    alias CalculationContext delegate(CalculationInstance cInstance,Method method,char[] className,char[] contextId) MethodAllocator;
+/// Limits the number of contexts that can be created/active
+class ContextLimiter:InputElement{
+    CalculationContext[char[]] contexts; // created contexts
+    CalculationContext[char[]] activeContexts; // active contexts
+    size_t maxContexts;
+    size_t maxActiveContexts;
+    WaitCondition waitForContexts;
+    mixin myFieldMixin!();
+    mixin(serializeSome("dchem.ContextLimiter",`maxActiveContexts : maximum number of active contexts (non binding)
+    maxContexts : maximum number of live (i.e. not yet given back) contexts`));
     
-    MethodAllocator[char[]] methodClasses;
-    
-    this(){ }
-    
-    void opIndexAssign(MethodAllocator allocator,char[]name){
-        synchronized(this){
-            methodClasses[name]=allocator;
-        }
+    bool lessThanMaxContexts(){
+        return contexts.length<maxContexts && activeContexts.length<maxActiveContexts;
     }
-    
-    MethodAllocator opIndex(char[]name){
-        synchronized(this){
-            auto r=name in methodClasses;
-            if (r is null){
-                throw new Exception(collectAppender(delegate void(CharSink s){
-                    s("could not find allocator for methodClass '"); s(name); s("'; ");
-                    s("known classes:");
-                    foreach(k,v;methodClasses){
-                        s("'"); s(k); s("'");
-                    }
-                }),__FILE__,__LINE__);
-            }
-            return *r;
-        }
-    }
-    
-    static MethodAllocators defaultAllocators;
-    static this(){
-        defaultAllocators=new MethodAllocators();
-    }
-}
-
-/// represent a manager for instances (execution contextes)
-class ClassInstanceManager: Executer {
-    bool addToCache;
-    CalculationInstance[char[]] activeInstances;
-    CalculationInstance[char[]] cache;
-    size_t maxInstances=1;
-    WaitCondition enoughInstances;
-        
     bool verify(CharSink sink){
+        auto s=dumper(sink);
         bool res=true;
-        auto s=dumper(sink); 
-        if (maxInstances==0){
-            s("Error: maxInstances should be larget than 0 in field ")(myFieldName)("\n");
+        if (maxActiveContexts<=0){
+            s("maxActiveContexts must be larger than 0 in ")(myFieldName)("\n");
+            res=false;
+        }
+        if (maxContexts<=0){
+            s("maxContexts must be larger than 0 in ")(myFieldName)("\n");
             res=false;
         }
         return res;
     }
-    this(size_t maxInstances=1,bool addToCache=true){
-        this.maxInstances=maxInstances;
-        this.addToCache=addToCache;
-        enoughInstances=new WaitCondition(&lessThanMaxInstances);
-    }
-    bool lessThanMaxInstances(){
-        return activeInstances.length<maxInstances;
-    }
-    CalculationInstance getInstance(InstanceGetFlags flags,uint maxContexts){
-        sout("entering ClassInstanceManager get instance\n");
-        while (true){
-            if ((flags & InstanceGetFlags.ReuseCache)!=0){
-                synchronized(this){
-                    foreach (instId,inst;cache){
-                        auto instance=inst;
-                        cache.remove(instId);
-                        instance.activate();
-                        return instance;
-                    }
-                }
-            }
-            if ((flags&InstanceGetFlags.NoAlloc)!=0){
-                sout("no alloc\n");
-                return null;
-            }
-            synchronized(this){
-                if (activeInstances.length>=maxInstances){
-                    if ((flags&InstanceGetFlags.Wait)==0) {
-                        sout("no wait\n");
-                        return null;
-                    }
-                } else {
-                    sout("create new\n");
-                    auto newI=newInstance(maxContexts);
-                    newI.activate();
-                    return newI;
-                }
-            }
-            sout("begin wait\n");
-            enoughInstances.wait();
-            sout("try again\n");
-        }
-    }
-    CalculationInstance newInstance(uint maxContexts){
-        throw new Exception("to implement in subclasses",__FILE__,__LINE__);
-    }
-    
-    CalculationInstance getFromCache(char[] instanceId){
-        synchronized(this){
-            auto i=instanceId in cache;
-            if (i !is null){
-                auto inst=*i;
-                cache.remove(instanceId);
-                return inst;
-            }
-        }
-        return null;
-    }
-    void purgeCache(){
-        synchronized(this){
-            foreach (k,v;cache){
-                v.destroy();
-            }
-        }
-    }
-    void activated(CalculationInstance c){
-        synchronized(this){
-            assert(!(c.instanceId in activeInstances),"activated active entry "~c.instanceId);
-            activeInstances[c.instanceId]=c;
-        }
-    }
-    void deactivated(CalculationInstance c){
-        bool destroy=false;
-        synchronized(this){
-            assert(c.instanceId in activeInstances,"deactivated non active entry "~c.instanceId);
-            activeInstances.remove(c.instanceId);
-            if (addToCache){
-                cache[c.instanceId]=c;
-            } else {
-                destroy=true;
-            }
-            if (activeInstances.length==maxInstances-1) enoughInstances.notify();
-        }
-        if (destroy){
-            c.destroy();
-        }
-    }
-    void destroyed(CalculationInstance c){
-        synchronized(this){
-            if (c.instanceId in activeInstances){
-                activeInstances.remove(c.instanceId);
-                if (activeInstances.length==maxInstances-1) enoughInstances.notify();
-            }
-            cache.remove(c.instanceId);
-        }
-    }
-    mixin(serializeSome("dchem.Executer",""));
-    mixin printOut!();
-    mixin myFieldMixin!();
-}
-/// represent an instance that can calculate systems (i.e. a computational resource)
-class CalcInstance:CalculationInstance{
-    ClassInstanceManager _manager;
-    char[] _instanceId;
-    CalculationContext[char[]] contexts; // active contexts
-    UniqueNumber!(size_t) lastContextId;
-    size_t maxContexts;
-    WaitCondition waitForContexts;
-
-    VfsFolder baseDirectory(){
-        assert(0,"unimplemented");
-        return null;
-    }
-    
-    bool lessThanMaxContexts(){
-        return contexts.length<maxContexts;
-    }
-    this(ClassInstanceManager manager,char[] instanceId,uint maxContexts){
-        this._manager=manager;
-        this._instanceId=instanceId;
-        this.lastContextId=UniqueNumber!(size_t)(1);
+    this(size_t maxContexts=1,size_t maxActiveContexts=1){
+        assert(maxContexts!=0,"maxContexts cannot be 0");
+        assert(maxActiveContexts!=0,"maxActiveContexts cannot be 0");
         this.maxContexts=maxContexts;
+        this.maxActiveContexts=maxActiveContexts;
         this.waitForContexts=new WaitCondition(&lessThanMaxContexts);
     }
-    Executer manager() { return _manager; }
-    char[] instanceId() { return _instanceId; }
     
-    CalculationContext newContext(Method m,char[]templateName,CalculationContext delegate(CalculationInstance,Method,char[],char[])allocator){
-        char[] contextId=collectAppender(delegate void(CharSink s){
-            s(templateName);
-            s("-");
-            writeOut(s,lastContextId.next());
-        });
+    /// creates a context if there aren't too many, if wait is true waits until some can be created
+    CalculationContext createContext(CalculationContext delegate(bool,ubyte[]history)cContext,
+        bool wait,ubyte[]history){
         while (true){
+            CalculationContext ctx;
             synchronized(this){
                 if (contexts.length<maxContexts) {
-                    auto res=allocator(this,m,templateName,contextId);
-                    res.activate();
-                    return res;
+                    ctx=cContext(wait,history);
+                    if(ctx!is null){
+                        contexts[ctx.contextId]=ctx;
+                        activeContexts[ctx.contextId]=ctx;
+                        ctx.nCenter.registerCallback("willActivateContext",&willActivateContextCB,Callback.Flags.ReceiveAll);
+                        ctx.nCenter.registerCallback("willDeactivateContext",&willDeactivateContextCB,Callback.Flags.ReceiveAll);
+                        ctx.nCenter.registerCallback("willGiveBackContext",&willGiveBackContextCB,Callback.Flags.ReceiveAll);
+                    }
+                    return ctx;
                 }
+            }
+            if(ctx!is null || (!wait)){
+                return ctx;
             }
             waitForContexts.wait();
         }
     }
-    void localExec(RemoteTask r){
-        r.execute(Variant(this));
-    }
-    /// creates a process that will be able to execute the given command
-    Process cmd(char[] cmd){
-        auto p=new Process(cmd);
-        p.workDir=baseDirectory.toString();
-        return p;
-    }
-    /// gets output (and errors) of the execution of the given process
-    static char[] getOutput(Process p,out int status){
-        auto buf=new IOArray(512,512);
-        p.redirect=Redirect.Output|Redirect.ErrorToOutput;
-        p.execute();
-        buf.copy(p.stdout);
-        auto res=p.wait();
-        status=res.status;
-        switch (res.reason)
-        {
-            case res.Exit:
-                break;
-            case res.Signal,res.Stop,res.Continue,res.Error:
-            default:
-                if (status==0) status=-1;
-                break;
-        }
-        p.stdout.close();
-        return cast(char[])buf.slice();
-    }
-    /// executes the given process, discards any output and return the status
-    static int execProcess(Process p){
-        auto buf=nullStream();
-        p.redirect=Redirect.Output|Redirect.ErrorToOutput;
-        p.execute();
-        buf.copy(p.stdout);
-        auto res=p.wait();
-        auto status=res.status;
-        switch (res.reason)
-        {
-            case res.Exit:
-                break;
-            case res.Signal,res.Stop,res.Continue,res.Error:
-            default:
-                if (status==0) status=-1;
-                break;
-        }
-        p.stdout.close();
-        return status;
-    }
-    void execCmd(char[] cmd,CharSink log=sout.call){
-        if (cmd.length>0 && cmd!="NONE"){
-            char[256] buf;
-            auto arr=lGrowableArray(buf,0);
-            dumper(&arr)("executing ")(cmd)("\n");
-            log(arr.data);
-            arr.clearData();
-            auto p=new Process(cmd);
-            int status;
-            log(getOutput(p,status));
-            if (status!=0){
-                arr("command failed with status ");
-                writeOut(&arr.appendArr,status);
-                throw new Exception(arr.data.dup,__FILE__,__LINE__);
-            }
-        }
-    }
-    void activate(){
-        manager.activated(this);
-    }
-    void deactivate(){
-        manager.deactivated(this);
-    }
-    void destroy(){
-        manager.destroyed(this);
-    }
-    void activatedContext(CalculationContext c){
+
+    void willActivateContextCB(char[]name,Callback*callBack,Variant v){
+        auto c=v.get!(CalculationContext)();
         synchronized(this){
-            assert(!(c.contextId in contexts),"activated already active context "~c.contextId);
-            contexts[c.contextId]=c;
+            assert((c.contextId in contexts),"activated context not in list "~c.contextId);
+            assert((c.contextId in activeContexts),"activated context already activated "~c.contextId);
+            activeContexts[c.contextId]=c;
         }
     }
-    void deactivatedContext(CalculationContext c){
+    void willDeactivateContextCB(char[]name,Callback*callBack,Variant v){
+        auto c=v.get!(CalculationContext)();
         synchronized(this){
-            assert((c.contextId in contexts),"deactivated already inactive context "~c.contextId);
-            contexts.remove(c.contextId);
-            waitForContexts.checkCondition();
+            assert((c.contextId in activeContexts),"deactivated context not in list "~c.contextId);
+            activeContexts.remove(c.contextId);
         }
-    }
-    void destroyedContext(CalculationContext c){
-        contexts.remove(c.contextId);
         waitForContexts.checkCondition();
     }
-    // comparison
-    override equals_t opEquals(Object o){
-        if (o.classinfo !is this.classinfo){
-            return 0;
+    void willGiveBackContextCB(char[]name,Callback*callBack,Variant v){
+        auto c=v.get!(CalculationContext)();
+        synchronized(this){
+            assert((c.contextId in contexts),"gave back context not in list "~c.contextId);
+            if((c.contextId in activeContexts)!is null)
+                activeContexts.remove(c.contextId);
+            contexts.remove(c.contextId);
         }
-        auto c=cast(CalcInstance)o;
-        if (c !is this){
-            assert(c.instanceId!=instanceId,"duplicate instanceId");
-            return false;
+        waitForContexts.checkCondition();
+    }
+}
+
+/// wraps a method so that it is constrained to a maximum number of contexts when used though this method
+class ContextLimiterClient:Method{
+    InputField contextLimiter;
+    InputField method;
+    
+    this(){
+        // should expose it to the world...
+    }
+    
+    mixin myFieldMixin!();
+    mixin(serializeSome("dchem.ContextLimiterClient",`contextLimiter : the limiter that constrain this method
+    method : the method that is constrained when accessed through this`));
+
+    final ContextLimiter cl(){
+        return cast(ContextLimiter)cast(Object)contextLimiter.content;
+    }
+
+    bool verify(CharSink s){
+        auto log=dumper(s);
+        bool res=true;
+        if (contextLimiter is null || cl() is null){
+            res=false;
+            log("contextLimiter has to be valid, and of type dchem.ContextLimiter in ")(myFieldName)("\n");
         }
-        return true;
-    }
-    override hash_t toHash(){
-        return getHash(instanceId);
-    }
-    override int opCmp(Object o){
-        if (o.classinfo !is this.classinfo){
-            return ((cast(void*)o.classinfo<cast(void*)this.classinfo)?-1:1);
+        if (method is null || method.method() is null){
+            res=false;
+            log("method has to be valid, and a method in ")(myFieldName)("\n");
         }
-        auto t=cast(CalcInstance)o;
-        return cmp(instanceId,t.instanceId);
+        return res;
     }
+    /// gets a calculator to perform calculations with this method, if possible reusing the given history
+    CalculationContext getCalculator(bool wait, ubyte[]history){
+        assert(cl!is null && method.method!is null);
+        return cl.createContext(&method.method.getCalculator,wait,history);
+    }
+    /// drops the history with the given id
+    void dropHistory(ubyte[]history){
+        method.method.dropHistory(history);
+    }
+    /// clears all history
+    void clearHistory(){
+        method.method.clearHistory();
+    }
+    /// url to access this from other processes
+    char[] exportedUrl(){
+        assert(0,"to do");
+        return "";
+    }
+    
 }
 
 char[] withPSys(char[]op,char[]from=""){
@@ -356,8 +182,8 @@ class CalcContext:CalculationContext{
     SegmentedArray!(Vector!(Real,3)) posArr;
     NotificationCenter _nCenter;
     HistoryManager!(LowP) _posHistory;
-    CalculationInstance _cInstance;
     ChangeLevel _changeLevel; /// 0: first time, 1: all changed, 2: only pos changed, 3: small pos change, 4: extrapolable pos change
+    Method _method;
     Real maxChange;
     MultiConstraint _constraints;
     
@@ -365,19 +191,18 @@ class CalcContext:CalculationContext{
         r.execute(Variant(this));
     }
 
-    this(CalculationInstance cInstance,char[] contextId){
-        this._cInstance=cInstance;
+    this(char[] contextId){
         this._contextId=contextId;
         _nCenter=new NotificationCenter();
         _constraints=new MultiConstraint();
+        // register to the world...
     }
     MultiConstraint constraints(){ return _constraints; }
     char[] contextId(){ return _contextId; }
     ParticleSys!(Real) pSysReal() { return _pSysReal; }
     ParticleSys!(LowP) pSysLowP() { return _pSysLowP; }
-    NotificationCenter nCenter() { return _nCenter; }
+    NotificationCenter nCenter()  { return _nCenter; }
     HistoryManager!(LowP) posHistory() { return _posHistory; }
-    CalculationInstance cInstance() { return _cInstance; }
     ChangeLevel changeLevel() { return _changeLevel; }
     void changeLevel(ChangeLevel c) { _changeLevel=c; }
     Real potentialEnergy(){
@@ -449,14 +274,37 @@ class CalcContext:CalculationContext{
         // maxChange=0.0; changeLevel=ChangeLevel.SmoothPosChange;
     }
     
+    /// called automatically after creation, but before any energy evaluation
+    /// should be called before working again with a deactivated calculator
     void activate(){
-        cInstance.activatedContext(this);
+        nCenter.notify("willActivateContext",Variant(this));
     }
+    /// call this to possibly get rid of all caches (i.e. before a pause in the calculation)
     void deactivate(){
-        cInstance.deactivatedContext(this);
+        nCenter.notify("willDeactivateContext",Variant(this));
     }
-    void destroy(){
-        cInstance.destroyedContext(this);
+    /// call this to remove the context (after all calculations with this are finished)
+    void giveBack(){
+        nCenter.notify("willGiveBackContext",Variant(this));
+    }
+    /// tries to stop a calculation in progress. Recovery after this is not possible
+    /// giveBack should still be called
+    void stop(){}
+    /// the method of this calculator (this might be different from the method that was used to create this
+    /// as that might have been wrapped)
+    Method method(){
+        assert(0,"to implement in subclasses");
+    }
+    /// stores the history somewhere and returns an id to possibly recover that history at a later point
+    /// this is just an optimization, it does not have to do anything. If implemented then
+    /// method.getCalculator, .dropHistory and .clearHistory have to be implemented accordingly
+    ubyte[]storeHistory(){ return []; }
+    /// exposes (publish/vends) this object to the world
+    void publish(){
+    }
+    /// url to access this from other processes
+    char[] exportedUrl(){
+        assert(0,"to do");
     }
 }
 

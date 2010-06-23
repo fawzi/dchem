@@ -976,7 +976,7 @@ class SegArrPool(T):Pool!(SegmentedArray!(T)){
     SegmentedArrayStruct arrayStruct;
     
     this(SegmentedArrayStruct s,size_t bufferSpace=8*batchSize, size_t maxEl=16*batchSize){
-        super(bufferSpace,maxEl);
+        super(null,bufferSpace,maxEl);
         assert(s!is null,"arrayStruct must be non null");
         arrayStruct=s;
     }

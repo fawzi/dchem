@@ -13,76 +13,16 @@ import tango.sys.Process;
 import blip.container.GrowableArray;
 import Path=tango.io.Path;
 import blip.io.Console;
-
-/// represent a manager for local processes
-class LocalExeInstanceManager:ClassInstanceManager {
-    UniqueNumber!(size_t) lastInstanceId;
-    char[] baseDir;
-    VfsFolder _baseDirectory;
-    bool registered=false;
-    
-    mixin(serializeSome("dchem.LocalExecuter","baseDir|maxInstances|addToCache"));
-    this(){}
-    this(char[]baseDir,size_t maxCalc=1,bool addToCache=true){
-        super(maxCalc,addToCache);
-        this.baseDir=baseDir;
-        this.lastInstanceId=UniqueNumber!(size_t)(1);
-    }
-    VfsFolder baseDirectory(){
-        if (_baseDirectory is null){
-            _baseDirectory=new FileFolder(baseDir,true);
-        }
-        return _baseDirectory;
-    }
-    override CalculationInstance newInstance(uint maxContexts){
-        char[] calcInstanceId=collectAppender(delegate void(CharSink s){
-            s(myFieldName);
-            s("-");
-            writeOut(s,lastInstanceId.next());
-        });
-        auto newF=baseDirectory.folder(calcInstanceId).create();
-        char[] dir=baseDir;
-        return new ExecuterInstance(this,calcInstanceId,newF.toString(),maxContexts);
-    }
-    bool verify(CharSink sink){
-        auto s=dumper(sink);
-        if (baseDir.length==0) {
-            s("Warning: no baseDir given in field ")(myFieldName)(", assuming '.'\n");
-            baseDir=".";
-        } else if (! Path.exists(baseDir)){
-            s("Warning: non existing baseDir '")(baseDir)("' given in field ")(myFieldName)("\n");
-        }
-        return true;
-    }
-}
-/// represent one local execution process
-class ExecuterInstance:CalcInstance{
-    char[] baseDir;
-    VfsFolder _baseDirectory;
-    Time creationTime;
-    
-    this(ClassInstanceManager manager,char[]instanceId,char[]folder,uint maxContexts){
-        super(manager,instanceId,maxContexts);
-        baseDir=folder;
-        creationTime=Clock.now;
-    }
-    VfsFolder baseDirectory(){
-        if (_baseDirectory is null){
-            _baseDirectory=new FileFolder(baseDir,true);
-        }
-        return _baseDirectory;
-    }
-}
+import dchem.util.ExecCmd;
+import dchem.calculator.ProcContext;
 
 class TemplateExecuter: Method {
     InputField superTemplate;
-    InputField executer;
     InputField startConfig;
     char[] templateDir;
     char[] setupCmd, executeInitialE, executeStructChangeE, executePosChangeE, executeSmallPosChangeE, executeSmoothPosChangeE, executeDefaultE;
     char[] stopCmd, executeInitialEF, executeStructChangeEF, executePosChangeEF, executeSmallPosChangeEF, executeSmoothPosChangeEF, executeDefaultEF;
     char[][char[]] subs;
-    char[] methodClass;
     bool writeReplacementsDict;
     bool overwriteUnchangedPaths;
     int maxContexts=1;
@@ -106,20 +46,8 @@ class TemplateExecuter: Method {
         return res;
     }
     
-    CalculationInstance getCalcInstance(InstanceGetFlags flags=InstanceGetFlags.ReuseWait){
-        sout("entering TemplateExecuter.getCalcInstance\n");
-        if (executer is null){
-            throw new Exception("Expected a valid executer in the executer field of the dchem.TemplateExecuter "~myFieldName,__FILE__,__LINE__);
-        }
-        auto manager=cast(ClassInstanceManager)cast(Object)executer.content;
-        if (manager is null){
-            throw new Exception("Expected an executer (subclass or ClassInstanceManager) in field "~myFieldName,__FILE__,__LINE__);
-        }
-        sout("call manager.getCalcInstance\n");
-        return manager.getInstance(flags,maxContexts);
-    }
-    CalculationContext getCalculator(CalculationInstance i){
-        return i.newContext(this,methodClass,MethodAllocators.defaultAllocators[methodClass]);
+    CalculationContext getCalculator(bool wait,ubyte[]history){
+        assert(0,"to be implemented by subclasses");
     }
     char[] setupCommand(){
         if (setupCmd.length==0 && superTemplate!is null){
@@ -214,8 +142,6 @@ class TemplateExecuter: Method {
     // serialization stuff
     mixin(serializeSome("dchem.TemplateExecuter",
     `superTemplate: a template where to take default values
-    executer: the executer allocating resources for this method
-    methodClass: class of the method to use (i.e. program, needed to know how to get energy,forces,...)
     startConfig: the initial configuration
     templateDir: where to find the definition of the template (tipically a directory)
     subs: keyword and their substitutions to apply to the templates (as dictionary string -> string)
@@ -226,7 +152,7 @@ class TemplateExecuter: Method {
     executePosChangeE: command executed to calculate the energy when only positions changed, set to NONE to deactivate
     executeSmallPosChangeE: command executed to calculate the energy when positions changed by a small amount, set to NONE to deactivate
     executeSmoothPosChangeE: command executed to calculate the energy when positions changed smoothly, set to NONE to deactivate
-    executeDefaultE: default command for all execute*E commands (if left empty)
+    executeDefaultE: default command for all execute*E commands (if they are empty)
     executeInitialEF: command executed to calculate the first energy and forces, set to NONE to deactivate
     executeStructChangeEF: command executed to calculate the energy and forces when the structure is changed, set to NONE to deactivate
     executePosChangeEF: command executed to calculate the energy and forces when only positions changed, set to NONE to deactivate
@@ -239,23 +165,62 @@ class TemplateExecuter: Method {
     `));
     mixin printOut!();
     mixin myFieldMixin!();
+    
+    /// drops the history associated with the given key
+    void dropHistory(ubyte[]history){}
+    /// clears all history
+    void clearHistory(){}
+    /// url to access this from other processes
+    char[] exportedUrl(){
+        assert(0,"to do");
+    }
+    
 }
 
 class ExecuterContext:CalcContext{
     TemplateExecuter input;
     TemplateHandler templateH;
+    Process opInProgress;
 
-    this(TemplateExecuter input,CalculationInstance cInstance,char[] className,char[] contextId){
-        super(cInstance,contextId);
+    VfsFolder baseDir(){
+        return templateH.targetDir;
+    }
+    Method method(){
+        return input;
+    }
+    void execCmd(char[] cmd,CharSink log=sout.call){
+        if (cmd.length>0 && cmd!="NONE"){
+            char[256] buf;
+            auto arr=lGrowableArray(buf,0);
+            dumper(&arr)("executing ")(cmd)("\n");
+            log(arr.data);
+            arr.clearData();
+            opInProgress=new Process(cmd);
+            auto bDir=baseDir.toString();
+            if (bDir.length>0){
+                opInProgress.workDir=bDir;
+            }
+            int status;
+            log(getOutput(opInProgress,status));
+            if (status!=0){
+                arr("command failed with status ");
+                writeOut(&arr.appendArr,status);
+                throw new Exception(arr.data.dup,__FILE__,__LINE__);
+            }
+        }
+    }
+
+    this(TemplateExecuter input,char[] contextId){
+        super(contextId);
         this.input=input;
-        templateH=new TemplateHandler(input.templateDirectory(),cInstance.baseDirectory());
+        templateH=new TemplateHandler(input.templateDirectory(),new FileFolder(ProcContext.instance.baseDirectory.toString()~"/"~contextId,true)); // to fix
         input.addFullSubs(templateH.subs);
         
         templateH.subs["templateDirectory"]=input.templateDirectory.toString;
         templateH.subs["workingDirectory"]=templateH.targetDir.toString;
         
         templateH.evalTemplates(0,true);
-        cInstance.execCmd(input.setupCommand());
+        execCmd(input.setupCommand());
         if (input.startConfig is null || input.startConfig.config is null){
             throw new Exception("Error: startConfiguration in field "~input.myFieldName~" should be set to a valid configuration",__FILE__,__LINE__);
         }
@@ -283,25 +248,21 @@ class ExecuterContext:CalcContext{
     
     void updateEF(bool updateE=true,bool updateF=true){
         templateH.evalTemplates(changeLevel,input.overwriteUnchangedPaths);
-        cInstance.execCmd(input.commandFor(updateE,updateF,changeLevel));
+        execCmd(input.commandFor(updateE,updateF,changeLevel));
         collectEF(updateE,updateF);
         maxChange=0;
         changeLevel=ChangeLevel.SmoothPosChange;
     }
     
+    override void stop(){
+        volatile auto op=opInProgress;
+        if (op!is null && op.isRunning)
+            op.kill();
+    }
+    
     /// should collect the newly calculated energy
     void collectEF(bool updateE=true,bool updateF=true){
         assert(0,"to implement in subclasses");
-    }
-    
-    void activate(){
-        cInstance.activatedContext(this);
-    }
-    void deactivate(){
-        cInstance.deactivatedContext(this);
-    }
-    void destroy(){
-        cInstance.destroyedContext(this);
     }
 }
 

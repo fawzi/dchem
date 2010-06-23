@@ -54,9 +54,10 @@ class ParticleKindMap{
 }
 
 ParticleSys!(T) readIn2PSys(T)(ReadSystem rIn,
-    ParticleKind delegate(Kind,LevelIdx,KindIdx) pkindsMap=&ParticleKindMap.defaultMap.mapKind,
+    ParticleKind delegate(Kind,LevelIdx,KindIdx) pkindsMap=null,
     NotificationCenter nCenter=null)
 {
+    if (pkindsMap is null) pkindsMap=&ParticleKindMap.defaultMap.mapKind;
     // fullSystem & levels
     KindRange[] levels=new KindRange[](4);
     auto sortedPIndex=BulkArray!(PIndex)(rIn.nParticles+rIn.residui.length+rIn.chains.length+1);
@@ -246,6 +247,125 @@ ParticleSys!(T) readIn2PSys(T)(ReadSystem rIn,
     foreach (p;rIn.particles){
         posV[LocalPIndex(p.pIndex),0]=Vector!(T,3)(p.pos[0],p.pos[1],p.pos[2]);
     }
+    
+    pSys.cellChanged();
+    pSys.positionsChanged();
+    
+    return pSys;
+}
+
+
+/// builds an artificial particle system without particles, only with systemwide attributes
+ParticleSys!(T) artificialPSys(T)(size_t nPos, size_t nOrient,size_t nDof,
+    NotificationCenter nCenter=null)
+{
+    // fullSystem & levels
+    KindRange[] levels=new KindRange[](4);
+    auto sortedPIndex=BulkArray!(PIndex)(1);
+    index_type[] kindStarts=new index_type[](2);
+
+    kindStarts=[cast(index_type)0,1];
+    for (size_t ipart=0;ipart<3;++ipart){
+        levels[ipart]=KindRange(cast(KindIdx)0,cast(KindIdx)0);
+    }
+    levels[3]=KindRange(cast(KindIdx)0,cast(KindIdx)1);
+    sortedPIndex[0]=PIndex(3,0); // the system particle
+    
+    auto fullRange=KindRange(levels[0].kStart,levels[$-1].kEnd);
+    auto fullSystem=new SubMapping("fullSystem",sortedPIndex,*cast(BulkArray!(LocalPIndex)*)cast(void*)&sortedPIndex,
+        sortedPIndex,kindStarts,
+        fullRange,MappingKind.Same);
+    
+    // externalOrder
+    auto gSortedLocalPIndex=BulkArray!(LocalPIndex)(0);
+    auto lSortedPIndex=BulkArray!(PIndex)(0);
+
+    auto externalOrder=new SubMapping("externalOrder",sortedPIndex[0..kindStarts[levels[0].kEnd]],
+        gSortedLocalPIndex,lSortedPIndex,kindStarts[0..1+levels[0].kEnd],KindRange(levels[0].kStart,levels[0].kEnd),
+        MappingKind.Gapless);
+    
+    // particleStruct, superParticle
+    index_type[] kindDims=new index_type[](cast(size_t)fullRange.kEnd);
+    kindDims[]=1;
+    auto particlesStruct=new SegmentedArrayStruct("particleStruct",fullSystem,fullRange,kindDims);
+    auto particles=new SegmentedArray!(PIndex)(particlesStruct,sortedPIndex,fullRange,kindStarts);
+    auto superParticle=new SegmentedArray!(PIndex)(particlesStruct);
+    
+    superParticle[LocalPIndex(0,0),0]=PIndex();
+
+    /// kinds particleKinds
+    auto kindsData=BulkArray!(ParticleKind)(1);
+    auto p=new SysKind(cast(LevelIdx)3,levels[3].kStart);
+    
+    kindsData[0]=p;
+    index_type elIdx,delIdx;
+    p.posEls.addElements(nPos,nPos,false,elIdx,delIdx);
+    p.orientEls.addElements(nOrient,0,true,elIdx,delIdx);
+    p.dofEls.addElements(nDof,nDof,false,elIdx,delIdx);
+    p.dofEls.addElements(0,3*nOrient,true,elIdx,delIdx);
+    auto kindDims2=new index_type[](kindDims.length);
+    kindDims2[]=0;
+    auto kindsStruct=new SegmentedArrayStruct("kindsStruct",fullSystem,fullRange,kindDims2,SegmentedArrayStruct.Flags.Min1);
+    auto particleKinds=new SegmentedArray!(ParticleKind)(kindsStruct,kindsData);
+    
+    /// subparticles
+    index_type[] nSubparticles=new index_type[](1);
+    nSubparticles[0]=0;
+    foreach (i,v;nSubparticles){
+        if (v!=index_type.max) {
+            auto oldV=kindsData[i].subParticles;
+            if(oldV!=0 && oldV!=size_t.max && oldV!=v && oldV!=index_type.max){
+                throw new Exception(collectAppender(delegate void(CharSink sink){
+                    dumper(sink)("subParticles was set to ")(oldV)(" but found ")(v)
+                        (" subparticles for particles of kind ")(kindsData[i])("\n");
+                }),__FILE__,__LINE__);
+            }
+            kindsData[i].subParticles=v;
+        }
+    }
+
+    auto subParticlesStruct=new SegmentedArrayStruct("subparticleStruct",fullSystem,KindRange(levels[1].kStart,levels[$-1].kEnd),nSubparticles[levels[1].kStart..levels[$-1].kEnd]);
+    auto subParticleIdxs=new SegmentedArray!(PIndex)(subParticlesStruct);
+    scope nSub=new SegmentedArray!(size_t)(particlesStruct,BulkArray!(size_t).dummy,KindRange(levels[0].kEnd,levels[$-1].kEnd));
+    nSub[]=0;
+    foreach(lIdx,superP;superParticle[KindRange(levels[0].kStart,levels[$-2].kEnd)].sLoop){ // sequential, we need to guarantee a deterministic result
+        nSub.dtype* idxAtt;
+        idxAtt=nSub.ptrI(superP,0);
+        *(subParticleIdxs.ptrI(superP,*idxAtt))=PIndex(lIdx);
+        ++(*idxAtt);
+    }
+    Exception e;
+    foreach(lIdx,nPart;nSub.pLoop){
+        if (nSubparticles[cast(size_t)lIdx.kind]!=cast(index_type)nPart){
+            e=new Exception(collectAppender(delegate void(CharSink sink){
+                dumper(sink)("internal error inconsistent number of subparticles:")
+                    (nSubparticles[cast(size_t)lIdx.kind])("vs")(nPart)("\n");
+            }),__FILE__,__LINE__);
+            break;
+        }
+    }
+    if (e!is null) throw e;
+    if (nSub.data.guard!is null) nSub.data.guard.release();
+    
+    // sysStruct
+    auto sysStruct=new SysStruct("sys", fullSystem, externalOrder, levels,
+         particlesStruct, particles, superParticle, subParticlesStruct,
+         subParticleIdxs, kindsStruct, particleKinds);
+    
+    if (nCenter is null) nCenter=new NotificationCenter();
+    
+    // particleSystem
+    auto pSys=new ParticleSys!(T)(0,"sys",sysStruct,nCenter);
+    pSys.pKindsInitialSetup(); // first setup of particle kinds
+    pSys.sysStructChanged();
+    
+    pSys.checkX();
+    Matrix!(T,3,3) h=Matrix!(T,3,3).identity;
+
+    pSys.dynVars.x.cell=new Cell!(T)(h,[0,0,0],Vector!(T,3).zero);
+    
+    auto posV=pSys.dynVars.x;
+    posV[]=0;
     
     pSys.cellChanged();
     pSys.positionsChanged();

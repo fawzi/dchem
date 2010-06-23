@@ -34,7 +34,7 @@ int main(char[][]args){
     }
     auto w1=v1-x0;
     auto w2=v2-x0;
-    auto n2=sqrt(norm2(axis));
+    auto n2=norm2(axis);
     if (n2==0) throw new Exception("axis is 0",__FILE__,__LINE__);
     axis/=n2;
     w1.axpby(axis,-dot(w1,axis));

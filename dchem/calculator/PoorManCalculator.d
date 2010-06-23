@@ -10,6 +10,10 @@ import dchem.Common;
 import dchem.input.RootInput;
 import blip.util.TemplateFu:fun2Dlg;
 import blip.io.Console;
+import blip.container.GrowableArray;
+import blip.io.BasicIO;
+import dchem.calculator.ProcContext;
+import blip.serialization.Serialization;
 
 void clearEF(T)(ParticleSys!(T)pSys){
     pSys.potentialEnergy=T.init;
@@ -18,6 +22,15 @@ void clearEF(T)(ParticleSys!(T)pSys){
     // clear also other forces??? for now assume no
 }
 
+class PoorManExecuter:TemplateExecuter{
+    override CalculationContext getCalculator(bool wait,ubyte[]history){
+        auto ctx=new PoorManContext(this,collectAppender(delegate void(CharSink s){
+            dumper(s)("PMCtx")(ProcContext.instance.id)("-")(ProcContext.instance.localId.next());
+        }));
+        return ctx;
+    }
+    mixin(serializeSome("dchem.PoorManExecuter",""));
+}
 
 /// a context that uses the "poor man" approach: any method works, as long as it puts energy and forces in the appropriate
 /// files in the appropriated format
@@ -25,16 +38,8 @@ class PoorManContext:ExecuterContext{
     char[] energyFile="dchem.energy";
     char[] forceFile="dchem.forces";
     
-    static CalculationContext contextAllocator(CalculationInstance cInstance,Method method,char[]className,char[] contextId){
-        auto m=cast(TemplateExecuter)cast(Object)method;
-        if (m is null){
-            throw new Exception("method must be valid and must be a TemplateExecuter",__FILE__,__LINE__);
-        }
-        return new PoorManContext(m,cInstance,className,contextId);
-    }
-    
-    this(TemplateExecuter input,CalculationInstance cInstance,char[] className,char[] contextId){
-        super(input,cInstance,className,contextId);
+    this(PoorManExecuter input, char[] contextId){
+        super(input,contextId);
     }
     void readFomattedWhitespaceF(T)(ParticleSys!(T)pSys){
         scope inF=toReaderChar(templateH.targetDir.file(forceFile).input);
@@ -79,6 +84,3 @@ class PoorManContext:ExecuterContext{
     }
 }
 
-static this(){
-    MethodAllocators.defaultAllocators["poorman"]=fun2Dlg(&PoorManContext.contextAllocator);
-}

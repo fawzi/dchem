@@ -167,7 +167,7 @@ class Cell(T)
         x0[]=val;
     }
     Cell!(V) dupT(V=T)(){
-        Cell!(V) res=void;
+        Cell!(V) res=new Cell!(V)();
         res[]=this;
         return res;
     }

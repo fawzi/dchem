@@ -1,11 +1,13 @@
 module dchem.input.WriteOut;
 import dchem.Physcon;
 import blip.io.BasicIO;
+import dchem.sys.DynVars;
 import dchem.sys.ParticleSys;
 import dchem.sys.PIndexes;
 import dchem.Common;
 import dchem.sys.SegmentedArray;
 import blip.serialization.Serialization;
+import blip.sync.Atomic;
 
 /// writes out an xyz file
 void writeXyz(T)(CharSink sink,SysStruct sysStruct,SegmentedArray!(Vector!(T,3))pos,char[] comments){
@@ -214,9 +216,9 @@ DynPVectorWriter!(T,group) dynPVectorWriter(T,int group)(DynPVector!(T,group) v)
 
 /// structure to dump out a ParticleSystem
 struct PSysWriter(T){
-    DynPVectorWriter!(T,0) x;
-    DynPVectorWriter!(T,1) dx;
-    DynPVectorWriter!(T,1) mddx;
+    DynPVectorWriter!(T,XType) x;
+    DynPVectorWriter!(T,DxType) dx;
+    DynPVectorWriter!(T,DxType) mddx;
     Real potentialEnergy;
     Serializable hVars;
     mixin(serializeSome("dchem.PSysWriter!("~T.stringof~")","potentialEnergy|x|dx|mddx|hVars"));
@@ -224,7 +226,7 @@ struct PSysWriter(T){
     /// creates a writer for the given ParticleSys
     static PSysWriter opCall(ParticleSys!(T) pSys){
         PSysWriter res;
-        res.potentialEnergy=pSys.potentialEnergy;
+        res.potentialEnergy=pSys.dynVars.potentialEnergy;
         res.x=dynPVectorWriter(pSys.dynVars.x);
         res.dx=dynPVectorWriter(pSys.dynVars.dx);
         res.mddx=dynPVectorWriter(pSys.dynVars.mddx);

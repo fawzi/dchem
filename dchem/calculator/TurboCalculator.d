@@ -10,7 +10,7 @@ import dchem.Common;
 import dchem.input.RootInput;
 import blip.util.TemplateFu:fun2Dlg;
 import blip.io.Console;
-
+/+
 void clearEF(T)(ParticleSys!(T)pSys){
     pSys.potentialEnergy=T.init;
     pSys.dynVars.mddx[]=0;
@@ -79,3 +79,4 @@ class TurboCalculator:ExecuterContext{
 static this(){
     MethodAllocators.defaultAllocators["turbo"]=fun2Dlg(&TurboCalculator.contextAllocator);
 }
++/

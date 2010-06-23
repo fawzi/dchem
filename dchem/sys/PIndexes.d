@@ -104,7 +104,7 @@ struct KindRange{
     bool opIn(KindRange kr){
         return kr.kStart<=kStart && kr.kEnd>=kEnd;
     }
-    int opApply(int delegate(KindIdx)loopOp){
+    int opApply(int delegate(ref KindIdx)loopOp){
         for (KindIdx k=kStart;k<kEnd;++k){
             auto res=loopOp(k);
             if (res!=0) return res;
@@ -119,12 +119,12 @@ struct KindRange{
             res.kr=k;
             return res;
         }
-        int opApply(int delegate(KindIdx)loopOp){
+        int opApply(int delegate(ref KindIdx)loopOp){
             if (kr.kStart>=kr.kEnd) return 0;
             Exception exception;
             int res=0;
             struct LoopK{
-                int delegate(KindIdx) inOp;
+                int delegate(ref KindIdx) inOp;
                 KindIdx k;
                 Exception* ep;
                 int *resPtr;

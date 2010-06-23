@@ -24,12 +24,10 @@ class SinglePoint:Sampler{
     
     /// does the single point calculation
     void run(){
-        auto m=cast(TemplateExecuter)cast(Object)method.content; // method.method;
+        auto m=method.method; // method.method;
         if (m is null) throw new Exception("invalid method in field "~myFieldName,__FILE__,__LINE__);
         sout("preparing to calculate\n");
-        auto i=m.getCalcInstance();
-        assert(i!is null,"null instance!");
-        CalculationContext c=m.getCalculator(i);
+        CalculationContext c=m.getCalculator(true,null);
         sout("will calculate\n");
         c.updateEF(calcE,calcF);
         sout("did calculate\n");

@@ -46,11 +46,17 @@ enum InstanceGetFlags{
 
 /// calculator setup (chooses the method to perform each calculation)
 interface Method:InputElement{
-    /// gets an instance (execution context)
-    CalculationInstance getCalcInstance(InstanceGetFlags flags=InstanceGetFlags.ReuseWait);
-    /// gets a calculator to perform calculations with this method
-    CalculationContext getCalculator(CalculationInstance);
+    /// gets a calculator to perform calculations with this method, if possible reusing the given history
+    /// if wait is true waits until a context is available
+    CalculationContext getCalculator(bool wait,ubyte[]history);
+    /// drops the history with the given id
+    void dropHistory(ubyte[]history);
+    /// clears all history
+    void clearHistory();
+    /// url to access this from other processes
+    char[] exportedUrl();
 }
+
 
 /// configuration
 interface Config:InputElement{
@@ -62,39 +68,6 @@ interface Config:InputElement{
     ParticleSys!(LowP) particleSysLowP();
     /// drops the cached readSystem/particleSys
     void clear();
-}
-
-/// Executer, gives the resources to execute a method
-interface Executer:InputElement{
-    /// basic method to get an instance (i.e. an execution context)
-    CalculationInstance getInstance(InstanceGetFlags flags,uint maxContexts);
-    /// tries to get an instance from the cache
-    CalculationInstance getFromCache(char[] instanceId);
-    /// removes the cached instances
-    void purgeCache();
-    /// callback when an instance is activated
-    void activated(CalculationInstance c);
-    /// callback when an instance is deactivated
-    void deactivated(CalculationInstance c);
-    /// callback when an instance is destroyed
-    void destroyed(CalculationInstance c);
-}
-
-/// represent an instance that can calculate systems (i.e. a computational resource)
-interface CalculationInstance{
-    Executer manager();
-    char[] instanceId();
-    CalculationContext newContext(Method m,char[]templateName,CalculationContext delegate(CalculationInstance,Method,char[],char[])allocator);
-    VfsFolder baseDirectory();
-    // Process cmd(char[] cmd);// cannot be remote...
-    void execCmd(char[] cmd,CharSink log=sout.call);
-    void localExec(RemoteTask r);
-    void activate();
-    void deactivate();
-    void destroy();
-    void activatedContext(CalculationContext c);
-    void deactivatedContext(CalculationContext c);
-    void destroyedContext(CalculationContext c);
 }
 
 /// amount of change since the last calculation in the context
@@ -116,12 +89,11 @@ interface CalculationContext{
     ParticleSys!(LowP) pSysLowP();
     /// the system struct
     SysStruct sysStruct();
-    /// notification central of the current particle system
+    /// notification central of the current particle system & context.
+    /// will receive activation, deactivation & destruction notifications
     NotificationCenter nCenter();
     /// history of the previous positions
     HistoryManager!(LowP) posHistory();
-    /// calculation instance in which this calculation is performed
-    CalculationInstance cInstance();
     /// change level since the last calculation
     ChangeLevel changeLevel();
     /// sets the change level
@@ -144,14 +116,37 @@ interface CalculationContext{
     SegmentedArray!(Vector!(Real,3)) mddpos();
     /// updates energy and/or forces
     void updateEF(bool updateE=true,bool updateF=true);
-    /// called when the context is activated
+    /// called automatically after creation, but before any energy evaluation
+    /// should be called before working again with a deactivated calculator
     void activate();
-    /// to call when the context is deactivated
+    /// call this to possibly compress the context and empty caches (i.e. before a long pause in the calculation)
     void deactivate();
-    /// to call when the context should be destroyed
-    void destroy();
+    /// call this to gives back the context (after all calculations with this are finished) might delete or reuse it
+    void giveBack();
+    /// tries to stop a calculation in progress, recovery after this is not possible (only giveBack can be called)
+    void stop();
     /// a place where to put all active constraints
     MultiConstraint constraints();
+    /// method that has generated this context
+    Method method();
+    /// stores the history somewhere and returns an id to possibly recover that history at a later point
+    /// this is just an optimization, it does not have to do anything. If implemented then
+    /// method.getCalculator, .dropHistory and .clearHistory have to be implemented accordingly
+    ubyte[]storeHistory();
+    /// url to access this from other processes
+    char[] exportedUrl();
+}
+
+/// templatized way to extract the pSys from a CalculationContext
+ParticleSys!(T) pSysT(T)(CalculationContext c){
+    static if (is(Real==T)){
+        return c.pSysReal;
+    } else static if(is(LowP==T)){
+        return c.pSysLowP;
+    } else {
+        static assert("requested a pSys "~T.stringof~" which is neither Real ("~
+            Real.stringof~") nor LowP ("~LowP.stringof~")");
+    }
 }
 
 /// a calculation method
@@ -218,8 +213,6 @@ class InputField:InputElement{
             break;
             case "method":  return TypeId.Method;
             break;
-            case "executer":  return TypeId.Executer;
-            break;
             case "sampler": return TypeId.Sampler;
             break;
             case "ref":     return TypeId.Reference;
@@ -235,7 +228,6 @@ class InputField:InputElement{
         auto oo=cast(Object)o;
         if (cast(Config)oo) return TypeId.Configuration;
         if (cast(Method)oo) return TypeId.Method;
-        if (cast(Executer)oo) return TypeId.Executer;
         if (cast(Sampler)oo) return TypeId.Sampler;
         if (cast(InputField)oo) return TypeId.InputField;
         throw new Exception("could not find type of object",__FILE__,__LINE__);
@@ -373,7 +365,12 @@ class RootInput{
         }
         bool inputOk=true;
         foreach (k,v;knownNames){
-            inputOk=inputOk && v.content.verify(errorLog);
+            if (v.content is null){
+                errorLog("Error: field "~k~" is null\n");
+                inputOk=false;
+            } else {
+                inputOk=inputOk && v.content.verify(errorLog);
+            }
         }
         return inputOk;
     }

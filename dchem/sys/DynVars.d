@@ -17,6 +17,11 @@ import blip.narray.NArray;
 import blip.t.core.Traits: ctfe_i2a;
 import blip.sync.Atomic;
 
+enum{
+    XType=0,
+    DxType=1,
+    DualDxType=2,
+}
 /// this is at the same time a pool and a structure for a DynPVector
 /// setup as follow: init, update *Structs, possibly consolidateStructs, allocPools, possibly consolidate
 class DynPVectStruct(T){
@@ -31,7 +36,7 @@ class DynPVectStruct(T){
     SegArrPool!(T) poolDof;
     
     /// equal if it has the same structures
-    override equal_t opEquals(Object o){
+    override equals_t opEquals(Object o){
         auto t=cast(DynPVectStruct)o;
         if (t is null) return 0;
         return (posStruct==t.posStruct && orientStruct==t.orientStruct && dofStruct==t.dofStruct);
@@ -139,6 +144,14 @@ class DynPVectStruct(T){
         res.convexHull(dofStruct.kRange);
         return res;
     }
+    /// length of a particle based loop on elements that have this structure
+    size_t length(){
+        return posStruct.length+orientStruct.length+dofStruct.length;
+    }
+    /// length of a particle based loop on elements that have this structure
+    size_t dataLength(){
+        return posStruct.dataLength+orientStruct.dataLength+dofStruct.dataLength;
+    }
 }
 
 /// perform an operation on the segmented arrays and cell of a dynPVector
@@ -230,7 +243,6 @@ struct DynPVector(T,int group){
     bool isDummy(){
         return cell is null && pos is null && orient is null && dof is null;
     }
-    
     /// returns a copy with a nullified cell
     DynPVector nullCell(){
         auto res=*this;
@@ -483,8 +495,12 @@ struct DynPVector(T,int group){
     }
 
     /// utility method for the squared euclidean (2-norm) of the vector: (this.dot(*this))
-    T norm2(){
+    T norm22(){
         return this.opDot(*this);
+    }
+    /// utility method for the euclidean (2-norm) of the vector: (this.dot(*this))
+    T norm2(){
+        return sqrt(this.opDot(*this));
     }
     
     int opApply(int delegate(ref T)loopBody){
@@ -741,22 +757,22 @@ class DynamicsVarsStruct(T){
     /// is distributed the local vectors will indeed be incompatible)
     DynPVectStruct!(T) dualDxGroup;
 
-    override equal_t opEquals(Object o){
+    override equals_t opEquals(Object o){
         auto t=cast(DynamicsVarsStruct)o;
         if (t is null) return 0;
         return this is t || (xGroup==t.xGroup && dxGroup==t.dxGroup && dualDxGroup==t.dualDxGroup);
     }
     /// utility method, returns an empty position vector (like x)
-    DynPVector!(T,0) emptyX(bool allocCell=false){
-        return DynPVector!(T,0).allocFromPool(xGroup,allocCell);
+    DynPVector!(T,XType) emptyX(bool allocCell=false){
+        return DynPVector!(T,XType).allocFromPool(xGroup,allocCell);
     }
     /// utility method, returns an empty derivative vector (like dx,mddx)
-    DynPVector!(T,1) emptyDx(bool allocCell=false){
-        return DynPVector!(T,1).allocFromPool(dxGroup,allocCell);
+    DynPVector!(T,DxType) emptyDx(bool allocCell=false){
+        return DynPVector!(T,DxType).allocFromPool(dxGroup,allocCell);
     }
     /// utility method, returns an empty dual derivative vector
-    DynPVector!(T,2) emptyDualDx(bool allocCell=false){
-        return DynPVector!(T,2).allocFromPool(dualDxGroup,allocCell);
+    DynPVector!(T,DualDxType) emptyDualDx(bool allocCell=false){
+        return DynPVector!(T,DualDxType).allocFromPool(dualDxGroup,allocCell);
     }
     /// releases the cache of the groups
     void flush(){
@@ -770,8 +786,20 @@ class DynamicsVarsStruct(T){
         if (dxGroup!is null) dxGroup.stopCaching;
         if (dualDxGroup!is null) dualDxGroup.stopCaching;
     }
+    this(DynPVectStruct!(T)xGroup,DynPVectStruct!(T)dxGroup,DynPVectStruct!(T)dualDxGroup){
+        this.xGroup=xGroup;
+        this.dxGroup=dxGroup;
+        this.dualDxGroup=dualDxGroup;
+    }
+    /// creates a copy that shares the pos/orient/dofStructs of another DynamicsVarsStruct
+    static DynamicsVarsStruct copyFrom(V)(DynamicsVarsStruct!(V) s2){
+        auto xGroup=new DynPVectStruct!(T)("xGroup",s2.xGroup.posStruct,s2.xGroup.orientStruct,s2.xGroup.dofStruct);
+        auto dxGroup=new DynPVectStruct!(T)("dxGroup",s2.dxGroup.posStruct,s2.dxGroup.orientStruct,s2.dxGroup.dofStruct);
+        auto dualDxGroup=new DynPVectStruct!(T)("dualDxGroup",s2.dualDxGroup.posStruct,s2.dualDxGroup.orientStruct,s2.dualDxGroup.dofStruct);
+        return new DynamicsVarsStruct(xGroup,dxGroup,dualDxGroup);
+    }
     /// constructor, allocates the segmented array structures
-    void this(SubMapping fullSystem,KindRange kRange){
+    this(SubMapping fullSystem,KindRange kRange){
         xGroup=new DynPVectStruct!(T)("xGroup",fullSystem,kRange,SegmentedArrayStruct.Flags.None);
         dxGroup=new DynPVectStruct!(T)("dxGroup",fullSystem,kRange,SegmentedArrayStruct.Flags.None);
         dualDxGroup=new DynPVectStruct!(T)("dualDxGroup",fullSystem,kRange,SegmentedArrayStruct.Flags.None);
@@ -788,11 +816,6 @@ class DynamicsVarsStruct(T){
     
     /// checks that the given vector is allocated
     void checkAllocDynPVect(V,int i)(DynPVector!(V,i)* v){
-        if (v.dVarStruct is null) {
-            v.dVarStruct=this;
-        } else if (v.dVarStruct != this){
-            throw new Exception("different structure");
-        }
         static if (i==0){
             auto pool=xGroup;
         } else static if (i==1){
@@ -828,15 +851,15 @@ struct DynamicsVars(T){
 
     /// structure of dynamic vars
     DynamicsVarsStruct!(T) dVarStruct;
-    
+
     /// potential energy of the system (NAN if unknown)
     Real potentialEnergy;
     /// position vector
-    DynPVector!(T,0) x;
+    DynPVector!(T,XType) x;
     /// velocities vector
-    DynPVector!(T,1) dx;
+    DynPVector!(T,DxType) dx;
     /// forces vector
-    DynPVector!(T,1) mddx;
+    DynPVector!(T,DxType) mddx;
     
     /// ensures that the positions are allocated
     void checkX(){
@@ -884,7 +907,11 @@ struct DynamicsVars(T){
     }
     DynamicsVars!(V) dupT(V=T)(){
         DynamicsVars!(V) res;
-        res.dVarStruct=dVarStruct;
+        static if(is(T==V)){
+            res.dVarStruct=dVarStruct;
+        } else {
+            res.dVarStruct=DynamicsVarsStruct!(V).copyFrom!(T)(this.dVarStruct);
+        }
         res.potentialEnergy=potentialEnergy;
         res.x=x.dupT!(V);
         res.dx=dx.dupT!(V);
@@ -943,9 +970,9 @@ struct DynamicsVars(T){
     /// clears the vector
     void clear(){
         potentialEnergy=T.init;
-        x=null;
-        dx=null;
-        mddx=null;
+        x.clear;
+        dx.clear;
+        mddx.clear;
         dVarStruct=null;
     }
     mixin(serializeSome("dchem.sys.DynamicsVars("~T.stringof~")","potentialEnergy|x|dx|mddx"));
@@ -957,8 +984,8 @@ version(InstantiateSome){
     pragma(msg,"DynVars InstantiateSome");
     private{
         DynPVectStruct!(double) a;
-        DynPVector!(double,1) v;
-        DynPMatrix!(double,1,2) m;
+        DynPVector!(double,DxType) v;
+        DynPMatrix!(double,DxType,DualDxType) m;
         DynamicsVars!(double) dv;
     }
 }
