@@ -11,10 +11,10 @@ import dchem.sys.Cell;
 import dchem.sys.SubMapping;
 import dchem.sys.SegmentedArray;
 import blip.parallel.smp.WorkManager;
-import blip.t.math.Math:sqrt;
-import blip.t.core.sync.Mutex;
+import blip.math.Math:sqrt;
+import blip.core.sync.Mutex;
 import blip.narray.NArray;
-import blip.t.core.Traits: ctfe_i2a;
+import blip.core.Traits: ctfe_i2a;
 import blip.sync.Atomic;
 
 enum{
@@ -860,6 +860,15 @@ struct DynamicsVars(T){
     DynPVector!(T,DxType) dx;
     /// forces vector
     DynPVector!(T,DxType) mddx;
+    
+    /// returns a copy with a nullified cell
+    DynamicsVars nullCell(){
+        DynamicsVars res=*this;
+        res.x.cell=null;
+        res.dx.cell=null;
+        res.mddx.cell=null;
+        return res;
+    }
     
     /// ensures that the positions are allocated
     void checkX(){

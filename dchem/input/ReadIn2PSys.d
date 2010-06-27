@@ -365,7 +365,7 @@ ParticleSys!(T) artificialPSys(T)(size_t nPos, size_t nOrient,size_t nDof,
     pSys.dynVars.x.cell=new Cell!(T)(h,[0,0,0],Vector!(T,3).zero);
     
     auto posV=pSys.dynVars.x;
-    posV[]=0;
+    posV.nullCell[]=0;
     
     pSys.cellChanged();
     pSys.positionsChanged();

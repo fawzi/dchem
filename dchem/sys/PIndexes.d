@@ -3,6 +3,9 @@ module dchem.sys.PIndexes;
 import blip.serialization.Serialization;
 import blip.serialization.SerializationMixins;
 import blip.parallel.smp.WorkManager;
+import blip.container.Cache;
+import blip.container.Pool;
+import blip.core.sync.Mutex;
 
 version(LongIndexes){
     alias ulong idxType; /// type used for particle,... indexing
@@ -113,45 +116,114 @@ struct KindRange{
     }
     /// parallel loop on this kind range
     struct PLoop{
+        int delegate(ref KindIdx) loopOp;
+        Exception exception;
+        int optimalBlockSize=1;
+        int res=0;
         KindRange kr;
-        static PLoop opCall(KindRange k){
+        
+        static PLoop opCall(KindRange k,int blockSize=1){
             PLoop res;
+            assert(blockSize>0,"blockSize cannot be 0");
             res.kr=k;
+            res.optimalBlockSize=blockSize;
             return res;
         }
-        int opApply(int delegate(ref KindIdx)loopOp){
-            if (kr.kStart>=kr.kEnd) return 0;
-            Exception exception;
-            int res=0;
-            struct LoopK{
-                int delegate(ref KindIdx) inOp;
-                KindIdx k;
-                Exception* ep;
-                int *resPtr;
-                void doOp(){
-                    if ((*ep) is null && *resPtr==0){
-                        try{
-                            auto resAtt=inOp(k);
-                            if (resAtt!=0) *resPtr=resAtt;
-                        } catch (Exception e){
-                            *ep=e;
-                        }
+
+        struct LoopK{
+            PLoop *ctx;
+            KindRange kr;
+            PoolI!(LoopK*) pool;
+            LoopK *next;
+            
+            static Mutex gLock;
+            static CachedPool!(LoopK*) gPool;
+            static size_t nPool;
+            static this(){
+                gLock=new Mutex();
+            }
+            static void addGPool(){
+                synchronized(gLock){
+                    if (nPool==0){
+                        assert(gPool is null);
+                        gPool=cachedPoolNext(delegate LoopK*(PoolI!(LoopK*)p){
+                            auto res=new LoopK;
+                            res.pool=p;
+                            return res;
+                        });
+                    }
+                    nPool+=1;
+                }
+            }
+            static void rmGPool(){
+                synchronized(gLock){
+                    if (nPool==0){
+                        throw new Exception("mismatched rmGPool",__FILE__,__LINE__);
+                    }
+                    --nPool;
+                    if (nPool==0){
+                        assert(gPool!is null);
+                        gPool.stopCaching();
+                        gPool=null;
                     }
                 }
-                void seppuku(){
+            }
+            static void gSync(){
+                gLock.lock(); gLock.unlock();
+            }
+            void doOp(){
+                auto bSize=ctx.optimalBlockSize;
+                if (ctx.exception!is null || ctx.res!=0) return;
+                if (kr.kEnd>kr.kStart+bSize*3/2){
+                    if (gPool is null) gSync();
+                    assert(gPool!is null,"gPool is null (missin addGPool?)");
+                    auto k1=gPool.getObj();
+                    auto k2=gPool.getObj();
+                    int mid=(kr.kEnd-kr.kStart)/2;
+                    if (mid>bSize){
+                        mid=((mid+bSize-1)/bSize)*bSize;
+                    }
+                    mid+=cast(int)kr.kStart;
+                    k1.kr.kStart=kr.kStart;
+                    k1.kr.kEnd=cast(KindIdx)mid;
+                    k2.kr.kStart=cast(KindIdx)mid;
+                    k2.kr.kEnd=kr.kEnd;
+                    Task("KindRangePLoopSub1",&k1.doOp).appendOnFinish(&k1.giveBack).autorelease.submit();
+                    Task("KindRangePLoopSub2",&k2.doOp).appendOnFinish(&k2.giveBack).autorelease.submit();
+                } else {
+                    try{
+                        auto loopB=ctx.loopOp;
+                        for (KindIdx kIdx=kr.kStart;kIdx<kr.kEnd;++kIdx){
+                            auto resAtt=loopB(kIdx);
+                            if (resAtt!=0){
+                                ctx.res=resAtt;
+                                return;
+                            }
+                        }
+                    } catch (Exception e){
+                        ctx.exception=e;
+                    }
+                }
+            }
+            
+            void giveBack(){
+                if (pool!is null){
+                    pool.giveBack(this);
+                } else {
                     delete this;
                 }
             }
-            Task("KindRangePLoop",delegate void(){
-                for (KindIdx k=kr.kStart;k<kr.kEnd;++k){
-                    auto lNow=new LoopK;
-                    lNow.inOp=loopOp;
-                    lNow.k=k;
-                    lNow.ep=&exception;
-                    lNow.resPtr=&res;
-                    Task("KindRangePLoopIter",&lNow.doOp).appendOnFinish(&lNow.seppuku).autorelease.submitYield();
-                }
-            }).autorelease.executeNow();
+        }
+        
+        int opApply(int delegate(ref KindIdx)loopOp){
+            this.loopOp=loopOp;
+            if (kr.kStart>=kr.kEnd) return 0;
+            LoopK.addGPool();
+            auto mainLooper=LoopK.gPool.getObj();
+            mainLooper.ctx=this;
+            mainLooper.kr=kr;
+            Task("KindRangePLoop",&mainLooper.doOp).appendOnFinish(&mainLooper.giveBack).autorelease.executeNow();
+            LoopK.rmGPool();
             if (exception!is null) throw new Exception("Exception in parallel kind loop",__FILE__,__LINE__,exception);
             return res;
         }

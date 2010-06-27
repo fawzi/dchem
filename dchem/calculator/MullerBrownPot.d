@@ -11,7 +11,7 @@ import blip.io.BasicIO;
 import dchem.calculator.ProcContext;
 import blip.serialization.Serialization;
 import dchem.input.ReadIn2PSys: artificialPSys;
-import blip.t.math.Math;
+import blip.math.Math;
 
 const Real[4] MBPreFactor = [-200.0,-100.0,-170.0,15.0];
 const Real[4] MBa = [-1.0,-1.0,-6.5,0.7];
@@ -36,17 +36,13 @@ class MullerBrownPot: Method {
     }
     
     void deriv(Real x,Real y,out Real dx, out Real dy){
-        sout("deriv\n");
         auto len=a.length;
         dx=0;
         dy=0;
-        sout("arrs\n");
-        sout("a:")(a.length)(" b:")(b.length)(" c:")(c.length)(" x0:")(x0.length)(" y0:")(y0.length)(" preFactor:")(preFactor.length)("\n");
         for (size_t ifact=0;ifact<len;++ifact){
             dx=preFactor[ifact]*exp(a[ifact]*pow2((x - x0[ifact])) + b[ifact]*(x - x0[ifact])*(y - y0[ifact]) + c[ifact]*pow2(y - y0[ifact]))*(a[ifact]*2.0*(x - x0[ifact]) + b[ifact]*(y - y0[ifact]));
             dy=preFactor[ifact]*exp(a[ifact]*pow2((x - x0[ifact])) + b[ifact]*(x - x0[ifact])*(y - y0[ifact]) + c[ifact]*pow2(y - y0[ifact]))*(b[ifact]*(x - x0[ifact]) + c[ifact]*2.0*(y - y0[ifact]));
         }
-        sout("derivEnd\n");
     }
     
     Real eval(Real x,Real y){

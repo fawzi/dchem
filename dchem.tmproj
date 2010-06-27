@@ -14,19 +14,19 @@
 			<key>filename</key>
 			<string>RandomTests.d</string>
 			<key>lastUsed</key>
-			<date>2010-03-19T09:03:41Z</date>
+			<date>2010-05-23T18:51:03Z</date>
 		</dict>
 		<dict>
 			<key>filename</key>
 			<string>t.d</string>
 			<key>lastUsed</key>
-			<date>2010-03-19T09:03:55Z</date>
+			<date>2010-06-03T08:51:05Z</date>
 		</dict>
 		<dict>
 			<key>filename</key>
 			<string>t1.d</string>
 			<key>lastUsed</key>
-			<date>2010-03-19T09:03:40Z</date>
+			<date>2010-06-03T10:41:44Z</date>
 		</dict>
 		<dict>
 			<key>filename</key>
@@ -36,9 +36,15 @@
 		</dict>
 		<dict>
 			<key>filename</key>
+			<string>RotateMol.d</string>
+			<key>lastUsed</key>
+			<date>2010-06-03T11:45:00Z</date>
+		</dict>
+		<dict>
+			<key>filename</key>
 			<string>Sampler.d</string>
 			<key>lastUsed</key>
-			<date>2010-03-22T00:15:19Z</date>
+			<date>2010-06-03T10:46:02Z</date>
 		</dict>
 		<dict>
 			<key>filename</key>
@@ -50,7 +56,7 @@
 			<key>filename</key>
 			<string>test2.d</string>
 			<key>lastUsed</key>
-			<date>2010-02-27T19:21:39Z</date>
+			<date>2010-05-23T18:51:05Z</date>
 		</dict>
 		<dict>
 			<key>expanded</key>
@@ -64,12 +70,12 @@
 		</dict>
 	</array>
 	<key>fileHierarchyDrawerWidth</key>
-	<integer>237</integer>
+	<integer>193</integer>
 	<key>metaData</key>
 	<dict/>
 	<key>showFileHierarchyDrawer</key>
 	<true/>
 	<key>windowFrame</key>
-	<string>{{152, 18}, {830, 760}}</string>
+	<string>{{246, 184}, {946, 578}}</string>
 </dict>
 </plist>

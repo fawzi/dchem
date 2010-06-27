@@ -5,16 +5,16 @@ import dchem.sys.SubMapping;
 import dchem.Common;
 import blip.narray.NArray;
 import blip.sync.Atomic;
-import blip.t.core.Traits;
+import blip.core.Traits;
 import blip.serialization.Serialization;
 import blip.serialization.SerializationMixins;
-import blip.t.core.Variant;
+import blip.core.Variant;
 import blip.parallel.smp.WorkManager;
 import blip.container.AtomicSLink;
 import blip.container.Pool;
 import blip.io.Console;
 import blip.util.Convert;
-import blip.t.core.Traits;
+import blip.core.Traits;
 
 enum ParaFlags{
     FullPara,

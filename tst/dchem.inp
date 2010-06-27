@@ -8,11 +8,11 @@ startConfig:{
         [0,0,8.45]]
 }
 
-samplePoorM:{
+singleP:{
     class:dchem.SinglePoint,
     calcE:1,
     calcF:1,
-    method:{ class:Ref, name:poorM}
+    method:{ class:Ref, name:mullerB}
 }
 
 poorM:{
@@ -32,13 +32,13 @@ mullerB:{
     class:"dchem.MullerBrownPot"
 }
 
-sampler:{
-    class:dchem.SinglePoint,
-    calcE:1,
-    calcF:1,
+testGrad:{
+    class:dchem.TestGrad,
+    dx:0.001,
+    maxEDiffErr: 1.e-5
     method:{ class:Ref, name:mullerB}
 }
 
-main:{class:Ref, name:sampler}
+main:{class:Ref, name:singleP}
 
 }

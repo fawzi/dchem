@@ -6,7 +6,7 @@ import blip.serialization.Serialization;
 import tango.math.random.Random;
 import blip.rtest.RTest;
 import Atomic=blip.sync.Atomic;
-import blip.t.math.Math:max;
+import blip.math.Math:max;
 import blip.container.BatchedGrowableArray;
 import tango.util.container.HashSet;
 import dchem.input.RootInput;

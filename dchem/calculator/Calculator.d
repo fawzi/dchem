@@ -2,8 +2,8 @@
 module dchem.calculator.Calculator;
 import dchem.Common;
 import blip.util.NotificationCenter;
-import blip.t.core.Traits: cmp,ctfe_rep;
-import blip.t.core.Variant;
+import blip.core.Traits: cmp,ctfe_rep;
+import blip.core.Variant;
 import blip.io.BasicIO;
 import blip.io.Console;
 import blip.container.GrowableArray;

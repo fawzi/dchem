@@ -4,7 +4,7 @@ module Sampler;
 import blip.io.Console;
 import blip.io.StreamConverters;
 import tango.io.stream.DataFile;
-import blip.t.core.stacktrace.TraceExceptions;
+import blip.core.stacktrace.TraceExceptions;
 import blip.util.TraceAll;
 import blip.text.TextParser;
 import dchem.sys.SegmentedArray;

@@ -12,16 +12,16 @@ import dchem.sys.Cell;
 import dchem.sys.SubMapping;
 import dchem.sys.SegmentedArray;
 import blip.util.NotificationCenter;
-import blip.t.core.Variant;
+import blip.core.Variant;
 import blip.container.BitArray;
 import blip.container.Deque;
 import blip.container.BulkArray;
 import blip.parallel.smp.WorkManager;
-import blip.t.math.Math:sqrt;
-import blip.t.core.sync.Mutex;
+import blip.math.Math:sqrt;
+import blip.core.sync.Mutex;
 import blip.narray.NArray;
 import gobo.blas.Types:BlasTypeForType;
-import blip.t.core.Traits: ctfe_i2a;
+import blip.core.Traits: ctfe_i2a;
 import dchem.sys.DynVars;
 
 /// various levels of duplication

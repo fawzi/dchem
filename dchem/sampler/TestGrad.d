@@ -12,6 +12,7 @@ import dchem.calculator.FileCalculator;
 import dchem.calculator.Calculator;
 import dchem.input.WriteOut;
 import dchem.sys.DynVars;
+import blip.container.GrowableArray;
 
 
 class TestGrad:Sampler{
@@ -152,14 +153,20 @@ class TestGrad:Sampler{
     DirInfo[] dirs;
     
     void doAllChecks(T)(){
-        foreach(i,dirI;pLoopArray!(DirInfo[])(dirs,1)){
+        sout("pippo doAllChecks\n");
+        foreach(i,ref dirI;pLoopArray(dirs,1)){
+            sinkTogether(sout,delegate void(CharSink s){ dumper(s)("dir")(i)(" start\n"); });
             dirI=new DirInfo(i,this);
+            sinkTogether(sout,delegate void(CharSink s){ dumper(s)("dir")(i)(" preCalc\n"); });
             dirI.calcE!(T)();
+            sinkTogether(sout,delegate void(CharSink s){ dumper(s)("dir")(i)(" done\n"); });
         }
+        sout("done dir calculations\n");
         if (dirs.length>0){
             dirs[0].writeHeader(sout.call);
         }
         bool failed=false;
+        sout("write out data\n");
         foreach(i,dirI;dirs){
             dirI.writeData(sout.call);
             failed=failed||dirI.eTooLarge();
@@ -169,23 +176,38 @@ class TestGrad:Sampler{
         } else {
             sout("Test passed\n");
         }
+        sout("pippo end doAllChecks\n");
     }
     
     /// does the checks
     void run(){
         
+        sout("pippo1\n");
         auto m=method.method(); // method.method;
         if (m is null) throw new Exception("invalid method in field "~myFieldName,__FILE__,__LINE__);
+        sout("pippo2\n");
         CalculationContext c=m.getCalculator(true,null);
+        sout("pippo3\n");
         size_t nDim;
+        sout("pippo4\n");
         mixin(withPSys(`nDim=pSys.dynVars.dVarStruct.dualDxGroup.dataLength;`,"c."));
+        sout("pippo5\n");
         dirs=new DirInfo[](nDim);
+        sout("pippo6\n");
 
+        sout("pippo7\n");
         c.updateEF(true,true);
-        centralPointReal=c.pSysReal().dup();
-        centralPointLowP=c.pSysLowP().dup();
+        sout("pippo8\n");
+        centralPointReal=c.pSysReal();
+        if (centralPointReal!is null) centralPointReal=centralPointReal.dup();
+        sout("pippo9\n");
+        centralPointLowP=c.pSysLowP();
+        if (centralPointLowP!is null) centralPointLowP=centralPointLowP.dup();
+        sout("pippo10\n");
         auto history=c.storeHistory();
+        sout("pippo11\n");
         c.giveBack();
+        sout("pippo12\n");
         
         if (centralPointReal!is null){
             doAllChecks!(Real)();
