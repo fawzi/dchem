@@ -22,6 +22,7 @@ const Real[4] MBy0 = [0.0,0.5,1.5,1.0];
 
 class MullerBrownPot: Method {
     Real[] a=MBa,b=MBb,c=MBc,x0=MBx0,y0=MBy0,preFactor=MBPreFactor;
+    Real startX=0,startY=0;
     
     this(){}
     
@@ -30,7 +31,7 @@ class MullerBrownPot: Method {
         auto s=dumper(sink);
         if (a.length!=b.length || a.length!=c.length || a.length!=x0.length || a.length!=x0.length
             || a.length!=preFactor.length){
-                s("Inconsistent lengths arrays of "~myFieldName);
+                s("Inconsistent lengths arrays in "~myFieldName);
             }
         return res;
     }
@@ -40,8 +41,8 @@ class MullerBrownPot: Method {
         dx=0;
         dy=0;
         for (size_t ifact=0;ifact<len;++ifact){
-            dx=preFactor[ifact]*exp(a[ifact]*pow2((x - x0[ifact])) + b[ifact]*(x - x0[ifact])*(y - y0[ifact]) + c[ifact]*pow2(y - y0[ifact]))*(a[ifact]*2.0*(x - x0[ifact]) + b[ifact]*(y - y0[ifact]));
-            dy=preFactor[ifact]*exp(a[ifact]*pow2((x - x0[ifact])) + b[ifact]*(x - x0[ifact])*(y - y0[ifact]) + c[ifact]*pow2(y - y0[ifact]))*(b[ifact]*(x - x0[ifact]) + c[ifact]*2.0*(y - y0[ifact]));
+            dx+=preFactor[ifact]*exp(a[ifact]*pow2(x - x0[ifact]) + b[ifact]*(x - x0[ifact])*(y - y0[ifact]) + c[ifact]*pow2(y - y0[ifact]))*(a[ifact]*2.0*(x - x0[ifact]) + b[ifact]*(y - y0[ifact]));
+            dy+=preFactor[ifact]*exp(a[ifact]*pow2(x - x0[ifact]) + b[ifact]*(x - x0[ifact])*(y - y0[ifact]) + c[ifact]*pow2(y - y0[ifact]))*(b[ifact]*(x - x0[ifact]) + c[ifact]*2.0*(y - y0[ifact]));
         }
     }
     
@@ -49,7 +50,7 @@ class MullerBrownPot: Method {
         Real res=0;
         auto len=a.length;
         for (size_t ifact=0;ifact<len;++ifact){
-            res+=preFactor[ifact]*exp(a[ifact]*pow2((x - x0[ifact])) + b[ifact]*(x - x0[ifact])*(y - y0[ifact]) + c[ifact]*pow2(y - y0[ifact]));
+            res+=preFactor[ifact]*exp(a[ifact]*pow2(x - x0[ifact]) + b[ifact]*(x - x0[ifact])*(y - y0[ifact]) + c[ifact]*pow2(y - y0[ifact]));
         }
         return res;
     }
@@ -71,7 +72,7 @@ class MullerBrownPot: Method {
     
     // serialization stuff
     mixin(serializeSome("dchem.MullerBrownPot",
-    `a|b|c|x0|y0|preFactor`));
+    `a|b|c|x0|y0|preFactor|startX|startY`));
     mixin printOut!();
     mixin myFieldMixin!();
 }
@@ -83,6 +84,9 @@ class MullerBrownPotContext:CalcContext{
         super(contextId);
         this.pot=pot;
         _pSysReal=artificialPSys!(Real)(0,0,2);
+        auto sys=LocalPIndex(0,0);
+        _pSysReal.dynVars.x.dof[sys,0]=pot.startX;
+        _pSysReal.dynVars.x.dof[sys,1]=pot.startY;
     }
 
     Method method(){
