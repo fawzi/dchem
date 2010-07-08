@@ -148,11 +148,11 @@ class ParticleKind: Serializable,CopiableObjectI,DerivTransfer{
             if (derivMap==DerivMap.SimpleMap){
                 assert(nElements==nDelements);
                 alias typeof(arr.basicData[0]) ArrBData;
-                scope a1=NArray!(ArrBData,2)([cast(index_type)(T.sizeof*blockSizeArr),ArrBData.sizeof],
-                    [arr.basicData.length/(T.sizeof/ArrBData.sizeof),nElements],0,arr.basicData,0);
+                scope a1=NArray!(ArrBData,2)([cast(index_type)(T.sizeof*blockSizeDarr),ArrBData.sizeof],
+                    [arr.basicData.length/(T.sizeof/ArrBData.sizeof*((blockSizeDarr==0)?1:blockSizeDarr)),nElements],0,arr.basicData,0);
                 alias typeof(darr.basicData[0]) DarrBData;
                 scope a2=NArray!(DarrBData,2)([cast(index_type)(V.sizeof*blockSizeArr),DarrBData.sizeof],
-                    [darr.basicData.length/(V.sizeof/DarrBData.sizeof),nDelements],0,darr.basicData,0);
+                    [darr.basicData.length/(V.sizeof/DarrBData.sizeof*((blockSizeArr==0)?1:blockSizeArr)),nDelements],0,darr.basicData,0);
                 a2+=a1;
             } else {
                 assert(el2DelMap.length>1&&(el2DelMap.length-2)%3==0,"unexpected el2DelMap length");
@@ -188,11 +188,11 @@ class ParticleKind: Serializable,CopiableObjectI,DerivTransfer{
             if (derivMap==DerivMap.SimpleMap){
                 assert(nElements==nDelements);
                 alias typeof(darr.basicData[0]) DarrBData;
-                scope a1=NArray!(DarrBData,2)([cast(index_type)(V.sizeof*blockSizeArr),DarrBData.sizeof],
-                    [darr.basicData.length/(V.sizeof/DarrBData.sizeof),nDelements],0,darr.basicData,0);
+                scope a1=NArray!(DarrBData,2)([cast(index_type)(DarrBData.sizeof*blockSizeDarr),DarrBData.sizeof],
+                    [darr.basicData.length/(V.sizeof/DarrBData.sizeof*((blockSizeDarr==0)?1:blockSizeDarr)),nDelements],0,darr.basicData,0);
                 alias typeof(arr.basicData[0]) ArrBData;
                 scope a2=NArray!(ArrBData,2)([cast(index_type)(T.sizeof*blockSizeArr),ArrBData.sizeof],
-                    [arr.basicData.length/(T.sizeof/ArrBData.sizeof),nElements],0,arr.basicData,0);
+                    [arr.basicData.length/(T.sizeof/ArrBData.sizeof*((blockSizeArr==0)?1:blockSizeArr)),nElements],0,arr.basicData,0);
                 a2+=a1;
             } else {
                 assert(el2DelMap.length>1&&(el2DelMap.length-2)%3==0,"unexpected el2DelMap length");
@@ -480,15 +480,15 @@ class ParticleKind: Serializable,CopiableObjectI,DerivTransfer{
     /// to the one that goes from pos.x-0.5*diffP to pos.x+0.5*diffP
     void addToTangentialSpaceT(T)(ParticleSys!(T)pos,DynPVector!(T,XType)diffP,DynPVector!(T,DxType)res){
         if (pKind in res.pos.kRange && pKind in diffP.pos.kRange){
-            posEls.addArrayToDArray(res.pos[pKind],res.pos[pKind],
+            posEls.addArrayToDArray(diffP.pos[pKind],res.pos[pKind],
                 diffP.pos.arrayStruct.kindDim(pKind),res.pos.arrayStruct.kindDim(pKind));
         }
         if (pKind in res.orient.kRange && pKind in diffP.orient.kRange){
-            orientEls.addArrayToDArray(res.orient[pKind],res.orient[pKind],
+            orientEls.addArrayToDArray(diffP.orient[pKind],res.orient[pKind],
                 diffP.orient.arrayStruct.kindDim(pKind),res.orient.arrayStruct.kindDim(pKind));
         }
         if (pKind in res.dof.kRange && pKind in diffP.dof.kRange){
-            dofEls.addArrayToDArray(res.dof[pKind],res.dof[pKind],
+            dofEls.addArrayToDArray(diffP.dof[pKind],res.dof[pKind],
                 diffP.dof.arrayStruct.kindDim(pKind),res.dof.arrayStruct.kindDim(pKind));
         }
         foreach(obj;transferHandlers){
@@ -500,15 +500,15 @@ class ParticleKind: Serializable,CopiableObjectI,DerivTransfer{
     /// it just have to be exact at the first order.
     void addFromDualTangentialSpaceT(T)(ParticleSys!(T)pos,DynPVector!(T,DualDxType)deriv,DynPVector!(T,XType)res){
         if (pKind in res.pos.kRange && pKind in deriv.pos.kRange){
-            posEls.addDArrayToArray(res.pos[pKind],res.pos[pKind],
+            posEls.addDArrayToArray(deriv.pos[pKind],res.pos[pKind],
                 deriv.pos.arrayStruct.kindDim(pKind),res.pos.arrayStruct.kindDim(pKind));
         }
         if (pKind in res.orient.kRange && pKind in deriv.orient.kRange){
-            orientEls.addDArrayToArray(res.orient[pKind],res.orient[pKind],
+            orientEls.addDArrayToArray(deriv.orient[pKind],res.orient[pKind],
                 deriv.orient.arrayStruct.kindDim(pKind),res.orient.arrayStruct.kindDim(pKind));
         }
         if (pKind in res.dof.kRange && pKind in deriv.dof.kRange){
-            dofEls.addDArrayToArray(res.dof[pKind],res.dof[pKind],
+            dofEls.addDArrayToArray(deriv.dof[pKind],res.dof[pKind],
                 deriv.dof.arrayStruct.kindDim(pKind),res.dof.arrayStruct.kindDim(pKind));
         }
         foreach(obj;transferHandlers){
@@ -578,7 +578,7 @@ class SysKind: ParticleKind{
     this(LevelIdx pLevel,KindIdx kindIdx){
         super("_SYSTEM_",pLevel,kindIdx,"","");
     }
-    
+    mixin(serializeSome("dchem.SysKind",""));
 }
 
 /// represent the structure of a system of particles
@@ -1008,9 +1008,9 @@ class ParticleSys(T): CopiableObjectI,Serializable
     }
     /// perform scalar product in the tangential (derivative) space
     T dotInTSpace(DynPVector!(T,DxType)v1,DynPVector!(T,DualDxType)v2){
-        assert(v1.pos.arrayStruct==v2.pos.arrayStruct,"redistribution of vectors not implemented");
-        assert(v1.orient.arrayStruct==v2.orient.arrayStruct,"redistribution of vectors not implemented");
-        assert(v1.dof.arrayStruct==v2.dof.arrayStruct,"redistribution of vectors not implemented");
+        assert(v1.pos is null || v2.pos is null || v1.pos.arrayStruct==v2.pos.arrayStruct,"redistribution of vectors not implemented");
+        assert(v1.orient is null || v2.orient is null || v1.orient.arrayStruct==v2.orient.arrayStruct,"redistribution of vectors not implemented");
+        assert(v1.dof is null || v2.dof is null || v1.dof.arrayStruct==v2.dof.arrayStruct,"redistribution of vectors not implemented");
         return v1.opDot(v2.toGroup!(1)());
     }
     /// updates the hidden vars to the current position

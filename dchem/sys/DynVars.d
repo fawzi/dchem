@@ -282,7 +282,7 @@ struct DynPVector(T,int group){
     }
     void axpby(V)(V x,T a=1,T b=1){
         static assert(is(V==DynPVector!(V.dtype,group)),"axpby only between DynPVectors of the same group, not "~V.stringof);
-        enum{ weak=false }
+        enum{ weak=true }
         if ((cell is x.cell) && cell !is null){
             throw new Exception("identical cells in axpby",__FILE__,__LINE__);
         }
@@ -402,96 +402,102 @@ struct DynPVector(T,int group){
         return len;
     }
     
-    U opDot(V,U=typeof(T.init+V.dtype.init))(V v2){ // could overlap the various loops...
-        static assert(is(typeof(V.vGroup)),"V has to be a DynPVector");
-        static assert(V.vGroup==group,"dot product only between same group");
+    struct DotOpStruct(V,U){
         U res=0;
         Exception e=null;
+        DynPVector *v1;
+        V v2;
+        
         void addRes(U inc){
-            static if(is(typeof(atomicAdd(res,inc)))){
-                atomicAdd(res,inc);
+            static if(is(typeof(atomicAdd(this.res,inc)))){
+                atomicAdd(this.res,inc);
             } else {
                 synchronized{
-                    res+=inc;
+                    this.res+=inc;
                 }
             }
         }
         void doPosLoop(){
             try{
-                if (e!is null) return;
-                assert(v2.pos!is null,"Different vectors in opDot");
-                assert(v2.pos.arrayStruct is pos.arrayStruct,"Different array structs in opDot");
-                auto d1=a2NA(pos.data.basicData);
-                auto d2=a2NA(v2.pos.data.basicData);
+                if (this.e!is null) return;
+                assert(this.v2.pos!is null && this.v2.pos!is null,"Invalid vectors in opDot");
+                assert(this.v2.pos.arrayStruct == this.v1.pos.arrayStruct,"Different array structs in opDot");
+                auto d1=a2NA(this.v1.pos.data.basicData);
+                auto d2=a2NA(this.v2.pos.data.basicData);
                 auto rAtt=dot(d1,d2);
                 addRes(cast(U)rAtt);
             } catch (Exception eTmp){
-                e=new Exception("exception in doPosLoop",__FILE__,__LINE__,eTmp);
+                this.e=new Exception("exception in doPosLoop",__FILE__,__LINE__,eTmp);
             }
         }
         void doDofLoop(){
             try{
-                if (e!is null) return;
-                assert(v2.dof!is null,"Different vectors in opDot");
-                assert(v2.dof.arrayStruct is dof.arrayStruct,"Different array structs in opDot");
-                if (dof.length==0) return;
-                auto d1=a2NA(dof.data.data);
-                auto d2=a2NA(v2.dof.data.data);
+                if (this.e!is null) return;
+                assert(this.v2.dof!is null && this.v1.dof!is null,"Invalid vectors in opDot");
+                assert(this.v2.dof.arrayStruct == this.v1.dof.arrayStruct,"Different array structs in opDot");
+                if (this.v1.dof.length==0) return;
+                auto d1=a2NA(this.v1.dof.data.data);
+                auto d2=a2NA(this.v2.dof.data.data);
                 auto rAtt=dot(d1,d2);
                 addRes(cast(U)rAtt);
             } catch(Exception eTmp){
-                e=new Exception("exception in doDofLoop",__FILE__,__LINE__,eTmp);
+                this.e=new Exception("exception in doDofLoop",__FILE__,__LINE__,eTmp);
             }
         }
         void doOrientLoop(){
             try{
-                if (e!is null) return;
-                assert(v2.orient!is null,"Different vectors in opDot");
-                assert(v2.orient.arrayStruct is orient.arrayStruct,"Different array structs in opDot");
-                if (orient.length==0) return;
-                auto d1=NArray!(T,2)([cast(index_type)4*T.sizeof,T.sizeof],[cast(index_type)orient.data.length,3],
-                    cast(index_type)0,(cast(T*)orient.data.ptr)[0..4*orient.data.length],0);
-                auto d2=NArray!(T,2)([cast(index_type)4*T.sizeof,T.sizeof],[cast(index_type)v2.orient.data.length,3],
-                    cast(index_type)0,(cast(T*)v2.orient.data.ptr)[0..4*v2.orient.data.length],0);
+                if (this.e!is null) return;
+                assert(this.v2.orient!is null,"Different vectors in opDot");
+                assert(this.v2.orient.arrayStruct == this.v1.orient.arrayStruct,"Different array structs in opDot");
+                if (this.v1.orient.length==0) return;
+                auto d1=NArray!(T,2)([cast(index_type)4*T.sizeof,T.sizeof],[cast(index_type)this.v1.orient.data.length,3],
+                    cast(index_type)0,(cast(T*)this.v1.orient.data.ptr)[0..4*this.v1.orient.data.length],0);
+                auto d2=NArray!(T,2)([cast(index_type)4*T.sizeof,T.sizeof],[cast(index_type)this.v2.orient.data.length,3],
+                    cast(index_type)0,(cast(T*)this.v2.orient.data.ptr)[0..4*this.v2.orient.data.length],0);
                 auto rAtt=dotAll(d1,d2);
                 addRes(cast(U)rAtt);
             } catch(Exception eTmp){
-                e=new Exception("exception in doOrientLoop",__FILE__,__LINE__,eTmp);
-                res=-1;
+                this.e=new Exception("exception in doOrientLoop",__FILE__,__LINE__,eTmp);
             }
         }
-        Task("DynPVectorDot",
-            delegate void(){
-                if (pos!is null){
-                    Task("DynPVectorDotPos",&doPosLoop).autorelease.submitYield();
-                } else {
-                    assert(v2.pos is null,"different vectors in dot");
-                }
-                if (cell!is null){
-                    U resTmp=0;
-                    auto c1=cell.h.cell[];
-                    auto c2=v2.cell.h.cell[];
-                    for(int i=0;i<9;++i){
-                        resTmp+=c1[i]*c2[i];
-                    }
-                    addRes(resTmp);
-                } else {
-                    assert(v2.cell is null,"different vectors in opDot");
-                }
-                if (dof!is null){
-                    Task("DynPVectorDotDof",&doDofLoop).autorelease.submitYield();
-                } else {
-                    assert(v2.dof is null,"different vectors in opDot");
-                }
-                if (orient!is null){
-                    Task("DynPVectorDotOrient",&doOrientLoop).autorelease.submit();
-                } else {
-                    assert(v2.orient is null,"different vectors in opDot");
-                }
+        void doDot(){
+            if (this.v1.pos!is null){
+                Task("DynPVectorDotPos",&doPosLoop).autorelease.submitYield();
+            } else {
+                assert(this.v2.pos is null,"different vectors in dot");
             }
-        ).autorelease.executeNow();
-        if (e!is null) throw e;
-        return res;
+            if (this.v1.cell!is null){
+                U resTmp=0;
+                auto c1=this.v1.cell.h.cell[];
+                auto c2=this.v2.cell.h.cell[];
+                for(int i=0;i<9;++i){
+                    resTmp+=c1[i]*c2[i];
+                }
+                addRes(resTmp);
+            } else {
+                assert(this.v2.cell is null,"different vectors in opDot");
+            }
+            if (this.v1.dof!is null){
+                Task("DynPVectorDotDof",&doDofLoop).autorelease.submitYield();
+            } else {
+                assert(this.v2.dof is null,"different vectors in opDot");
+            }
+            if (this.v1.orient!is null){
+                Task("DynPVectorDotOrient",&doOrientLoop).autorelease.submit();
+            } else {
+                assert(this.v2.orient is null,"different vectors in opDot");
+            }
+        }
+    }
+    U opDot(V,U=typeof(T.init+V.dtype.init))(V v2){ // could overlap the various loops...
+        static assert(is(typeof(V.vGroup)),"V has to be a DynPVector");
+        static assert(V.vGroup==group,"dot product only between same group");
+        auto dOp=new DotOpStruct!(V,U); // keep on stack??? should be safe...
+        dOp.v2=v2;
+        dOp.v1=this;
+        Task("DynPVectorDot",&dOp.doDot).autorelease.executeNow();
+        if (dOp.e!is null) throw dOp.e;
+        return dOp.res;
     }
 
     /// utility method for the squared euclidean (2-norm) of the vector: (this.dot(*this))
@@ -500,16 +506,19 @@ struct DynPVector(T,int group){
     }
     /// utility method for the euclidean (2-norm) of the vector: (this.dot(*this))
     T norm2(){
-        return sqrt(this.opDot(*this));
+        return cast(T)sqrt(this.opDot(*this));
     }
     
-    int opApply(int delegate(ref T)loopBody){
+    struct OpApplyStruct{
         int res=0;
         Exception e=null;
+        int delegate(ref T)loopBody;
+        DynPVector *pVect;
+        
         void doPosLoop(){
-            if (res!=0) return;
+            if (this.res!=0) return;
             try{
-                auto resTmp=pos.pLoop.opApply(delegate int(ref Vector!(T,3) v){ // could be flattened using a NArray on pos.data like the dot...
+                auto resTmp=pVect.pos.pLoop.opApply(delegate int(ref Vector!(T,3) v){ // could be flattened using a NArray on pos.data like the dot...
                     if (auto res=loopBody(v.x)) return res;
                     if (auto res=loopBody(v.y)) return res;
                     if (auto res=loopBody(v.z)) return res;
@@ -522,7 +531,7 @@ struct DynPVector(T,int group){
         }
         void doDofLoop(){
             try{
-                auto resTmp=dof.data.opApply(loopBody);
+                auto resTmp=pVect.dof.data.opApply(loopBody);
                 if (resTmp!=0) res=resTmp;
             } catch(Exception eTmp){
                 e=new Exception("exception in doDofLoop",__FILE__,__LINE__,eTmp);
@@ -531,7 +540,7 @@ struct DynPVector(T,int group){
         }
         void doOrientLoop(){
             try{
-                auto resTmp=orient.data.opApply(delegate int(ref Quaternion!(T) q){ // could be flattened using a NArray on pos.data...
+                auto resTmp=pVect.orient.data.opApply(delegate int(ref Quaternion!(T) q){ // could be flattened using a NArray on pos.data...
                     if(auto r=loopBody(q.xyzw.x)) return r;
                     if(auto r=loopBody(q.xyzw.y)) return r;
                     if(auto r=loopBody(q.xyzw.z)) return r;
@@ -542,25 +551,28 @@ struct DynPVector(T,int group){
                 res=-1;
             }
         }
-        Task("DynPVectorOpApply",
-            delegate void(){
-                if (pos!is null){
-                    Task("DynPVectorOpApplyPos",&doPosLoop).autorelease.submitYield();
-                }
-                if (cell!is null){
-                    auto resTmp=cell.h.opApply(loopBody);
-                    if (resTmp!=0) res=resTmp;
-                }
-                if (dof!is null){
-                    Task("DynPVectorOpApplyDof",&doDofLoop).autorelease.submitYield();
-                }
-                if (orient!is null){
-                    Task("DynPVectorOpApplyOrient",&doOrientLoop).autorelease.submit();
-                }
+        void doOpApply(){
+            if (pVect.pos!is null){
+                Task("DynPVectorOpApplyPos",&doPosLoop).autorelease.submitYield();
             }
-        ).autorelease.executeNow();
-        if (e) throw e;
-        return res;
+            if (pVect.cell!is null){
+                auto resTmp=pVect.cell.h.opApply(loopBody);
+                if (resTmp!=0) res=resTmp;
+            }
+            if (pVect.dof!is null){
+                Task("DynPVectorOpApplyDof",&doDofLoop).autorelease.submitYield();
+            }
+            if (pVect.orient!is null){
+                Task("DynPVectorOpApplyOrient",&doOrientLoop).autorelease.submit();
+            }
+        }
+    }
+    int opApply(int delegate(ref T)loopBody){
+        auto oAp=new OpApplyStruct; // keep on stack???
+        oAp.loopBody=loopBody;
+        Task("DynPVectorOpApply",&oAp.doOpApply).autorelease.executeNow();
+        if (oAp.e!is null) throw oAp.e;
+        return oAp.res;
     }
     
     DynPVector emptyCopy(){

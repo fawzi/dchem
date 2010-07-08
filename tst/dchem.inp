@@ -30,15 +30,17 @@ poorM:{
 
 mullerB:{
     class:"dchem.MullerBrownPot"
+#    startX:0.45
+#    startY:3.1
 }
 
 testGrad:{
     class:dchem.TestGrad,
-    dx:0.001,
-    maxEDiffErr: 1.e-5
+    dx:0.05,
+    maxEDiffErr: 0.1
     method:{ class:Ref, name:mullerB}
 }
 
-main:{class:Ref, name:singleP}
+main:{class:Ref, name:testGrad}
 
 }

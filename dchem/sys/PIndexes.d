@@ -216,16 +216,24 @@ struct KindRange{
         }
         
         int opApply(int delegate(ref KindIdx)loopOp){
-            this.loopOp=loopOp;
-            if (kr.kStart>=kr.kEnd) return 0;
-            LoopK.addGPool();
-            auto mainLooper=LoopK.gPool.getObj();
-            mainLooper.ctx=this;
-            mainLooper.kr=kr;
-            Task("KindRangePLoop",&mainLooper.doOp).appendOnFinish(&mainLooper.giveBack).autorelease.executeNow();
-            LoopK.rmGPool();
-            if (exception!is null) throw new Exception("Exception in parallel kind loop",__FILE__,__LINE__,exception);
-            return res;
+            version(PLoopKinds){
+                this.loopOp=loopOp;
+                if (kr.kStart>=kr.kEnd) return 0;
+                LoopK.addGPool();
+                auto mainLooper=LoopK.gPool.getObj();
+                mainLooper.ctx=this;
+                mainLooper.kr=kr;
+                Task("KindRangePLoop",&mainLooper.doOp).appendOnFinish(&mainLooper.giveBack).autorelease.executeNow();
+                LoopK.rmGPool();
+                if (exception!is null) throw new Exception("Exception in parallel kind loop",__FILE__,__LINE__,exception);
+                return res;
+            } else {
+                for (auto ik=kr.kStart;ik<kr.kEnd;++ik){
+                    auto res=loopOp(ik);
+                    if (res!=0) return res;
+                }
+                return 0;
+            }
         }
     }
     /// parallel loop (all kinds in parallel)

@@ -13,6 +13,8 @@ import dchem.calculator.Calculator;
 import dchem.input.WriteOut;
 import dchem.sys.DynVars;
 import blip.container.GrowableArray;
+import blip.parallel.smp.Wait;
+import blip.math.Math;
 
 
 class TestGrad:Sampler{
@@ -26,8 +28,8 @@ class TestGrad:Sampler{
     ubyte[] history;
     ParticleSys!(Real) centralPointReal;
     ParticleSys!(LowP) centralPointLowP;
-    DynPVector!(Real,DualDxType) dualForcesReal;// forces (mddx) in the dual space
-    DynPVector!(LowP,DualDxType) dualForcesLowP;// forces (mddx) in the dual space
+    DynPVector!(Real,DualDxType) dualForcesReal; // forces (mddx) in the dual space
+    DynPVector!(LowP,DualDxType) dualForcesLowP; // forces (mddx) in the dual space
 
     ParticleSys!(T) centralPointT(T)(){
         static if (is(T==Real)){
@@ -55,7 +57,7 @@ class TestGrad:Sampler{
     }
     
     /// information about a direction
-    class DirInfo{
+    static class DirInfo{
         TestGrad context;
         Real[2] ens; /// energies evaluated at the different points
         Real[2] dCenter; /// distances fom the central point
@@ -70,7 +72,7 @@ class TestGrad:Sampler{
             this.context=context;
             this.idir=idir;
         }
-        /// offset from the central point in the coord space
+        /// offset of the finite difference line from the central point in the coord space
         Real offsetCenter(){
             Real semiP=0.5*(coordDx+dCenter[0]+dCenter[1]);
             Real areaT2=semiP*(semiP-coordDx)*(semiP-dCenter[0])*(semiP-dCenter[1]);
@@ -86,9 +88,9 @@ class TestGrad:Sampler{
         }
         /// if the error is too large
         bool eTooLarge(){
-            return (coordDx<context.maxDxFact*context.dx &&
-                offsetCenter()<context.maxOffsetCFact &&
-                eDiff()>context.maxEDiffErr);
+            return (abs(coordDx)<context.maxDxFact*context.dx &&
+                abs(offsetCenter())<context.maxOffsetCFact &&
+                abs(eError())>context.maxEDiffErr);
         }
         /// writes the header for the data of this direction
         void writeHeader(CharSink sink){
@@ -97,7 +99,7 @@ class TestGrad:Sampler{
         /// writes the data regarding this direction
         void writeData(CharSink sink){
             auto s=dumper(sink);
-            s(idir,",8"[])("\t")(dCenter[0],",8"[])(dCenter[1],",8"[])("\t")(offsetCenter,",8")("\t");
+            s(idir,",8"[])("\t")(dCenter[0],",8"[])("\t")(dCenter[1],",8"[])("\t")(offsetCenter,",8")("\t");
             s(coordDx,",8"[])("\t")(dualTSDx,",8"[])("\t")(realTSDx,",8"[])("\t")(cosDir,",8")("\t");
             s(eDiff,",8"[])("\t")(gradEDiff,",8"[])("\t")(eError,",8"[])("\t");
             if (eTooLarge) s("ERROR");
@@ -108,44 +110,49 @@ class TestGrad:Sampler{
             DynPVector!(T,XType) diff;
             diff=context.centralPointT!(T)().dynVars.dVarStruct.emptyX;
             diff[]=0;
+            auto diffLock=new RLock();
             
             int i=0;
+            bool iterator(ref CalculationContext ctx){
+                if (i<2) {
+                    ctx=context.method.method.getCalculator(true,context.history);
+                    ++i;
+                    return true;
+                }
+                return false;
+            }
             // calc
-            foreach(c;pLoopIter(delegate bool(ref CalculationContext c){
-                    if (i<2) {
-                        c=method.method.getCalculator(true,context.history);
-                        ++i;
-                        return true;
-                    }
-                    return false;
-                }))
+            foreach(ref c;pLoopIter(&iterator))
+            //CalculationContext c;
+            //while(iterator(c)) 
             {
                 auto dualDir=pSysT!(T)(c).dynVars.dVarStruct.emptyDualDx();
                 dualDir[]=0;
-                T sign=1-2*i;
-                dualDir[idir]=sign*0.5*dx;
-                auto pippo=&pSysT!(T)(c).addFromDualTSpace!(T);
+                T sign=1-2*(i-1);
+                dualDir[idir]=sign*0.5*context.dx;
                 pSysT!(T)(c).addFromDualTSpace!(T)(dualDir,pSysT!(T)(c).dynVars.x);
                 dualDir.giveBack();
                 c.updateEF(true,false);
-                synchronized(this){
+                {
+                    diffLock.lock();
+                    scope(exit) diffLock.unlock();
                     diff.axpby(pSysT!(T)(c).dynVars.x,sign,cast(T)1);
                 }
-                pSysT!(T)(c).dynVars.x.axpby(centralPointT!(T)().dynVars.x,-1,1);
-                dCenter[i]=pSysT!(T)(c).dynVars.x.norm2();
-                ens[i]=c.potentialEnergy;
+                pSysT!(T)(c).dynVars.x.axpby(context.centralPointT!(T)().dynVars.x,-1,1);
+                dCenter[i-1]=pSysT!(T)(c).dynVars.x.norm2();
+                ens[i-1]=c.potentialEnergy;
             }
             // check
             coordDx=diff.norm2();
-            auto dir=centralPointT!(T)().dynVars.dVarStruct.emptyDx();
+            auto dir=context.centralPointT!(T)().dynVars.dVarStruct.emptyDx();
             dir[]=0;
-            centralPointT!(T)().addToTSpace!(T)(diff,dir);
-            gradEDiff=centralPointT!(T)().dotInTSpace(dir,dualForcesT!(T)());
-
+            context.centralPointT!(T)().addToTSpace!(T)(diff,dir);
+            gradEDiff= -context.centralPointT!(T)().dotInTSpace(dir,context.dualForcesT!(T)());
+            auto dualDir=context.centralPointT!(T)().dynVars.dVarStruct.emptyDualDx();
+            context.centralPointT!(T)().toDualTSpace(dir,dualDir);
+            realTSDx=context.centralPointT!(T)().dotInTSpace(dir,dualDir);
+            realTSDx=((realTSDx>0)?sqrt(realTSDx):0);
             dir.giveBack();
-            auto dualDir=centralPointT!(T)().dynVars.dVarStruct.emptyDualDx();
-            centralPointT!(T)().toDualTSpace(dir,dualDir);
-            realTSDx=centralPointT!(T)().dotInTSpace(dir,dualDir);
             dualTSDx=dualDir.norm2();
             cosDir=dualDir[idir]/dualTSDx;
         }
@@ -153,20 +160,20 @@ class TestGrad:Sampler{
     DirInfo[] dirs;
     
     void doAllChecks(T)(){
-        sout("pippo doAllChecks\n");
+        sout("evaluated at:")(dynPVectorWriter(centralPointT!(T)().dynVars.x));
+        sout("energy:")(centralPointT!(T)().dynVars.potentialEnergy)("\n");
+        sout("dualForces:")(dynPVectorWriter(dualForcesT!(T)()));
         foreach(i,ref dirI;pLoopArray(dirs,1)){
-            sinkTogether(sout,delegate void(CharSink s){ dumper(s)("dir")(i)(" start\n"); });
+            debug(PrintDirCalc) sinkTogether(sout,delegate void(CharSink s){ dumper(s)("dir")(i)(" start\n"); });
             dirI=new DirInfo(i,this);
-            sinkTogether(sout,delegate void(CharSink s){ dumper(s)("dir")(i)(" preCalc\n"); });
             dirI.calcE!(T)();
-            sinkTogether(sout,delegate void(CharSink s){ dumper(s)("dir")(i)(" done\n"); });
+            debug(PrintDirCalc) sinkTogether(sout,delegate void(CharSink s){ dumper(s)("dir")(i)(" done\n"); });
         }
-        sout("done dir calculations\n");
+        debug(PrintDirCalc) sout("done dir calculations\n");
         if (dirs.length>0){
             dirs[0].writeHeader(sout.call);
         }
         bool failed=false;
-        sout("write out data\n");
         foreach(i,dirI;dirs){
             dirI.writeData(sout.call);
             failed=failed||dirI.eTooLarge();
@@ -176,39 +183,32 @@ class TestGrad:Sampler{
         } else {
             sout("Test passed\n");
         }
-        sout("pippo end doAllChecks\n");
     }
     
     /// does the checks
     void run(){
-        
-        sout("pippo1\n");
         auto m=method.method(); // method.method;
         if (m is null) throw new Exception("invalid method in field "~myFieldName,__FILE__,__LINE__);
-        sout("pippo2\n");
         CalculationContext c=m.getCalculator(true,null);
-        sout("pippo3\n");
         size_t nDim;
-        sout("pippo4\n");
         mixin(withPSys(`nDim=pSys.dynVars.dVarStruct.dualDxGroup.dataLength;`,"c."));
-        sout("pippo5\n");
         dirs=new DirInfo[](nDim);
-        sout("pippo6\n");
-
-        sout("pippo7\n");
         c.updateEF(true,true);
-        sout("pippo8\n");
         centralPointReal=c.pSysReal();
-        if (centralPointReal!is null) centralPointReal=centralPointReal.dup();
-        sout("pippo9\n");
+        if (centralPointReal!is null) {
+            centralPointReal=centralPointReal.dup();
+            dualForcesReal=centralPointReal.dynVars.dVarStruct.emptyDualDx();
+            centralPointReal.toDualTSpace(centralPointReal.dynVars.mddx,dualForcesReal);
+        }
         centralPointLowP=c.pSysLowP();
-        if (centralPointLowP!is null) centralPointLowP=centralPointLowP.dup();
-        sout("pippo10\n");
+        if (centralPointLowP!is null) {
+            centralPointLowP=centralPointLowP.dup();
+            dualForcesLowP=centralPointLowP.dynVars.dVarStruct.emptyDualDx();
+            centralPointLowP.toDualTSpace(centralPointLowP.dynVars.mddx,dualForcesLowP);
+        }
         auto history=c.storeHistory();
-        sout("pippo11\n");
         c.giveBack();
-        sout("pippo12\n");
-        
+
         if (centralPointReal!is null){
             doAllChecks!(Real)();
         } else if (centralPointLowP!is null){
