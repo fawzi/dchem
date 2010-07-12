@@ -310,6 +310,25 @@ class MultiConstraint: Constraint{
     }
 }
 
+/// describes a function from some variables to another, the mapping should be derivable,
+/// but not much more is required (i.e. it can be partial, surjective,...)
+/// (this should be a templated interface that thing would be less buggy)
+
+// f()PSys->DynPVect2 npos,norient,ndof
+// particles
+interface FunctionVar(T){
+    void addValueTo(ParticleSys!(T) pos,DynPVector!(T,XType)target);
+    /// transfers the derivative functionDeriv with respect to this variables to derivatives with respect
+    /// to the pos variable, and adds them to targetTs:
+    /// targetTs+=functionDeriv*df/dpos|_{pos}
+    void addDerivToTs(T)(ParticleSys!(T) pos,DynPVector!(T,DxType)functionDeriv,DynPVector!(T,DxType)targetTs);
+    /// performs the scalar product of the vector p with the derivative of this function
+    /// i.e. it returns dot(functionDeriv*df/dpos|_{pos},vect)
+    T collectDerivInTs(T)(ParticleSys!(T) pos,DynPVector!(T,DxType)functionDeriv,DynPVector!(T,DualDxType) vect);
+    /// tries to set pos, so that evaluating it one obtains fromT
+    /// returns true if it was successful, false if it was only partially done, or not at all
+    bool quickInverse(T)(ParticleSys!(T) pos,DynPVector!(T,XType) fromT);
+}
 /+
 class DistanceConstraint{
 }

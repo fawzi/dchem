@@ -20,7 +20,7 @@ enum MappingKind:uint{
     Direct=7u,    /// there is only a subsetting
     Same=15u,     /// no mapping at all
 }
-/// mapping os a system to a subsystem, assumes that the subsystem is smaller
+/// mapping from a system to a subsystem, assumes that the subsystem is smaller
 /// (but only memory wastage occurs if this is not true)
 /// this object is supposed to be immutable once used...
 class SubMapping: BasicObjectI{

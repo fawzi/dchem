@@ -161,6 +161,62 @@ final class SegmentedArrayStruct{
     }
 }
 
+/// maps each particle kind to a contiguos memory segment
+/// useful to put several segmentedArrays on the same memory, sharing full system and pieces of it
+/// this is built around BulkArrays, move to pointers directly??
+class SegArrMemMap(T){
+    SegmentedArrayStruct arrayStruct;
+    size_t[] kindOffests; /// start of each kind wrt. to the BulkArray start
+    size_t allocSize;     /// alloc size of the BulkArray (in T units)
+    size_t alignBytes;    /// requested alignment (at the moment only as check)
+    PoolI!(ChunkGuard) poolChunks; /// pool for quick alloc of backing memory
+    PoolI!(SegmentedArray!(T)) poolSegmented; /// pool for quick alloc of SegmentedArrays (without backing memory)
+    
+    this(SegmentedArrayStruct arrayStruct,size_t allocSize=0,size_t alignBytes=0,PoolI!(ChunkGuard) poolChunks=null, PoolI!(SegmentedArray!(T)) poolSegmented=null){
+        this.arrayStruct=arrayStruct;
+        this.allocSize=allocSize;
+        this.alignBytes=alignBytes;
+        this.poolChunks=poolChunks;
+        this.poolSegmented=poolSegmented;
+        if (this.allocSize==0) {
+            this.allocSize=this.arrayStruct.kindStarts[$-1]*T.sizeof;
+        }
+        if (this.poolChunks is null){
+            if (this.allocSize>10*1024*1024){
+                // use a global (non numa) pool
+                this.poolChunks=new Pool!(ChunkGuard)(&allocBase);
+            } else {
+                this.poolChunks=cachedPool(&allocBase);
+            }
+        }
+        if (this.poolSegmented is null){
+            this.poolSegmented=cachedPool(&allocSegArr);
+        }
+    }
+    /// allocates a new block of storage (ChunkGuard)
+    ChunkGuard allocBase(PoolI!(ChunkGuard)p){
+        return new ChunkGuard(allocSize,alignBytes,typeHasPointers!(T)(),p);
+    }
+    /// allocates a new segmented array (without backing memory)
+    SegmentedArray!(T) allocEmptySegArr(PoolI!(SegmentedArray!(T))p){
+        return new SegmentedArray!(T)(p,poolChunks);
+    }
+    /// allocates a new 
+    /// gets a new block of storage (bulkArray) possibly reusing old blocks
+    ChunkGuard newBase(){
+        auto res=poolChunks.getObj();
+    }
+    /// alloc a new SegmentedArray using the given storage chunk
+    SegmentedArray!(T) arrayFromData(ChunkGuard data){
+        auto sArr=poolSegmented.getObj();
+        sArr.reset(this,data);
+    }
+    /// new array
+    SegmentedArray!(T) newArray(){
+        auto bArr=pool.getObj();
+        return arrayFromBulkArray(bArr);
+    }
+}
 
 /// segmented (level/kinds) array (with kind uniform dimension)
 final class SegmentedArray(T){
@@ -180,9 +236,16 @@ final class SegmentedArray(T){
     BulkArray!(T) data(){
         return _data[kindStarts[0],kindStarts[$-1]];
     }
+    
+    void reset(ChunkGuard g){
+        
+    }
 
     // internal for serialization
     this(){ }
+    this(PoolI!(SegmentedArray) pool){
+        pool=pool;
+    }
     /// allocates a new SegmentedArray with the given kind dimensions
     /// min1 
     this(SegmentedArrayStruct arrayStruct, BulkArray!(T)data=BulkArray!(T).dummy,
@@ -364,7 +427,7 @@ final class SegmentedArray(T){
             }
         } else {
             if (_data.length!=val._data.length){
-                val._data.dataOfGuard(new blip.container.BulkArray.Guard(_data.length*V.sizeof));
+                val._data.dataOfGuard(new ChunkGuard(_data.length*V.sizeof));
             } else {
                 val._data.copyFrom!(T)(_data);
             }
