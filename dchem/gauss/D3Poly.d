@@ -1460,7 +1460,7 @@ grad_do2:   DO igrad=max_grad2+1,grad
 END SUBROUTINE
 
 ! *****************************************************************************
-!> \brief evaluates the 1d polynomial at the given place, results are stored contiguosly
+!> \brief evaluates the 1d polynomial at the given place, results are stored contiguously
 ! *****************************************************************************
 SUBROUTINE poly_eval1(p,x,pRes,npoly,error)
     REAL(dp), DIMENSION(:), INTENT(in)       :: p
@@ -1494,7 +1494,7 @@ SUBROUTINE poly_eval1(p,x,pRes,npoly,error)
 END SUBROUTINE
 
 ! *****************************************************************************
-!> \brief evaluates the 2d polynomial at the given place, results are stored contiguosly
+!> \brief evaluates the 2d polynomial at the given place, results are stored contiguously
 ! *****************************************************************************
 SUBROUTINE poly_eval2(p,x,y,pRes,npoly,error)
     REAL(dp), DIMENSION(:), INTENT(in)       :: p
@@ -1561,7 +1561,7 @@ grad_do4:   DO igrad=max_grad2+1,grad
 END SUBROUTINE
 
 ! *****************************************************************************
-!> \brief evaluates the 3d polynomial at the given place, results are stored contiguosly
+!> \brief evaluates the 3d polynomial at the given place, results are stored contiguously
 ! *****************************************************************************
 SUBROUTINE poly_eval3(p,x,y,z,pRes,npoly,error)
     REAL(dp), DIMENSION(:), INTENT(in)       :: p
