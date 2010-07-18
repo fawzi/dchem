@@ -12,7 +12,7 @@ singleP:{
     class:dchem.SinglePoint,
     calcE:1,
     calcF:1,
-    method:{ class:Ref, name:mullerB}
+    method:{ class:Ref, name:poorM}
 }
 
 poorM:{
@@ -23,15 +23,15 @@ poorM:{
         projName:"test1",
     },
     maxContexts:1,
-    executeDefaultE:"echo 1",
-    executeDefaultEF:"echo 2"
+    executeDefaultE:"sh calcE.sh",
+    executeDefaultEF:"sh calcE.sh"
     startConfig:{ class:Ref name:startConfig}
 }
 
 mullerB:{
     class:"dchem.MullerBrownPot"
-#    startX:0.45
-#    startY:3.1
+    startX:0.45
+    startY:0.1
 }
 
 testGrad:{
