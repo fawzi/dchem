@@ -617,7 +617,8 @@ class SysStruct: CopiableObjectI,Serializable
     this(){ }
     /// kinds as a simple BulkArray (easier indexing)
     BulkArray!(ParticleKind) kinds(){
-        return particleKinds.data();
+        assert(particleKinds.contiguous(),"available only for contiguous arrays");
+        return particleKinds.support();
     }
     SysStruct dup(PSDupLevel l){
         if ((l&PSDupLevel.SysStructContents)!=0) {
@@ -858,7 +859,7 @@ class ParticleSys(T): CopiableObjectI,Serializable
     void sysStructChanged(){
         derivOverlap.clear();
         this.reallocStructs();
-        foreach(pKind;sysStruct.particleKinds.data){
+        foreach(pKind;sysStruct.particleKinds.sDataLoop){
             pKind.sysStructChanged(Variant(this));
         }
         if (nCenter!is null)
@@ -868,7 +869,7 @@ class ParticleSys(T): CopiableObjectI,Serializable
     /// position of particles changed, position,... are valid
     void positionsChanged(){
         derivOverlap.invalidate();
-        foreach(pKind;sysStruct.particleKinds.data){
+        foreach(pKind;sysStruct.particleKinds.sDataLoop){
             pKind.positionsChanged(Variant(this));
         }
         if (nCenter!is null)
@@ -876,7 +877,7 @@ class ParticleSys(T): CopiableObjectI,Serializable
     }
     /// cell changed
     void cellChanged(){
-        foreach(pKind;sysStruct.particleKinds.data){
+        foreach(pKind;sysStruct.particleKinds.sDataLoop){
             pKind.cellChanged(Variant(this));
         }
         if (nCenter!is null)
@@ -941,7 +942,7 @@ class ParticleSys(T): CopiableObjectI,Serializable
     /// returns true if the overlap of derivatives is not the unit matrix
     bool specialDerivOverlap(){
         bool specOv=false;
-        foreach(pKind;sysStruct.particleKinds.data){
+        foreach(pKind;sysStruct.particleKinds.sDataLoop){
             if (pKind.specialOverlap()){
                 return true;
             }
@@ -950,7 +951,7 @@ class ParticleSys(T): CopiableObjectI,Serializable
     }
     /// sets the overlap matrix (should be initialized with 0 at the beginnng)
     void setDerivOverlap(DynPMatrix!(dtypeBlas,1,2) overlap){
-        foreach(pKind;sysStruct.particleKinds.data){
+        foreach(pKind;sysStruct.particleKinds.sDataLoop){
             pKind.setOverlap(overlap);
         }
     }

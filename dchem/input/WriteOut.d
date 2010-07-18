@@ -8,11 +8,13 @@ import dchem.Common;
 import dchem.sys.SegmentedArray;
 import blip.serialization.Serialization;
 import blip.sync.Atomic;
+import blip.container.BulkArray;
+import stdlib=blip.stdc.stdlib;
 
 /// writes out an xyz file
 void writeXyz(T)(CharSink sink,SysStruct sysStruct,SegmentedArray!(Vector!(T,3))pos,char[] comments){
     // angstrom*...
-    auto nAtoms=sysStruct.particles[sysStruct.levels[0]].data.length;
+    auto nAtoms=sysStruct.particles[sysStruct.levels[0]].length;
     auto s=dumper(sink);
     s(nAtoms)("\n");
     foreach(c;comments){
@@ -44,10 +46,62 @@ void writeTurboCoord(T)(CharSink sink,SysStruct sysStruct,SegmentedArray!(Vector
 struct SegArrWriter(T){
     KindRange kRange;
     index_type[] kindStarts;
-    T[] data;
-    mixin(serializeSome("dchem.SegArray!("~T.stringof~")","kRange|kindStarts|data"));
-    mixin printOut!();
+    index_type[] kindOffsets;
+    BulkArray!(T) data;
     bool ownsData=true; // careful with positioning this, as it is the target of atomi ops...
+
+    static ClassMetaInfo metaI;
+    static this(){
+        metaI=ClassMetaInfo.createForType!(typeof(*this))("SegArrWriter!("~T.mangleof~")");
+        metaI.addFieldOfType!(KindRange)("kRange","the range of this segment");
+        metaI.addFieldOfType!(index_type[])("kindStarts","the starts of each kind");
+        metaI.addFieldOfType!(LazyArray!(T))("data","the actual data"); // use T[]???
+    }
+    ClassMetaInfo getSerializationMetaInfo(){
+        return metaI;
+    }
+    /// loops on the data (switch to pLoop?)...
+    int opApply(int delegate(ref T el) loopBody){
+        for (size_t ikind=0;ikind<kindOffsets.length;++ikind){
+            auto sliceAtt=data[kindOffsets[ikind]..kindOffsets[ikind]+(kindStarts[ikind+1]-kindStarts[ikind])];
+            auto resAtt=sliceAtt.opApply(loopBody);
+            if (resAtt!=0) return resAtt;
+        }
+        return 0;
+    }
+    void serialize(Serializer s){
+        s.field(metaI[0],kRange);
+        s.field(metaI[1],kindStarts);
+        auto dataS=LazyArray!(T)(&opApply,kindStarts[$-1]-kindStarts[0]);
+        s.field(metaI[2],dataS);
+    }
+    void unserialize(Unserializer s){
+        s.field(metaI[0],kRange);
+        s.field(metaI[1],kindStarts);
+        size_t len=0,startLen=8;
+        if (kindStarts.length>0) startLen=kindStarts[$-1]-kindStarts[0];
+        T[] dataA=(cast(T*)stdlib.malloc(startLen*T.sizeof))[0..startLen];
+        auto dataS=LazyArray!(T)(delegate void(T el){
+            if (len==startLen){
+                startLen=growLength(startLen+1,T.sizeof);
+                dataA=(cast(T*)stdlib.realloc(dataA.ptr,startLen*T.sizeof))[0..startLen];
+            }
+            dataA[len]=el;
+            ++len;
+        },delegate void(ulong l){
+            if (l<startLen){
+                startLen=l;
+                dataA.length=startLen;
+            }
+        });
+        s.field(metaI[2],dataS);
+        auto guard=new ChunkGuard(dataA[0..len]); // leave it oversized??? then should make pool accept larger guards
+        data=BulkArray!(T)(dataA[0..len],guard);
+        kindOffsets=kindStarts;
+        ownsData=true;
+    }
+
+    mixin printOut!();
     /// returns a writer that writes out the given array.
     /// memory is shared, so it reinteprets is as of type T
     static SegArrWriter opCall(V)(SegmentedArray!(V) sarr){
@@ -55,16 +109,28 @@ struct SegArrWriter(T){
         static assert((V.sizeof % T.sizeof)==0,"type of the array ("~V.stringof~") is not commensurate with "~T.stringof);
         if (sarr is null) return res;
         uint dimMult=V.sizeof/T.sizeof;
+        auto supp=sarr.support;
+        res.data=BulkArray!(T)((cast(T*)supp.ptr)[0..supp.length*dimMult],supp.guard);
+        auto aStruct=sarr.arrayMap.arrayStruct;
+        auto ikEnd=sarr.kRange.length;
+        auto kShift=sarr.kRange.kStart-aStruct.kRange.kStart;
         if (dimMult!=1){
-            res.kindStarts=new index_type[](sarr.kindStarts.length);
-            foreach (i,p;sarr.kindStarts){
-                res.kindStarts[i]=dimMult*p;
+            res.kindStarts=new index_type[](sarr.kRange.length+1);
+            for (size_t ik=0;ik<=ikEnd;++ik){
+                res.kindStarts[ik]=aStruct.kindStarts[ik+kShift]*dimMult;
             }
         } else {
-            res.kindStarts=sarr.kindStarts;
+            res.kindStarts=aStruct.kindStarts[kShift..kShift+sarr.kRange.length+1];
         }
-        auto mdata=sarr.data.data;
-        res.data=(cast(T*)mdata.ptr)[0..mdata.length*dimMult];
+        res.kRange=sarr.kRange;
+        res.kindOffsets=new index_type[](sarr.kRange.length);
+        auto baseOffset=cast(size_t)(res.data.ptr-res.data.guard.dataPtr);
+        for (size_t ik=0;ik<ikEnd;++ik){
+            size_t nOffset=(sarr.kindOffsets[ik]-baseOffset)/T.sizeof;
+            assert(((sarr.kindOffsets[ik]-baseOffset)%T.sizeof)==0,"non aligned segment");
+            assert(nOffset+(res.kindStarts[ik+1]-res.kindStarts[ik])<=res.data.length,"offset overflow");
+            res.kindOffsets[ik]=cast(index_type)nOffset;
+        }
         res.kRange=sarr.kRange;
         res.ownsData=false;
         return res;
@@ -72,9 +138,11 @@ struct SegArrWriter(T){
     /// destroys the memory used by this object if it owns it
     void deallocData(){
         if (atomicCAS(ownsData,false,true)){
-            delete data;
+            if (data.guard!is null)
+                data.guard.release();
         }
     }
+    /+
     /// returns a segmented array with this data as contents, if steal is true then the data will remain valid 
     /// also after the destruction of this. Memory is reinterpreted (no cast/conversion)
     SegmentedArray!(V) toSegArr(V=T)(SysStruct sysStruct,bool steal=false){
@@ -90,16 +158,28 @@ struct SegArrWriter(T){
             kDims[i]=(p-kindStarts[i])/rFactor;
             if (kDims[i]==0) flags=0;
         }
-        auto aStruct=new SegmentedArrayStruct(name,sysStruct.fullSystem,kRange,kDims,flags);
-        return new SegmentedArray!(V)(aStruct,BulkArray!(V)((cast(V*)data.ptr)[0..data.length/dimMult],kRange),steal);
-    }
+        if (arrayMap is null){
+            auto aStruct=new SegmentedArrayStruct(name,sysStruct.fullSystem,kRange,kDims,flags);
+            arrayMap=new SegArrMemMap!(V)(aStruct);
+        } else {
+            // ignore and realloc???
+            assert(sysStruct.fullSystem == arrayMap.arrayStruct.submapping,"different submapping...");
+        }
+        auto dData=BulkArray!(V)((cast(V*)data.ptr)[0..data.length/dimMult];
+        if (steal && atomicCAS(ownsData,false,true)) {
+            return aMap.newArray(dData);
+        } else {
+            auto res=aMap.newArray();
+            res.support()[]=dData;
+            return res;
+        }
+    }+/
     /// ditto
-    SegmentedArray!(V) toSegArr(V=T)(SegmentedArrayStruct aStruct,bool steal=false,SegArrPool!(V) pool=null){
+    SegmentedArray!(V) toSegArr(V=T)(SegArrMemMap!(V) aMap,bool steal=false){
         static assert((V.sizeof % T.sizeof)==0,"type of the array ("~V.stringof~") is not commensurate with "~T.stringof);
         uint dimMult=V.sizeof/T.sizeof;
         if (kindStarts.length==0) return null;
         auto pKStarts=sysStruct.particles.kindStarts;
-        auto flags=SegmentedArrayStruct.Flags.Min1;
         foreach (i,p;kindStarts[1..$]){
             auto rFactor=(pKStarts[i+1]-pKStarts[i])*dimMult;
             if(((p-kindStarts[i])%rFactor)!=0)
@@ -109,19 +189,44 @@ struct SegArrWriter(T){
             if (kDims[i]==0 && (aStruct.flags&SegmentedArrayStruct.Flags.Min1)!=0)
                 throw new Exception("Min1 flags when not expected",__FILE__,__LINE__);
         }
-        auto newData=(cast(V*)data.ptr)[0..data.length/dimMult];
-        BulkArray!(V) b;
-        if (!atomicCAS(ownsData,false,true)) {
-            b=BulkArray!(V)(newData.length);
-            b.data()[]=newData;
-        } else {
-            b=BulkArray!(V)(newData);
+        auto dData=BulkArray!(V)((cast(V*)data.ptr)[0..data.length/dimMult],data.guard);
+        // compatible layout:
+        if (!(kRange in aMap.kRange))
+            throw new Exception("incompatible kind ranges",__FILE__,__FILE__);
+        if (steal && data.guard!is null){
+            auto baseOffset=data.ptr-data.guard.dataPtr;
+            bool compatible=true;
+            auto kShift=kRange.kStart-aMap.kRange.kStart;
+            foreach(i,o;kindOffsets){
+                if (o*T.sizeof+baseOffset!=aMap.kindOffsets[i+kShift]) {
+                    compatible=false;
+                    break;
+                }
+            }
+            // can be stolen:
+            if (compatible && atomicCAS(ownsData,false,true)){
+                return aMap.newArray(dData);
+            }
         }
-        return new SegmentedArray!(V)(aStruct,b,kRange,null,pool);
+        auto res=aMap.newArray(kRange);
+        foreach (k;kRange){
+            auto ik=k-kRange.kStart;
+            res[k][]=dData[kindOffsets[ik]*dimMult..
+                (kindOffsets[ik]+kindStarts[ik+1]-kindStarts[ik])*dimMult];
+        }
+        return res;
     }
     /// copies to an array of the given type, this might cast (checks kindStarts to decide if reinterpret the memory or cast/convert)
     void copyTo(V)(SegmentedArray!(V) s){
         assert(s!is null,"copy to only to allocated arrays");
+        if (s.arrayMap is arrayMap){
+            s.support()[]=data;
+        } else {
+            if (arrayMap is null){
+                arrayMap=new SegArrMemMap!(T)(s.arrayStruct);
+                
+            }
+        }
         if (cast(void*)s.data.ptr is cast(void*)data.ptr) {
             assert(s.data.length*V.sizeof==data.length*T.sizeof,"unexpected length");
             return;
@@ -134,7 +239,7 @@ struct SegArrWriter(T){
             s.data.basicData()[]=data;
         } else {
             if (kindStarts==s.kindStarts){
-                selfArr=toSegArr(s.arrayStruct);
+                selfArr=toSegArr(s.arrayMap);
                 s[]=selfArr;
             } else {
                 if (s.data.length*V.sizeof==data.length*T.sizeof){
@@ -185,9 +290,9 @@ struct DynPVectorWriter(T,int group){
             assert(cell.length==9,"invalid cell length");
             res.cell=new Cell(Matrix!(T,3,3)(cell),pVStruct.cellPeriod);
         }
-        res.pos=pos.toSegArr!(Vector!(T,3))(pVStruct.posStruct,steal,pVStruct.poolPos);
-        res.orient=orient.toSegArr!(Vector!(T,3))(pVStruct.orientStruct,steal,pVStruct.poolOrient);
-        res.dof=dof.toSegArr!(Vector!(T,3))(pVStruct.dofStruct,steal,pVStruct.poolDof);
+        res.pos=pos.toSegArr!(Vector!(T,3))(pVStruct.poolPos,steal);
+        res.orient=orient.toSegArr!(Vector!(T,3))(pVStruct.poolOrient,steal);
+        res.dof=dof.toSegArr!(Vector!(T,3))(pVStruct.poolDof,steal);
         return res;
     }
     /// copies to an array of the given type, this might cast (checks kindStarts to decide if reinterpret the memory or cast/convert)

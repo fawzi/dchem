@@ -1,3 +1,7 @@
+/// segmented array: efficient dense storage for particle properties that have kind dependent storage need
+/// this is the basis of for storing most properties, and is used for position,charge,... arrays
+///
+/// as extra optimization one could allocate the various struct arrays at the same time (giving a "nicer" memory layout)
 module dchem.sys.SegmentedArray;
 import dchem.sys.PIndexes;
 import blip.container.BulkArray;
@@ -15,11 +19,14 @@ import blip.container.Pool;
 import blip.io.Console;
 import blip.util.Convert;
 import blip.core.Traits;
+import blip.container.Cache;
 
 enum ParaFlags{
     FullPara,
     KindPara,
     Sequential,
+    DataLoop=1<<5,
+    MaskBase= ~DataLoop,
 }
 
 /// structure of a segmented array, kindStarts is valid only after freezing
@@ -33,8 +40,10 @@ final class SegmentedArrayStruct{
     char[] name; /// a name (for debugging)
     SubMapping submapping;
     KindRange  kRange;
-    index_type[]   _kindDims;
-    index_type[]   kindStarts;
+    index_type[]   _kindDims; /// number of basic elements for each particle of this kind
+    index_type[]   kindStarts; /// starts of the kinds
+    index_type[]   kindIncrements; /// when looping the increment to add for each particle of the given kind
+    index_type[]   mKindDims; /// minimum number of basic elements (this is max(1,_kindDims) if Min1, otherwise _kindDims)
     Flags flags;
     mixin(serializeSome("dchem.sys.SegmentedArrayStruct","submapping|kRange|_kindDims|kindStarts"));
     mixin printOut!();
@@ -54,6 +63,8 @@ final class SegmentedArrayStruct{
             kindDims[]=0; // should be the default
         }
         this._kindDims   = kindDims  ;
+        this.kindIncrements=new index_type[](nkinds);
+        this.mKindDims=new index_type[](nkinds);
         assert(_kindDims.length==nkinds,"kindDims has the wrong length");
         assert(kRange in submapping.lKRange,"submapping is smaller than current kRange");
         //if ((flags & Flags.Frozen)!=0){
@@ -61,6 +72,13 @@ final class SegmentedArrayStruct{
         //} else {
             kindStarts[]=index_type.max;
         //}
+    }
+    /// number of particles for the given kind
+    /// make this faster???
+    index_type nParticles(KindIdx k){
+        assert(k in kRange);
+        auto kLoc=k-submapping.lKRange.kStart;
+        return submapping.kindStarts[kLoc+1]-submapping.kindStarts[kLoc];
     }
     /// ditto
     this(char[] name,SubMapping submapping, KindRange kRange, NArray!(index_type,1) kindDims,Flags f=Flags.Min1){
@@ -99,9 +117,13 @@ final class SegmentedArrayStruct{
         for (size_t i=0;i<nkinds;++i){
             if (min1 && _kindDims[i]==0){
                 kindStarts[i+1]=kindStarts[i]+1; // always keep a "kind owned" value
+                kindIncrements[i]=0;
+                mKindDims[i]=1;
             } else {
                 kindStarts[i+1]=kindStarts[i]
                     +_kindDims[i]*(submapping.kindStarts[i+1+kindShift]-submapping.kindStarts[i+kindShift]);
+                kindIncrements[i]=_kindDims[i];
+                mKindDims[i]=_kindDims[i];
             }
         }
     }
@@ -161,25 +183,50 @@ final class SegmentedArrayStruct{
     }
 }
 
-/// maps each particle kind to a contiguos memory segment
+/// maps each particle kind to a contiguous memory segment
 /// useful to put several segmentedArrays on the same memory, sharing full system and pieces of it
-/// this is built around BulkArrays, move to pointers directly??
-class SegArrMemMap(T){
+class SegArrMemMap(T):PoolI!(SegmentedArray!(T)){
     SegmentedArrayStruct arrayStruct;
-    size_t[] kindOffests; /// start of each kind wrt. to the BulkArray start
-    size_t allocSize;     /// alloc size of the BulkArray (in T units)
+    size_t[] kindOffsets; /// start of each kind wrt. to the guard start (in bytes)
+    size_t[] kindByteIncrements; /// increments in bytes
+    size_t allocSize;     /// alloc size of the BulkArray (in bytes)
     size_t alignBytes;    /// requested alignment (at the moment only as check)
     PoolI!(ChunkGuard) poolChunks; /// pool for quick alloc of backing memory
     PoolI!(SegmentedArray!(T)) poolSegmented; /// pool for quick alloc of SegmentedArrays (without backing memory)
+    KindRange kRange; /// range of the map (must be a subset of arrayStruct.kRange)
+    size_t activeUsers=1;
     
-    this(SegmentedArrayStruct arrayStruct,size_t allocSize=0,size_t alignBytes=0,PoolI!(ChunkGuard) poolChunks=null, PoolI!(SegmentedArray!(T)) poolSegmented=null){
+    enum Flags{
+        None,
+        StandardBlock, // memory is a continuos block kindOffsets[0]..kindOffsets[$1], with each kind one after the
+        // other without gaps
+    }
+    Flags flags=Flags.None;
+    this(){}
+    this(SegmentedArrayStruct arrayStruct,KindRange kRange=KindRange.all,size_t allocSize=0,size_t alignBytes=0,PoolI!(ChunkGuard) poolChunks=null, PoolI!(SegmentedArray!(T)) poolSegmented=null){
         this.arrayStruct=arrayStruct;
+        arrayStruct.freeze();
+        this.kRange=kRange.intersect(arrayStruct.kRange);
         this.allocSize=allocSize;
         this.alignBytes=alignBytes;
         this.poolChunks=poolChunks;
         this.poolSegmented=poolSegmented;
+        auto nkinds=this.kRange.length;
+        auto buf=new size_t[](2*nkinds);
+        this.kindOffsets=buf[0..nkinds];
+        auto kShift=this.kRange.kStart-arrayStruct.kRange.kStart;
+        foreach(i,k;arrayStruct.kindStarts[kShift..kShift+nkinds]){
+            this.kindOffsets[i]=(k-arrayStruct.kindStarts[kShift])*T.sizeof;
+        }
+        this.kindByteIncrements=buf[nkinds..2*nkinds];
+        foreach(i,k;arrayStruct.kindIncrements[kShift..kShift+nkinds]){
+            this.kindByteIncrements[i]=k*T.sizeof;
+        }
+        this.activeUsers=1;
+        this.flags=Flags.StandardBlock;
         if (this.allocSize==0) {
-            this.allocSize=this.arrayStruct.kindStarts[$-1]*T.sizeof;
+            this.allocSize=(this.arrayStruct.kindStarts[kShift+nkinds]
+                -this.arrayStruct.kindStarts[kShift])*T.sizeof;
         }
         if (this.poolChunks is null){
             if (this.allocSize>10*1024*1024){
@@ -190,7 +237,7 @@ class SegArrMemMap(T){
             }
         }
         if (this.poolSegmented is null){
-            this.poolSegmented=cachedPool(&allocSegArr);
+            this.poolSegmented=cachedPool(&allocEmptySegArr);
         }
     }
     /// allocates a new block of storage (ChunkGuard)
@@ -199,54 +246,235 @@ class SegArrMemMap(T){
     }
     /// allocates a new segmented array (without backing memory)
     SegmentedArray!(T) allocEmptySegArr(PoolI!(SegmentedArray!(T))p){
-        return new SegmentedArray!(T)(p,poolChunks);
+        return new SegmentedArray!(T)(p);
     }
-    /// allocates a new 
-    /// gets a new block of storage (bulkArray) possibly reusing old blocks
-    ChunkGuard newBase(){
-        auto res=poolChunks.getObj();
-    }
-    /// alloc a new SegmentedArray using the given storage chunk
-    SegmentedArray!(T) arrayFromData(ChunkGuard data){
-        auto sArr=poolSegmented.getObj();
-        sArr.reset(this,data);
-    }
-    /// new array
+    /// new array (with data)
     SegmentedArray!(T) newArray(){
-        auto bArr=pool.getObj();
-        return arrayFromBulkArray(bArr);
+        auto guard=poolChunks.getObj();
+        auto sArr=poolSegmented.getObj();
+        sArr.reset(this,guard);
+        guard.release();
+        return sArr;
+    }
+    /// new array (with a subset of the data)
+    SegmentedArray!(T) newArray(KindRange kr){
+        // realloc another map is it is a much smaller subset???
+        auto guard=poolChunks.getObj();
+        auto sArr=poolSegmented.getObj();
+        sArr.reset(this,guard,kr);
+        guard.release();
+        return sArr;
+    }
+    /// new array (with a BulkArray)
+    SegmentedArray!(T) newArray(BulkArray!(T) bArr,KindRange kr=KindRange.all){
+        auto sArr=poolSegmented.getObj();
+        sArr.reset(this,bArr,kr);
+        return sArr;
+    }
+    /// if the array is contiguous
+    bool contiguous(){
+        return (flags&Flags.StandardBlock)!=0;
+    }
+    // fully disallow serialization, as it is useful mostly for debugging purposes...
+    mixin(serializeSome("dchem.SegArrMemMap",`arrayStruct
+        kindOffsets
+        kindByteIncrements
+        allocSize
+        alignBytes`));
+    mixin printOut!();
+    
+    // pool methods
+    
+    /// returns a new segmented array
+    SegmentedArray!(T) getObj(){
+        return newArray();
+    }
+    /// returns an instance, so that it can be reused
+    void giveBack(SegmentedArray!(T) obj){
+        if (obj is null) return;
+        if (obj.guard !is null){
+            obj.guard.release;
+            obj.guard=null;
+        }
+        if (obj.pool!is null){
+            obj.pool.giveBack(obj);
+        } else {
+            // actively delete??
+        }
+    }
+    /// should discard all the cached objects (no guarantee)
+    void flush(){
+        poolChunks.flush();
+        poolSegmented.flush();
+    }
+    /// should not cache any objects from now on (no guarantee)
+    /// this is suboptimal if the pools are shared, use some reference counting or avoid propagating???
+    void stopCaching(){
+        poolChunks.stopCaching();
+        poolSegmented.stopCaching();
+    }
+    /// add an active user (when created one active user is automatically added)
+    void addUser(){
+        if (atomicAdd(activeUsers,cast(size_t)1)==0){
+            throw new Exception("addUser called on non used pool",__FILE__,__LINE__);
+        }
+    }
+    /// removes an active user (if there are 0 active users stopCaching is called)
+    void rmUser(){
+        auto oldUsers=atomicAdd(activeUsers,-cast(size_t)1);
+        if (oldUsers==0){
+            throw new Exception("rmUser called on non used pool",__FILE__,__LINE__);
+        }
+        if (oldUsers==1){
+            stopCaching();
+        }
+    }
+    /// tries to reuse the pools from the given SegArrMemMap
+    void consolidate(V)(SegArrMemMap!(V) baseVal){
+        if (baseVal is null) return;
+        static if (is(V==T)){
+            baseVal.poolSegmented.addUser();
+            poolSegmented.rmUser();
+            poolSegmented=baseVal.poolSegmented;
+        }
+        if (baseVal.allocSize==allocSize && baseVal.alignBytes>=alignBytes){
+            baseVal.poolChunks.addUser();
+            poolChunks.rmUser();
+            poolChunks=baseVal.poolChunks;
+        }
     }
 }
 
 /// segmented (level/kinds) array (with kind uniform dimension)
 final class SegmentedArray(T){
-    SegmentedArrayStruct arrayStruct;
+    void *basePtr; /// this is guard.dataPtr
+    size_t[] kindOffsets; /// offsets wrt. to basePtr (in bytes)
+    size_t[] kindByteIncrements; /// increments for each particle (in bytes)
+    index_type[] mKindDims; /// number of basic elements in each particle (at least 1 if Min1)
+    SegArrMemMap!(T) arrayMap;
+    ChunkGuard guard;
     KindRange  kRange;
-    index_type[]   kindStarts;
-    BulkArray!(T) _data;
-    bool direct;
     alias T dtype;
     alias BulkArray!(T).basicDtype basicDtype;
     static size_t defaultOptimalBlockSize=32*1024/T.sizeof;
     PoolI!(SegmentedArray) pool;
     
-    mixin(serializeSome("dchem.sys.SegmentedArray","kRange|kindStarts|_data"));
+    mixin(serializeSome("dchem.sys.SegmentedArray","kRange|kindOffsets|kindByteIncrements|mKindDims|arrayMap|guard"));
     mixin printOut!();
     
-    BulkArray!(T) data(){
+    /+BulkArray!(T) data(){
         return _data[kindStarts[0],kindStarts[$-1]];
+    }+/
+
+    SegmentedArrayStruct arrayStruct(){
+        return arrayMap.arrayStruct;
+    }
+    /// initializes with map, guard & range
+    void reset(SegArrMemMap!(T) arrayMap,ChunkGuard guard,KindRange kr){
+        assert(this.arrayMap is null && this.guard is null && this.basePtr is null,"reset called on non cleared SegmentedArray");
+        this.arrayMap=arrayMap;
+        this.guard=guard.retain();
+        this.basePtr=guard.dataPtr;
+        assert(kr in arrayMap.kRange,"kr out of range of map");
+        this.kRange=kr;
+        auto kStart=arrayMap.kRange.kStart;
+        this.kindOffsets=arrayMap.kindOffsets[(this.kRange.kStart-kStart)..(this.kRange.kEnd-kStart)];
+        this.kindByteIncrements=arrayMap.kindByteIncrements[(this.kRange.kStart-kStart)..(this.kRange.kEnd-kStart)];
+        this.mKindDims=arrayMap.arrayStruct.mKindDims[(this.kRange.kStart-arrayMap.arrayStruct.kRange.kStart)..
+            (this.kRange.kEnd-arrayMap.arrayStruct.kRange.kStart)]; // duplicate this in the map?
+    }
+    /// initializes with map & guard
+    void reset(SegArrMemMap!(T) arrayMap,ChunkGuard guard){
+        reset(arrayMap,guard,arrayMap.kRange);
+    }
+    /// initializes with a BulkArray, that must be compatible with the memory layout of arrayMap
+    void reset(SegArrMemMap!(T) arrayMap,BulkArray!(T)bArr,KindRange kr=KindRange.all){
+        assert(this.arrayMap is null && this.guard is null && this.basePtr is null,"reset called on non cleared SegmentedArray");
+        this.arrayMap=arrayMap;
+        guard=bArr.guard;
+        if (guard is null){
+            // copy...
+            guard=arrayMap.poolChunks.getObj();
+            this.basePtr=guard.dataPtr;
+            this.kRange=kr.intersect(arrayMap.kRange);
+            auto kStart=arrayMap.kRange.kStart;
+            auto kStart2=arrayMap.arrayStruct.kRange.kStart;
+            this.kindOffsets=arrayMap.kindOffsets[(this.kRange.kStart-kStart)..(this.kRange.kEnd-kStart)];
+            this.kindByteIncrements=arrayMap.kindByteIncrements[(this.kRange.kStart-kStart)..(this.kRange.kEnd-kStart)];
+            this.mKindDims=arrayMap.arrayStruct.mKindDims[(this.kRange.kStart-kStart2)..(this.kRange.kEnd-kStart2)];
+            assert(bArr.length==dataLength);
+            foreach(i,ref v;sDataLoop){ // could be parallel...
+                v=bArr[i];
+            }
+        } else {
+            // check compatibility
+            guard.retain();
+            this.basePtr=guard.dataPtr;
+            this.kRange=kr.intersect(arrayMap.kRange);
+            auto kStart=arrayMap.kRange.kStart;
+            auto kStart2=arrayMap.arrayStruct.kRange.kStart;
+            this.kindOffsets=arrayMap.kindOffsets[(this.kRange.kStart-kStart)..(this.kRange.kEnd-kStart)];
+            this.kindByteIncrements=arrayMap.kindByteIncrements[(this.kRange.kStart-kStart)..(this.kRange.kEnd-kStart)];
+            this.mKindDims=arrayMap.arrayStruct.mKindDims[(this.kRange.kStart-kStart2)..(this.kRange.kEnd-kStart2)];
+            assert(bArr.length==dataLength);
+            auto bArr2=support();
+            if (bArr2.ptr!is bArr.ptr || bArr2.length!=bArr.length){
+                throw new Exception("bArr incompatible with arrayMap",__FILE__,__LINE__);
+            }
+        }
     }
     
-    void reset(ChunkGuard g){
-        
-    }
 
     // internal for serialization
     this(){ }
     this(PoolI!(SegmentedArray) pool){
         pool=pool;
     }
-    /// allocates a new SegmentedArray with the given kind dimensions
+    this(SegArrMemMap!(T) arrayMap,ChunkGuard guard,KindRange kr,PoolI!(SegmentedArray) pool=null){
+        this(pool);
+        reset(arrayMap,guard,kr);
+    }
+    this(SegArrMemMap!(T) arrayMap,ChunkGuard guard,PoolI!(SegmentedArray) pool=null){
+        this(pool);
+        reset(arrayMap,guard);
+    }
+    this(SegArrMemMap!(T) arrayMap,BulkArray!(T)bArr,PoolI!(SegmentedArray) pool=null){
+        this(pool);
+        reset(arrayMap,bArr);
+    }
+    /// if the array is stored contiguosly
+    bool contiguous(){
+        return arrayMap.contiguous;
+    }
+    void clear(){
+        if (guard!is null){
+            guard.release;
+            guard=null;
+            basePtr=null;
+        }
+        arrayMap=null;
+        kindOffsets=[];
+        kindByteIncrements=[];
+        mKindDims=[];
+    }
+    /// returns a bulk array that can support the current range
+    BulkArray!(T)support(){
+        if (kindOffsets.length==0) return BulkArray!(T)();
+        auto kEnd=kRange.kEnd-kRange.kStart;
+        auto aStruct=arrayMap.arrayStruct;
+        auto kShift=kRange.kStart-aStruct.kRange.kStart;
+        size_t minS=kindOffsets[0];
+        size_t maxS=kindOffsets[0]+(aStruct.kindStarts[kShift+1]-aStruct.kindStarts[kShift])*T.sizeof;
+        for (auto i=1;i<kEnd;++i){
+            if (maxS<=kindOffsets[i]){ // assumes non overlapping segments
+                maxS=kindOffsets[i]+(aStruct.kindStarts[i+kShift+1]-aStruct.kindStarts[i+kShift])*T.sizeof;
+            }
+            if (minS>kindOffsets[i]) minS=kindOffsets[i];
+        }
+        assert(((maxS-minS)%T.sizeof)==0,"non aligned offsets");
+        return BulkArray!(T)((cast(T*)(basePtr+minS))[0..((maxS-minS)/T.sizeof)],guard);
+    }
+/+    /// allocates a new SegmentedArray with the given kind dimensions
     /// min1 
     this(SegmentedArrayStruct arrayStruct, BulkArray!(T)data=BulkArray!(T).dummy,
         KindRange kRange=KindRange.all,index_type[] kindStarts=null,PoolI!(SegmentedArray) pool=null)
@@ -287,28 +515,35 @@ final class SegmentedArray(T){
         if (BulkArrayIsDummy(data)){
             _data=BulkArray!(T)(this.kindStarts[this.kindStarts.length-1]-this.kindStarts[0]);
         }
-        direct=(arrayStruct.flags&SegmentedArrayStruct.Flags.Direct)!=0;
         this.pool=pool;
-    }
+    }+/
     /// array of elements in the given range
     SegmentedArray!(T) opIndex(KindRange kr){
+        auto res=arrayMap.poolSegmented.getObj();
         KindRange krCommon=kRange.intersect(kr);
-        size_t startLK=cast(size_t)(krCommon.kStart-kRange.kStart);
-        size_t endLK=cast(size_t)(krCommon.kEnd-kRange.kStart+1);
-        return new SegmentedArray(arrayStruct,data,krCommon,kindStarts[startLK..endLK]);
+        res.reset(arrayMap,guard,krCommon);
+        return res;
     }
-    /// array of elements for *local* kind k
+    /// array of elements for local kind k
     BulkArray!(T) opIndex(KindIdx k){
-        auto res=data[kindStarts[cast(size_t)k],kindStarts[cast(size_t)k+1]];
-        // res.blockSize=arrayStruct.kindDim[cast(size_t)k];
+        assert(k in kRange,"kind out of range");
+        auto aStruct=arrayMap.arrayStruct;
+        auto res=BulkArray!(T)((cast(T*)(basePtr+kindOffsets[k-kRange.kStart]))[0..(aStruct.kindStarts[k-aStruct.kRange.kStart+1]-
+            aStruct.kindStarts[k-aStruct.kRange.kStart])],guard);
+        assert(res.ptr>=basePtr && res.ptr+res.length<=(basePtr+guard.dataLen),"data out of range");
         return res;
     }
     /// gets the particle using the local particle numbering, but that might be outside the kind range
+    /// could be optimized more, but will never be very efficient...
     T[] getMaybeInRange(LocalPIndex p){
         auto kindIdx=p.kind();
         if (kindIdx in kRange){
-            auto startIdx=kindStarts[cast(size_t)kindIdx]+p.particle();
-            return _data.getSlice(startIdx,startIdx+arrayStruct.kindDim(kindIdx));
+            auto kStart=arrayMap.arrayStruct.submapping.lKRange.kStart;
+            if (p.particle() < arrayMap.arrayStruct.nParticles(kindIdx)){
+                auto startPtr=cast(T*)(basePtr+kindOffsets[kindIdx-kRange.kStart]+p.particle()*kindByteIncrements[kindIdx-kRange.kStart]);
+                auto res=startPtr[0..mKindDims[kindIdx-kRange.kStart]];
+                assert(res.ptr>=basePtr && res.ptr+res.length<(basePtr+guard.dataLen),"data out of range");
+            }
         }
         return null;
     }
@@ -316,10 +551,11 @@ final class SegmentedArray(T){
     T[] opIndex(LocalPIndex p){
         auto kindIdx=p.kind();
         assert(kindIdx in kRange,"kind is not in range as expected, you might want to use getMaybeInRange");
-        auto dim=arrayStruct.kindDim(kindIdx);
-        auto startIdx=kindStarts[cast(size_t)(kindIdx-kRange.kStart)]+p.particle()*dim;
-        return _data.getSlice(startIdx,startIdx+((dim!=0)?dim:
-            (arrayStruct.flags&SegmentedArrayStruct.Flags.Min1!=0)?1:0));
+        assert(p.particle() < arrayMap.arrayStruct.nParticles(kindIdx),"particle index out of range"); // make this test quicker?
+        auto startPtr=cast(T*)(basePtr+kindOffsets[kindIdx-kRange.kStart]+p.particle()*kindByteIncrements[kindIdx-kRange.kStart]);
+        auto res=startPtr[0..mKindDims[kindIdx-kRange.kStart]];
+        assert(res.ptr>=basePtr && res.ptr+res.length<=(basePtr+guard.dataLen),"data out of range");
+        return res;
     }
     /// array of elements for a (global) particle p
     /// not as efficient as it could be, if you know that submapping is gapless for the
@@ -329,20 +565,20 @@ final class SegmentedArray(T){
             auto kindIdx=p.kind();
             auto pos=p.particle();
             assert(kindIdx in kRange,"kind out of range");
-            auto dim=arrayStruct.kindDim(kindIdx);
-            auto startIdx=kindStarts[cast(size_t)kindIdx-kRange.kStart]+p.particle()*dim;
-            assert(startIdx<kindStarts[kindIdx-kRange.kStart+1] || dim==0,"particle index out of bounds");
-            return _data.getSlice(startIdx,startIdx+((dim!=0)?dim:
-                ((arrayStruct.flags&SegmentedArrayStruct.Flags.Min1)!=0)?1:0));
+            assert(pos < arrayMap.arrayStruct.nParticles(kindIdx),"particle index out of range");
+            auto startPtr=cast(T*)(basePtr+kindOffsets[kindIdx-kRange.kStart]+pos*kindByteIncrements[kindIdx-kRange.kStart]);
+            auto res=startPtr[0..mKindDims[kindIdx-kRange.kStart]];
+            assert(res.ptr>=basePtr && res.ptr+res.length<=(basePtr+guard.dataLen),"data out of range");
+            return res;
         } else {
             LocalPIndex l=arrayStruct.submapping[p];
             auto kindIdx=l.kind();
             assert(kindIdx in kRange,"kind out of range");
-            auto dim=arrayStruct.kindDim(kindIdx);
-            auto startIdx=kindStarts[kindIdx-kRange.kStart]+l.particle()*dim;
-            assert(startIdx<kindStarts[kindIdx-kRange.kStart+1] || dim==0,"particle index out of bounds");
-            return _data.getSlice(startIdx,startIdx+((dim!=0)?dim:
-                ((arrayStruct.flags&SegmentedArrayStruct.Flags.Min1)!=0)?1:0));
+            assert(l.particle() < arrayMap.arrayStruct.nParticles(kindIdx),"particle index out of range, internal error");
+            auto startPtr=cast(T*)(basePtr+kindOffsets[kindIdx-kRange.kStart]+l.particle()*kindByteIncrements[kindIdx-kRange.kStart]);
+            auto res=startPtr[0..mKindDims[kindIdx-kRange.kStart]];
+            assert(res.ptr>=basePtr && res.ptr+res.length<=(basePtr+guard.dataLen),"data out of range");
+            return res;
         }
     }
     /// gets the particle using the local particle numbering (has to be in the kind range)
@@ -350,13 +586,13 @@ final class SegmentedArray(T){
     T *ptrI(LocalPIndex p,index_type i){
         auto kindIdx=p.kind();
         assert(kindIdx in kRange,"kind is not in range as expected, you might want to use getMaybeInRange");
-        assert(i>=0 && (i<arrayStruct.kindDim(kindIdx)||
+        assert(i>=0 && (i<arrayStruct.mKindDims[kindIdx-kRange.kStart]||
                 (i==0&&(arrayStruct.flags & SegmentedArrayStruct.Flags.Min1)!=0)),"index i out of bounds");
-        auto kPos=cast(size_t)(kindIdx-kRange.kStart);
-        auto dim=arrayStruct.kindDim(kindIdx);
-        auto startIdx=kindStarts[kPos]+p.particle()*dim;
-        assert(startIdx+dim<=kindStarts[kPos+1],"p.particle out of bounds");
-        return _data.ptrI(startIdx+i);
+        assert(p.particle() < arrayMap.arrayStruct.nParticles(kindIdx),"particle index out of range, internal error");
+        assert(i<mKindDims[kindIdx-kRange.kStart],"i out of range"); // always allow i=0??
+        auto startPtr=cast(T*)(basePtr+kindOffsets[kindIdx-kRange.kStart]+
+            p.particle()*kindByteIncrements[kindIdx-kRange.kStart]+i*T.sizeof);
+        return startPtr;
     }
     /// gets the particle using the local particle numbering (has to be in the kind range)
     /// i is the index within the elements for particle i
@@ -366,7 +602,7 @@ final class SegmentedArray(T){
     /// sets the value for element i of the particle using the local particle numbering
     /// (has to be in the kind range)
     void opIndexAssign(T val,LocalPIndex p,index_type i){
-        static if (is(typeof(val.opSliceAssign(val)))){
+        static if (is(typeof(delegate void(){ val[]=val; }))){
             (*ptrI(p,i))[]=val;
         } else {
             *ptrI(p,i)=val;
@@ -376,24 +612,23 @@ final class SegmentedArray(T){
     /// not as efficient as it could be, if you know that submapping is gapless for the
     /// kinds included cast to LocalPIndex and use either getMaybeInRange or opIndex
     T *ptrI(PIndex p,index_type i){
-        if (direct){
+        if ((arrayStruct.flags&SegmentedArrayStruct.Flags.Direct)!=0){
             auto kindIdx=p.kind();
-            assert(kindIdx in kRange,"kind out of range");
-            auto dim=arrayStruct.kindDim(kindIdx);
-            assert(i>=0 && (i<dim||(i==0&&(arrayStruct.flags&SegmentedArrayStruct.Flags.Min1)!=0)),"index i out of bounds");
-            auto pos=p.particle();
-            auto startIdx=kindStarts[kindIdx-kRange.kStart]+p.particle()*dim;
-            assert(startIdx+dim<=kindStarts[kindIdx-kRange.kStart+1],"p.particle out of range");
-            return _data.ptrI(startIdx+cast(size_t)i);
+            assert(kindIdx in kRange,"kind is not in range as expected, you might want to use getMaybeInRange");
+            assert(p.particle() < arrayMap.arrayStruct.nParticles(kindIdx),"particle index out of range, internal error");
+            assert(i>=0 && i<mKindDims[kindIdx-kRange.kStart],"i out of range"); // always allow i=0??
+            auto startPtr=cast(T*)(basePtr+kindOffsets[kindIdx-kRange.kStart]+
+                p.particle()*kindByteIncrements[kindIdx-kRange.kStart]+i*T.sizeof);
+            return startPtr;
         } else {
             LocalPIndex l=arrayStruct.submapping[p];
             auto kindIdx=l.kind();
-            assert(kindIdx in kRange,"kind out of range");
-            auto dim=arrayStruct.kindDim(kindIdx);
-            assert(i>=0 && (i<dim||(i==0&&(arrayStruct.flags&SegmentedArrayStruct.Flags.Min1)!=0)),"index i out of bounds");
-            auto startIdx=kindStarts[cast(size_t)(kindIdx-kRange.kStart)]+l.particle()*dim;
-            assert(startIdx+dim<=kindStarts[kindIdx-kRange.kStart+1],"p.particle out of range");
-            return _data.ptrI(startIdx+i);
+            assert(kindIdx in kRange,"kind is not in range as expected, you might want to use getMaybeInRange");
+            assert(l.particle() < arrayMap.arrayStruct.nParticles(kindIdx),"particle index out of range, internal error");
+            assert(i>=0 && i<mKindDims[kindIdx-kRange.kStart],"i out of range"); // always allow i=0??
+            auto startPtr=cast(T*)(basePtr+kindOffsets[kindIdx-kRange.kStart]+
+                l.particle()*kindByteIncrements[kindIdx-kRange.kStart]+i*T.sizeof);
+            return startPtr;
         }
     }
     /// element i of a (global) particle p array
@@ -404,47 +639,85 @@ final class SegmentedArray(T){
     }
     /// copies from an array to this
     void opSliceAssign(V)(SegmentedArray!(V) val){
+        static if (is(T==V)) {
+            if (val is this) return;
+        }
         assert(arrayStruct==val.arrayStruct,"different structs");
         assert(kRange==val.kRange,"different kRanges");
-        assert(kindStarts==val.kindStarts,"different kindStarts");
-        _data.copyFrom(val._data);
+        int kEnd=kRange.kEnd-kRange.kStart;
+        auto kStarts=arrayMap.arrayStruct.kindStarts[kRange.kStart-arrayMap.arrayStruct.kRange.kStart..$];
+        for (int ik=0;ik<kEnd;++ik){
+            auto startPtr1=cast(T*)(basePtr+kindOffsets[ik]);
+            auto startPtr2=cast(V*)(val.basePtr+val.kindOffsets[ik]);
+            static if (is(T==V)){
+                memcpy(startPtr1,startPtr2,T.sizeof*(kStarts[ik+1]-kStarts[ik]));
+            } else {
+                for(size_t p=kStarts[ik+1]-kStarts[ik];p!=0;--p){
+                    static if(is(typeof((*startPtr1)[]=(*startPtr2)))){
+                        (*startPtr1)[]=(*startPtr2);
+                    } else static if(is(V:T)){
+                        *startPtr1=cast(T)(*startPtr2);
+                    } else {
+                        *startPtr1=convertTo!(T)(*startPtr2);
+                    }
+                    ++startPtr1;
+                    ++startPtr2;
+                }
+            }
+        }
     }
     /// copies from an array to this
     void opSliceAssign()(T val){
-        _data[]=val;
+        int kEnd=kRange.kEnd-kRange.kStart;
+        auto kStarts=arrayMap.arrayStruct.kindStarts[kRange.kStart-arrayMap.arrayStruct.kRange.kStart..$];
+        for (int ik=0;ik<kEnd;++ik){
+            auto startPtr1=cast(T*)(basePtr+kindOffsets[ik]);
+            for(size_t p=kStarts[ik+1]-kStarts[ik];p!=0;--p){
+                static if(is(typeof((*startPtr1)[]=val))){
+                    (*startPtr1)[]=val;
+                } else {
+                    *startPtr1=val;
+                }
+                ++startPtr1;
+            }
+        }
     }
     /// copies this array to the given SegmentedArray, tryig to reuse its memory allocations
     void dupTo(V)(SegmentedArray!(V) val){
-        val.arrayStruct=arrayStruct;
         val.kRange=kRange;
-        val.kindStarts=kindStarts;
-        val.direct=direct;
+        val.kindOffsets=kindOffsets;
+        val.kindByteIncrements=kindByteIncrements;
+        val.mKindDims=mKindDims;
         static if(is(T==V)){
-            if (_data.length!=val._data.length){
-                val._data.dataOfGuard(_data.dup().guard);
-            } else {
-                val._data.copyFrom!(V)(_data);
+            if (val.arrayMap.arrayStruct != arrayMap.arrayStruct){
+                val.arrayMap=arrayMap; // avoid using this mapping if it is a much smaller subset?
+                val.guard.release();
+                val.guard=arrayMap.poolChunks.getObj();
             }
+            val.opSliceAssign!(T)(this);
         } else {
-            if (_data.length!=val._data.length){
-                val._data.dataOfGuard(new ChunkGuard(_data.length*V.sizeof));
-            } else {
-                val._data.copyFrom!(T)(_data);
+            if (val.arrayMap.arrayStruct != arrayMap.arrayStruct){
+                val.clear();
+                auto newMap=new SegArrMemMap!(V)(arrayStruct);
+                newMap.consolidate(arrayMap);
+                val.reset(newMap,newMap.poolChunks.getObj());
+                if (val.guard!is null) val.guard.release();
             }
+            val.opSliceAssign!(T)(this);
         }
     }
     /// returns a copy of the segmented array
     SegmentedArray!(V) dupT(V=T)(){
         static if (is(V==T)){
-            if (pool!is null){
-                auto res=pool.getObj();
-                dupTo(res);
-                return res;
-            } else {
-                return new SegmentedArray(arrayStruct,_data.dup,kRange,kindStarts.dup);
-            }
+            auto res=arrayMap.newArray();
+            dupTo(res);
+            return res;
         } else {
-            return new SegmentedArray!(V)(arrayStruct,_data.dupT!(V),kRange,kindStarts.dup);
+            auto newMap=new SegArrMemMap!(V)(arrayStruct);
+            newMap.consolidate(arrayMap);
+            auto res=newMap.newArray();
+            this.dupTo(res);
+            return res;
         }
     }
     SegmentedArray dup(){
@@ -452,14 +725,15 @@ final class SegmentedArray(T){
     }
     /// returns a copy of the segmented array
     SegmentedArray deepdup(){
-        return new SegmentedArray(arrayStruct,_data.deepdup,kRange,kindStarts.dup);
+        assert(0,"unimplemented");
+        return null;
     }
     
     /// length of a particle based loop on this (i.e skipping kinds without particles, and counting
     /// the number of particles for dimension of size 0 if Min1, i.e. a single value per kind)
-    /// this is the size of sLoop and pLoop. The real storage size is .data.length
+    /// this is the size of sLoop and pLoop. The real storage size is .dataLength
     size_t length(){
-        size_t iterRef=this.data.length;
+        size_t iterRef=this.dataLength;
         auto submap=this.arrayStruct.submapping;
         if((arrayStruct.flags&SegmentedArrayStruct.Flags.Min1)!=0){
             for (auto k=this.kRange.kStart;k<this.kRange.kEnd;++k){
@@ -471,9 +745,16 @@ final class SegmentedArray(T){
         }
         return iterRef;
     }
+    /// returns the length of the data actually stored (this is the "dimension" of this vector in T units)
+    size_t dataLength(){
+        auto aStruct=arrayMap.arrayStruct;
+        auto kStart=aStruct.kRange.kStart;
+        auto res=aStruct.kindStarts[kRange.kEnd-kStart]-aStruct.kindStarts[kRange.kStart-kStart];
+        return res;
+    }
     
     /// loops on the particles and each element of a multivaluated segmented array.
-    /// for consistency always skips kinds wiouth particles (even if Min1)
+    /// for consistency always skips kinds without particles (even if Min1)
     struct PLoop(int pFlags){
         size_t optimalBlockSize;
         SegmentedArray array;
@@ -485,23 +766,40 @@ final class SegmentedArray(T){
             ["if ((*finalRes)!=0) return;","if (auto res=dlg(*arrayPtr)){ *finalRes=res; return; }","",
             
             "if ((*finalRes)!=0) return;",`
-            for (size_t ii=0;ii<arrayNel;++ii){
+            for (size_t ii=0;ii<arrayMKindDims;++ii){
                 if (auto res=dlg(arrayPtr[ii])){ *finalRes=res; return; }
             }`,""]));
             return result;
         }
-        int opApply(int delegate(ref LocalPIndex lIdx,ref T)loopBody){
-            int result=0;
-            mixin(segArrayMonoLoop(pFlags,"iterContext",["array"],
-            "int delegate(ref LocalPIndex,ref T) dlg; int* finalRes;","",
-            "mainContext.dlg=loopBody;mainContext.finalRes=&result;","visitKind=visitKind&&(newK.pIndexPtrStart !is null);","",
-            ["if ((*finalRes)!=0) return;","if (auto res=dlg(localPIndex,*arrayPtr)){ *finalRes=res; return; }","",
+        static if ((pFlags&ParaFlags.DataLoop)!=0){
+            int opApply(int delegate(ref size_t gIdx,ref T)loopBody){
+                int result=0;
+                mixin(segArrayMonoLoop(pFlags,"iterContext",["array"],
+                "int delegate(ref size_t,ref T) dlg; int* finalRes; SegmentedArrayStruct aStruct;","",
+                "mainContext.dlg=loopBody;mainContext.finalRes=&result;mainContext.aStruct=array.arrayStruct;","visitKind=visitKind&&(newK.pIndexPtrStart !is null);","",
+                ["if ((*finalRes)!=0) return; size_t gIdx=aStruct.kindStarts[kind-aStruct.kRange.kStart]+start;","if (auto res=dlg(gIdx,*arrayPtr)){ *finalRes=res; return; } ++gIdx;","",
+
+                "if ((*finalRes)!=0) return; size_t gIdx=aStruct.kindStarts[kind-aStruct.kRange.kStart]+start;",`
+                for (size_t ii=0;ii<arrayMKindDims;++ii){
+                    if (auto res=dlg(gIdx,arrayPtr[ii])){ *finalRes=res; return; }
+                    ++gIdx;
+                }`,""]));
+                return result;
+            }
+        } else {
+            int opApply(int delegate(ref LocalPIndex lIdx,ref T)loopBody){
+                int result=0;
+                mixin(segArrayMonoLoop(pFlags,"iterContext",["array"],
+                "int delegate(ref LocalPIndex,ref T) dlg; int* finalRes;","",
+                "mainContext.dlg=loopBody;mainContext.finalRes=&result;","visitKind=visitKind&&(newK.pIndexPtrStart !is null);","",
+                ["if ((*finalRes)!=0) return;","if (auto res=dlg(localPIndex,*arrayPtr)){ *finalRes=res; return; }","",
             
-            "if ((*finalRes)!=0) return;",`
-            for (size_t ii=0;ii<arrayNel;++ii){
-                if (auto res=dlg(localPIndex,arrayPtr[ii])){ *finalRes=res; return; }
-            }`,""]));
-            return result;
+                "if ((*finalRes)!=0) return;",`
+                for (size_t ii=0;ii<arrayMKindDims;++ii){
+                    if (auto res=dlg(localPIndex,arrayPtr[ii])){ *finalRes=res; return; }
+                }`,""]));
+                return result;
+            }
         }
         int opApply(int delegate(ref PIndex pIdx,ref LocalPIndex lIdx,ref T)loopBody){
             int result=0;
@@ -510,7 +808,7 @@ final class SegmentedArray(T){
             "mainContext.dlg=loopBody;mainContext.finalRes=&result;","visitKind=visitKind&&(newK.pIndexPtrStart !is null);","",
             ["if ((*finalRes)!=0) return;","if (auto returnV=dlg(*pIndexPtr,localPIndex,*arrayPtr)){ *finalRes=returnV; return; }","",
             "if ((*finalRes)!=0) return;",`
-            for (size_t ii=0;ii<arrayNel;++ii){
+            for (size_t ii=0;ii<arrayMKindDims;++ii){
                 if (auto returnV=dlg(*pIndexPtr,localPIndex,arrayPtr[ii])){ *finalRes=returnV; return; }
             }`,""]));
            return result;
@@ -523,7 +821,7 @@ final class SegmentedArray(T){
             ["if ((*finalRes)!=0) return;","size_t ii=0; if (auto returnV=dlg(ii,*pIndexPtr,localPIndex,*arrayPtr)){ *finalRes=returnV; return; }","",
             
             "if ((*finalRes)!=0) return;",`
-            for (size_t ii=0;ii<arrayNel;++ii){
+            for (size_t ii=0;ii<arrayMKindDims;++ii){
                 if (auto returnV=dlg(ii,*pIndexPtr,localPIndex,arrayPtr[ii])){ *finalRes=returnV; return; }
             }`,""]));
            return result;
@@ -550,11 +848,26 @@ final class SegmentedArray(T){
         res.array=this;
         return res;
     }
-    
+    /// parallel data loop
+    PLoop!(ParaFlags.FullPara|ParaFlags.DataLoop) pDataLoop(size_t optSize=defaultOptimalBlockSize){
+        PLoop!(ParaFlags.FullPara|ParaFlags.DataLoop) res;
+        res.optimalBlockSize=optSize;
+        res.array=this;
+        return res;
+    }
+    /// sequential data loop
+    PLoop!(ParaFlags.Sequential|ParaFlags.DataLoop) sDataLoop(){
+        PLoop!(ParaFlags.Sequential|ParaFlags.DataLoop) res;
+        res.optimalBlockSize=defaultOptimalBlockSize;
+        res.array=this;
+        return res;
+    }
+
+    /// axpby
     void axpby(V)(SegmentedArray!(V) x,basicDtype a=1,basicDtype b=1){
-        if (x.arrayStruct is arrayStruct){
-            scope a1=a2NA(data.basicData);
-            scope a2=a2NA(x.data.basicData);
+        if (x.arrayStruct is arrayStruct && x.arrayMap.contiguous && arrayMap.contiguous){
+            scope a1=a2NA(support.basicData);
+            scope a2=a2NA(x.support.basicData);
             a1.axpby(a2,a,b);
             return;
         }
@@ -562,54 +875,54 @@ final class SegmentedArray(T){
         auto y=this;
         if(b==1){
             if(a==1){
-                mixin(segArrayMonoLoop(ParaFlags.FullPara,"iterContext",["y","x"],"","",
+                mixin(segArrayMonoLoop(ParaFlags.FullPara/+|ParaFlags.DataLoop+/,"iterContext",["y","x"],"","",
                 "",`
                 visitKind=visitKind&&(!outOfRange);
-                assert((newK.xNel<=1&&newK.yNel<=1)||newK.xNel==newK.yNel,"variable combination of Nel not implemented in axpby");`,"",
+                assert((newK.xMKindDims<=1&&newK.yMKindDims<=1)||newK.xMKindDims==newK.yMKindDims,"variable combination of MKindDims not implemented in axpby");`,"",
                 ["","*yPtr += convertTo!(T)(*xPtr);","",
                 
                 "",`
-                for (size_t ii=0;ii<xNel;++ii){
+                for (size_t ii=0;ii<xMKindDims;++ii){
                     yPtr[ii] += convertTo!(T)(xPtr[ii]);
                 }`,""]));
             } else {
                 alias optimalBlockSize optimalBlockSize_1;
-                mixin(segArrayMonoLoop(ParaFlags.FullPara,"iterContext2",["y","x"],
+                mixin(segArrayMonoLoop(ParaFlags.FullPara/+|ParaFlags.DataLoop+/,"iterContext2",["y","x"],
                 "basicDtype a;","_1",
                 "mainContext_1.a=a;",`
                 visitKind_1=visitKind_1&&(!outOfRange_1);
-                assert((newK_1.xNel<=1&&newK_1.yNel<=1)||newK_1.xNel==newK_1.yNel,"variable combination of Nel not implemented in axpby");`,"",
+                assert((newK_1.xMKindDims<=1&&newK_1.yMKindDims<=1)||newK_1.xMKindDims==newK_1.yMKindDims,"variable combination of MKindDims not implemented in axpby");`,"",
                 ["","*yPtr += convertTo!(T)((*xPtr)*this.a);","",
                 
                 "",`
-                for (size_t ii=0;ii<xNel;++ii){
+                for (size_t ii=0;ii<xMKindDims;++ii){
                     yPtr[ii] += convertTo!(T)(xPtr[ii]*this.a);
                 }`,""]));
             }
         } else if(b==0){
             alias optimalBlockSize optimalBlockSize_2;
-            mixin(segArrayMonoLoop(ParaFlags.FullPara,"iterContext_2",["y","x"],
+            mixin(segArrayMonoLoop(ParaFlags.FullPara/+|ParaFlags.DataLoop+/,"iterContext_2",["y","x"],
             "basicDtype a;","_2",
             "mainContext_2.a=a;",`
             visitKind_2=visitKind_2&&(!outOfRange_2);
-            assert((newK_2.xNel<=1&&newK_2.yNel<=1)||newK_2.xNel==newK_2.yNel,"variable combination of Nel not implemented in axpby");`,"",
+            assert((newK_2.xMKindDims<=1&&newK_2.yMKindDims<=1)||newK_2.xMKindDims==newK_2.yMKindDims,"variable combination of MKindDims not implemented in axpby");`,"",
             ["","*yPtr = convertTo!(T)((*xPtr)*a);","",
             
             "",`
-            for (size_t ii=0;ii<xNel;++ii){
+            for (size_t ii=0;ii<xMKindDims;++ii){
                 yPtr[ii] = convertTo!(T)(xPtr[ii]*a);
             }`,""]));
         } else {
             alias optimalBlockSize optimalBlockSize_3;
-            mixin(segArrayMonoLoop(ParaFlags.FullPara,"iterContext_3",["y","x"],
+            mixin(segArrayMonoLoop(ParaFlags.FullPara/+|ParaFlags.DataLoop+/,"iterContext_3",["y","x"],
             "basicDtype a;basicDtype b;","_3",
             "mainContext_3.a=a;mainContext_3.b=b;",`
             visitKind_3=visitKind_3&&(!outOfRange_3);
-            assert((newK_3.xNel<=1&&newK_3.yNel<=1)||newK_3.xNel==newK_3.yNel,"variable combination of Nel not implemented in axpby");`,"",
+            assert((newK_3.xMKindDims<=1&&newK_3.yMKindDims<=1)||newK_3.xMKindDims==newK_3.yMKindDims,"variable combination of MKindDims not implemented in axpby");`,"",
             ["","*yPtr = convertTo!(T)((*yPtr)*b+(*xPtr)*a);","",
             
             "",`
-            for (size_t ii=0;ii<xNel;++ii){
+            for (size_t ii=0;ii<xMKindDims;++ii){
                 yPtr[ii] = convertTo!(T)((*yPtr)*b+(*xPtr)*a);
             }`,""]));
         }
@@ -635,11 +948,11 @@ final class SegmentedArray(T){
             "T scale;","",
             "mainContext.scale=scale;",`
             visitKind=visitKind&&(!outOfRange);
-            assert((newK.xNel<=1&&newK.yNel<=1)||newK.xNel==newK.yNel,"variable combination of Nel not implemented in opMulAssign");`,"",
+            assert((newK.xMKindDims<=1&&newK.yMKindDims<=1)||newK.xMKindDims==newK.yMKindDims,"variable combination of MKindDims not implemented in opMulAssign");`,"",
             ["","*xPtr *= *yPtr;","",
             
             "",`
-            for (size_t ii=0;ii<xNel;++ii){
+            for (size_t ii=0;ii<xMKindDims;++ii){
                 xPtr[ii] *= convertTo!(T)(yPtr[ii]);
             }`,""]));
         } else {
@@ -648,25 +961,26 @@ final class SegmentedArray(T){
             "T scale;","_2",
             "mainContext_2.scale=scale;",`
             visitKind_2=visitKind_2&&(!outOfRange_2);
-            assert((newK_2.xNel<=1&&newK_2.yNel<=1)||newK_2.xNel==newK_2.yNel,"variable combination of Nel not implemented in opMulAssign");`,"",
+            assert((newK_2.xMKindDims<=1&&newK_2.yMKindDims<=1)||newK_2.xMKindDims==newK_2.yMKindDims,"variable combination of MKindDims not implemented in opMulAssign");`,"",
             ["","*xPtr = (*xPtr)*(*yPtr);","",
             
             "",`
-            for (size_t ii=0;ii<xNel;++ii){
+            for (size_t ii=0;ii<xMKindDims;++ii){
                 xPtr[ii] = convertTo!(T)(xPtr[ii]*yPtr[ii]);
             }`,""]));
         }
     }
     /// an array just like this, but with unitialized values
     SegmentedArray emptyCopy(){
-        if (pool){
-            return pool.getObj();
-        }
-        return new SegmentedArray(arrayStruct,BulkArray!(T).dummy,kRange,kindStarts.dup);
+        return arrayMap.newArray(kRange);
     }
     /// gives back the current array, its use after this call is an error
     void giveBack(){
-        if (pool){
+        if (guard!is null){
+            guard.release();
+            guard=null;
+        }
+        if (pool!is null){
             pool.giveBack(this);
         }
     }
@@ -695,7 +1009,8 @@ char[] segArrayContextExecStr(int pFlags,char[] iterName, char[][]namesLocal,cha
                 secondHalf.start=this.start+mid;`;
         foreach (name;namesLocal){
             visitorStr~=`
-                secondHalf.`~name~`PtrStart+=this.`~name~`Nel*mid;`;
+                secondHalf.`~name~`PtrStart=cast(typeof(secondHalf.`~name~`PtrStart))(
+                    cast(size_t)secondHalf.`~name~`PtrStart+this.`~name~`ByteIncrements*mid);`;
         }
         visitorStr~=`
                 Task("SegArrLoop2`~iterName~`",&secondHalf.exec`~execN~`).appendOnFinish(&secondHalf.giveBack).autorelease.submit;
@@ -720,7 +1035,8 @@ char[] segArrayContextExecStr(int pFlags,char[] iterName, char[][]namesLocal,cha
                         ++pIndexPtr;`;
     foreach (name;namesLocal){
         visitorStr~=`
-                        `~name~`Ptr+=`~name~`Nel;`;
+                        `~name~`Ptr=cast(typeof(`~name~`Ptr))(
+                            cast(size_t)`~name~`Ptr+`~name~`ByteIncrements);`;
     }
     visitorStr~=`
                     }
@@ -745,7 +1061,8 @@ char[] segArrayContextStr(int pFlags,char[] iterName, char[][]namesLocal,char[] 
     foreach (name;namesLocal){
         visitorStr~=`
         `~name~`.dtype* `~name~`PtrStart;
-        size_t `~name~`Nel;`;
+        size_t `~name~`MKindDims;
+        size_t `~name~`ByteIncrements;`;
     }
     visitorStr~=`
         size_t optimalBlockSize;
@@ -787,6 +1104,8 @@ char[] segArrayContextStr(int pFlags,char[] iterName, char[][]namesLocal,char[] 
 char[] segArrayKLoopStr(int pFlags,char[] iterName, char[][]namesLocal,
     char[]startLoop,char[] loopBody,char[]endLoop,char[] uniq="")
 {
+    bool dataLoop=(pFlags&ParaFlags.DataLoop)!=0;
+    auto pFlagsBase= (pFlags&ParaFlags.MaskBase);
     char[] visitorStr=`
     {
         `~iterName~` mainContext`~uniq~`;
@@ -796,7 +1115,7 @@ char[] segArrayKLoopStr(int pFlags,char[] iterName, char[][]namesLocal,
         mainContext`~uniq~`.optimalBlockSize=optimalBlockSize`~uniq~`;
         mainContext`~uniq~`.context=&mainContext`~uniq~`;`;
     visitorStr~=startLoop;
-    if (pFlags!=ParaFlags.Sequential){
+    if (pFlagsBase!=ParaFlags.Sequential){
         visitorStr~=`
         Task("segArrayKLoop`~iterName~`",delegate void(){`;
     }
@@ -809,9 +1128,19 @@ char[] segArrayKLoopStr(int pFlags,char[] iterName, char[][]namesLocal,
                     newK`~uniq~`=mainContext`~uniq~`.alloc();
                 }
                 newK`~uniq~`.kind=kIdx`~uniq~`;
-                newK`~uniq~`.start=0;
+                newK`~uniq~`.start=0;`;
+    if (dataLoop) {
+        visitorStr~=`
+                auto aStruct=`~namesLocal[0]~`.arrayStruct;
+                newK`~uniq~`.end=cast(ParticleIdx)
+                    ((aStruct.kindStarts[kIdx`~uniq~`-aStruct.kRange.kStart+1]-aStruct.kindStarts[kIdx`~uniq~`-aStruct.kRange.kStart])/
+                        (aStruct.mKindDims[kIdx`~uniq~`-`~namesLocal[0]~`.kRange.kStart]));`;
+    } else {
+        visitorStr~=`
                 newK`~uniq~`.end=
-                    `~namesLocal[0]~`.arrayStruct.submapping.nLocalParticles(kIdx`~uniq~`);
+                    `~namesLocal[0]~`.arrayStruct.submapping.nLocalParticles(kIdx`~uniq~`);`;
+    }
+    visitorStr~=`
                 auto submap`~uniq~`=`~namesLocal[0]~`.arrayStruct.submapping;
                 if (submap`~uniq~`.kindStarts[kIdx`~uniq~`-submap`~uniq~`.lKRange.kStart]<
                     submap`~uniq~`.kindStarts[kIdx`~uniq~`-submap`~uniq~`.lKRange.kStart+1])
@@ -825,18 +1154,21 @@ char[] segArrayKLoopStr(int pFlags,char[] iterName, char[][]namesLocal,
         visitorStr~=`
                 if (kIdx`~uniq~` in `~name~`.kRange){
                     auto ik`~uniq~`=cast(size_t)(kIdx`~uniq~`-`~name~`.kRange.kStart);
-                    if (`~name~`.kindStarts[ik`~uniq~`]<`~name~`.kindStarts[ik`~uniq~`+1]){
-                        newK`~uniq~`.`~name~`PtrStart=`~name~`._data.ptr+`~name~`.kindStarts[ik`~uniq~`];
-                        newK`~uniq~`.`~name~`Nel=`~name~`.arrayStruct.kindDim(kIdx`~uniq~`);
+                    if (`~name~`.mKindDims[ik`~uniq~`]!=0){
+                        newK`~uniq~`.`~name~`PtrStart=cast(typeof(newK`~uniq~`.`~name~`PtrStart))(`~name~`.basePtr+`~name~`.kindOffsets[ik`~uniq~`]);
+                        newK`~uniq~`.`~name~`MKindDims=`~name~`.mKindDims[ik`~uniq~`];
+                        newK`~uniq~`.`~name~`ByteIncrements=`~name~`.kindByteIncrements[ik`~uniq~`];
                     } else {
                         outOfRange`~uniq~`=true;
                         newK`~uniq~`.`~name~`PtrStart=null;
-                        newK`~uniq~`.`~name~`Nel=0;
+                        newK`~uniq~`.`~name~`MKindDims=0;
+                        newK`~uniq~`.`~name~`ByteIncrements=0;
                     }
                 } else {
                     outOfRange`~uniq~`=true;
                     newK`~uniq~`.`~name~`PtrStart=null;
-                    newK`~uniq~`.`~name~`Nel=0;
+                    newK`~uniq~`.`~name~`MKindDims=0;
+                    newK`~uniq~`.`~name~`ByteIncrements=0;
                 }`;
     }
     visitorStr~="\n";
@@ -844,7 +1176,7 @@ char[] segArrayKLoopStr(int pFlags,char[] iterName, char[][]namesLocal,
     visitorStr~="\n";
     visitorStr~=`
         }`;
-    if (pFlags!=ParaFlags.Sequential){
+    if (pFlagsBase!=ParaFlags.Sequential){
         visitorStr~=`
         }).autorelease.executeNow();`;
     }
@@ -874,6 +1206,7 @@ char[] segArrayMonoLoop(int pFlags,char[] iterName, char[][]namesLocal,
     char[] contextExtra,char[] uniq,char[]startLoop,char[]kindVisit,char[]endLoop,
     char[][]pVisitors)
 {
+    auto pFlagsBase=(pFlags &ParaFlags.MaskBase);
     char[] res="{\n";
     res~=segArrayContextStr(pFlags,iterName, namesLocal, contextExtra,uniq,
         pVisitors);
@@ -883,15 +1216,15 @@ char[] segArrayMonoLoop(int pFlags,char[] iterName, char[][]namesLocal,
                 bool multiDim`~uniq~`=false;`;
     foreach (n;namesLocal){
                 kVisit~=`
-                if (newK`~uniq~`.`~n~`Nel!=newK`~uniq~`.maxInnerDim && newK`~uniq~`.`~n~`Nel!=0 && newK`~uniq~`.`~n~`Nel!=1){
+                if (newK`~uniq~`.`~n~`MKindDims!=newK`~uniq~`.maxInnerDim && newK`~uniq~`.`~n~`MKindDims!=0 && newK`~uniq~`.`~n~`MKindDims!=1){
                     if (newK`~uniq~`.maxInnerDim!=1){
                         multiDim`~uniq~`=true;
                     }
-                    if (newK`~uniq~`.maxInnerDim<newK`~uniq~`.`~n~`Nel) newK`~uniq~`.maxInnerDim=newK`~uniq~`.`~n~`Nel;
+                    if (newK`~uniq~`.maxInnerDim<newK`~uniq~`.`~n~`MKindDims) newK`~uniq~`.maxInnerDim=newK`~uniq~`.`~n~`MKindDims;
                 }`;
     }
     if (pVisitors.length==3) {
-        if (pFlags==ParaFlags.Sequential){
+        if (pFlagsBase==ParaFlags.Sequential){
             kVisit~=`
                 newK`~uniq~`.exec0();`;
         } else {
@@ -901,7 +1234,7 @@ char[] segArrayMonoLoop(int pFlags,char[] iterName, char[][]namesLocal,
                 newK`~uniq~`=null;`;
         }
     } else if (pVisitors.length==6){
-        if (pFlags==ParaFlags.Sequential){
+        if (pFlagsBase==ParaFlags.Sequential){
             kVisit~=`
                 if (newK`~uniq~`.maxInnerDim==1){
                     newK`~uniq~`.exec0();
@@ -921,7 +1254,7 @@ char[] segArrayMonoLoop(int pFlags,char[] iterName, char[][]namesLocal,
                 newK`~uniq~`=null;`;
         }
     } else if (pVisitors.length==9){
-        if (pFlags==ParaFlags.Sequential){
+        if (pFlagsBase==ParaFlags.Sequential){
             kVisit~=`
                 if (!multiDim`~uniq~`){
                     if (newK`~uniq~`.maxInnerDim==1){
@@ -977,8 +1310,8 @@ char[] segArrayBinLoop(int pFlags,char[] iterName, char[][]namesLocal1, char[] c
         PIndex *pIndexPtr_1=outerLoopContext.pIndexPtrStart+cast(size_t)index_1;`;
     foreach(name;namesLocal1){
         preLocalLoop2~=`
-        `~name~`.dtype *`~name~`Ptr_1=outerLoopContext.`~name~`PtrStart
-                +outerLoopContext.`~name~`Nel*cast(size_t)outerLoopContext.lIndex;
+        auto `~name~`Ptr_1=cast(`~name~`.dtype *)(cast(size_t)outerLoopContext.`~name~`PtrStart
+                +outerLoopContext.`~name~`ByteIncrements*cast(size_t)outerLoopContext.lIndex;
         `;
     }
     char[][] pVis2;
@@ -1032,20 +1365,4 @@ char[] segArrayBinLoop(int pFlags,char[] iterName, char[][]namesLocal1, char[] c
     res~=kLoopExt;
     res~="\n}\n";
     return res;
-}
-
-/// a pool for segmented arrays
-class SegArrPool(T):Pool!(SegmentedArray!(T)){
-    SegmentedArrayStruct arrayStruct;
-    
-    this(SegmentedArrayStruct s,size_t bufferSpace=8*batchSize, size_t maxEl=16*batchSize){
-        super(null,bufferSpace,maxEl);
-        assert(s!is null,"arrayStruct must be non null");
-        arrayStruct=s;
-    }
-    SegmentedArray!(T) allocateNew(){
-        auto res=new SegmentedArray!(T)(arrayStruct);
-        res.pool=this;
-        return res;
-    }
 }

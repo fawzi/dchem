@@ -249,6 +249,10 @@ struct KindRange{
     bool valid(){
         return kStart<=kEnd && kEnd<KindIdx.init;
     }
+    size_t length(){
+        assert(kEnd!=KindIdx.init);
+        return kEnd-kStart;
+    }
 }
 
 /// particle index, stores particle level,particle kind and particle position in one single long

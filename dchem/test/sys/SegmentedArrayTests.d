@@ -57,6 +57,7 @@ struct RandomSegmentedArrayStruct(SegmentedArrayStruct.Flags flags=SegmentedArra
 
 struct RandomSegmentedArray(T,SegmentedArrayStruct.Flags flags=SegmentedArrayStruct.Flags.Min1,MappingKind mappingKind=MappingKind.KindPreserving,char[]nameBase=""){
     SegmentedArrayStruct arrayStruct;
+    SegArrMemMap!(T) arrayMap;
     Rand localR;
     SegmentedArray!(T)[] generatedArrays;
     
@@ -64,6 +65,7 @@ struct RandomSegmentedArray(T,SegmentedArrayStruct.Flags flags=SegmentedArrayStr
         RandomSegmentedArray res;
         res.localR=r;
         res.arrayStruct=arrayStruct;
+        res.arrayMap=new SegArrMemMap!(T)(arrayStruct);
         return res;
     }
     static RandomSegmentedArray randomGenerate(Rand r, ref bool acceptable){
@@ -76,7 +78,7 @@ struct RandomSegmentedArray(T,SegmentedArrayStruct.Flags flags=SegmentedArrayStr
     }
     /// returns a random segmented array, null if it can't generate it
     SegmentedArray!(T) randomArray(){
-        SegmentedArray!(T) res=new SegmentedArray!(T)(arrayStruct);
+        SegmentedArray!(T) res=arrayMap.newArray();
         for (int i=0;i<10;++i){
             bool acceptable=true;
             mkRandomArray(localR,res.data.data,acceptable);
@@ -97,7 +99,8 @@ struct RandomSegmentedArray(T,SegmentedArrayStruct.Flags flags=SegmentedArrayStr
 }
 
 void testLoop(RandomSegmentedArrayStruct!() aStruct,SizeLikeNumber!(3,1) s){
-    auto sarr=new SegmentedArray!(LocalPIndex)(aStruct.arrayStruct);
+    auto aMap=new SegArrMemMap!(LocalPIndex)(aStruct.arrayStruct);
+    auto sarr=aMap.newArray();
     
     size_t iterRef=sarr.length;
     size_t ii=0;
@@ -137,6 +140,12 @@ void testLoop(RandomSegmentedArrayStruct!() aStruct,SizeLikeNumber!(3,1) s){
         assert(v.data==i.data+1||(sarr.arrayStruct.kindDim(i.kind)==0 && v.kind==i.kind),"invalid value in sLoop");
     }
     
+    foreach(i,v;sarr.sLoop){
+        sarr[i,0]=LocalPIndex(sarr[i,0].data-1);
+        assert(sarr[i,0]==LocalPIndex(v.data-1),"element set failed");
+        sarr[i,0]=v;
+    }
+    
     ii=0;
     foreach(i,v;sarr.pLoop(s.val)){
         assert(v.data==i.data+1||(sarr.arrayStruct.kindDim(i.kind)==0 && v.kind==i.kind),"incorrect value in pLoop");
@@ -169,7 +178,6 @@ void testLoop(RandomSegmentedArrayStruct!() aStruct,SizeLikeNumber!(3,1) s){
         assert(i.data+2==v.data||(sarr.arrayStruct.kindDim(i.kind)==0 && v.kind==i.kind),"incorrect value in pLoop");
     }
 }
-
 
 /// all container tests (a template to avoid compilation and instantiation unless really requested)
 TestCollection segmentedArrayTests()(TestCollection superColl=null){

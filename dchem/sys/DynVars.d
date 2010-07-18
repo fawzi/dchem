@@ -31,9 +31,9 @@ class DynPVectStruct(T){
     SegmentedArrayStruct orientStruct;
     SegmentedArrayStruct dofStruct;
     
-    SegArrPool!(Vector!(T,3)) poolPos;
-    SegArrPool!(Quaternion!(T)) poolOrient;
-    SegArrPool!(T) poolDof;
+    SegArrMemMap!(Vector!(T,3)) poolPos;
+    SegArrMemMap!(Quaternion!(T)) poolOrient;
+    SegArrMemMap!(T) poolDof;
     
     /// equal if it has the same structures
     override equals_t opEquals(Object o){
@@ -70,17 +70,17 @@ class DynPVectStruct(T){
         if (baseVal!is null && baseVal.poolPos!is null && baseVal.poolPos.arrayStruct is posStruct){
             poolPos=baseVal.poolPos;
         } else {
-            poolPos=new SegArrPool!(Vector!(T,3))(posStruct);
+            poolPos=new SegArrMemMap!(Vector!(T,3))(posStruct);
         }
         if (baseVal!is null && baseVal.poolOrient!is null && baseVal.poolOrient.arrayStruct is orientStruct){
             poolOrient=baseVal.poolOrient;
         } else {
-            poolOrient=new SegArrPool!(Quaternion!(T))(orientStruct);
+            poolOrient=new SegArrMemMap!(Quaternion!(T))(orientStruct);
         }
         if (baseVal!is null && baseVal.poolDof!is null && baseVal.poolDof.arrayStruct is dofStruct){
             poolDof=baseVal.poolDof;
         } else {
-            poolDof=new SegArrPool!(T)(dofStruct);
+            poolDof=new SegArrMemMap!(T)(dofStruct);
         }
     }
     /// consolidates pools
@@ -314,9 +314,10 @@ struct DynPVector(T,int group){
     
     T opIndex(size_t idx){
         if (pos!is null){
-            auto len=3*pos.data.length;
+            auto len=3*pos.dataLength;
+            assert(pos.contiguous,"not implemented for non contiguous arrays");
             if (idx<len){
-                return pos.data[idx/3][idx%3];
+                return pos.support[idx/3][idx%3];
             }
             idx-=len;
         }
@@ -327,16 +328,18 @@ struct DynPVector(T,int group){
             idx-=9;
         }
         if (dof!is null){
-            auto len=dof.data.length;
+            assert(dof.contiguous,"not implemented for non contiguous arrays");
+            auto len=dof.dataLength;
             if (idx<len){
-                return dof.data[idx];
+                return dof.support[idx];
             }
             idx-=len;
         }
         if (orient!is null){
-            auto len=3*orient.data.length;
+            assert(pos.contiguous,"not implemented for non contiguous arrays");
+            auto len=3*orient.dataLength;
             if (idx<len){
-                return orient.data[idx/3].xyzw.cell[idx%3];
+                return orient.support[idx/3].xyzw.cell[idx%3];
             }
         }
         throw new Exception("index out of bounds",__FILE__,__LINE__);
@@ -344,9 +347,10 @@ struct DynPVector(T,int group){
 
     void opIndexAssign(T val,size_t idx){
         if (pos!is null){
-            auto len=3*pos.data.length;
+            assert(pos.contiguous,"not implemented for non contiguous arrays");
+            auto len=3*pos.dataLength;
             if (idx<len){
-                auto v=pos.data.ptrI(idx/3);
+                auto v=pos.support.ptrI(idx/3);
                 v.opIndexAssign(val,idx%3);
                 return;
             }
@@ -360,17 +364,19 @@ struct DynPVector(T,int group){
             idx-=9;
         }
         if (dof!is null){
-            auto len=dof.data.length;
+            assert(dof.contiguous,"not implemented for non contiguous arrays");
+            auto len=dof.dataLength;
             if (idx<len){
-                dof.data.opIndexAssign(val,idx);
+                dof.support.opIndexAssign(val,idx);
                 return;
             }
             idx-=len;
         }
         if (orient!is null){
-            auto len=3*orient.data.length;
+            assert(orient.contiguous,"not implemented for non contiguous arrays");
+            auto len=3*orient.dataLength;
             if (idx<len){
-                auto p=orient.data.ptrI(idx/3);
+                auto p=orient.support.ptrI(idx/3);
                 p.xyzw.cell[idx%3]=val;
                 auto n=p.xyzw.x*p.xyzw.x+p.xyzw.y*p.xyzw.y+p.xyzw.z*p.xyzw.z;
                 if (n>1){
@@ -388,16 +394,16 @@ struct DynPVector(T,int group){
     size_t length(){
         size_t len=0;
         if (pos!is null){
-            len+=3*pos.data.length;
+            len+=3*pos.dataLength;
         }
         if (cell!is null){
             len+=9;
         }
         if (dof!is null){
-            len+=dof.data.length;
+            len+=dof.dataLength;
         }
         if (orient!is null){
-            len+=3*orient.data.length;
+            len+=3*orient.dataLength;
         }
         return len;
     }
@@ -422,8 +428,9 @@ struct DynPVector(T,int group){
                 if (this.e!is null) return;
                 assert(this.v2.pos!is null && this.v2.pos!is null,"Invalid vectors in opDot");
                 assert(this.v2.pos.arrayStruct == this.v1.pos.arrayStruct,"Different array structs in opDot");
-                auto d1=a2NA(this.v1.pos.data.basicData);
-                auto d2=a2NA(this.v2.pos.data.basicData);
+                assert(this.v1.pos.contiguous && this.v2.pos.contiguous,"not implemented for non contiguous arrays");
+                auto d1=a2NA(this.v1.pos.support.basicData);
+                auto d2=a2NA(this.v2.pos.support.basicData);
                 auto rAtt=dot(d1,d2);
                 addRes(cast(U)rAtt);
             } catch (Exception eTmp){
@@ -435,9 +442,10 @@ struct DynPVector(T,int group){
                 if (this.e!is null) return;
                 assert(this.v2.dof!is null && this.v1.dof!is null,"Invalid vectors in opDot");
                 assert(this.v2.dof.arrayStruct == this.v1.dof.arrayStruct,"Different array structs in opDot");
+                assert(this.v1.dof.contiguous && this.v2.dof.contiguous,"not implemented for non contiguous arrays");
                 if (this.v1.dof.length==0) return;
-                auto d1=a2NA(this.v1.dof.data.data);
-                auto d2=a2NA(this.v2.dof.data.data);
+                auto d1=a2NA(this.v1.dof.support.data);
+                auto d2=a2NA(this.v2.dof.support.data);
                 auto rAtt=dot(d1,d2);
                 addRes(cast(U)rAtt);
             } catch(Exception eTmp){
@@ -449,11 +457,12 @@ struct DynPVector(T,int group){
                 if (this.e!is null) return;
                 assert(this.v2.orient!is null,"Different vectors in opDot");
                 assert(this.v2.orient.arrayStruct == this.v1.orient.arrayStruct,"Different array structs in opDot");
+                assert(this.v1.orient.contiguous && this.v2.orient.contiguous,"not implemented for non contiguous arrays");
                 if (this.v1.orient.length==0) return;
-                auto d1=NArray!(T,2)([cast(index_type)4*T.sizeof,T.sizeof],[cast(index_type)this.v1.orient.data.length,3],
-                    cast(index_type)0,(cast(T*)this.v1.orient.data.ptr)[0..4*this.v1.orient.data.length],0);
-                auto d2=NArray!(T,2)([cast(index_type)4*T.sizeof,T.sizeof],[cast(index_type)this.v2.orient.data.length,3],
-                    cast(index_type)0,(cast(T*)this.v2.orient.data.ptr)[0..4*this.v2.orient.data.length],0);
+                auto d1=NArray!(T,2)([cast(index_type)4*T.sizeof,T.sizeof],[cast(index_type)this.v1.orient.support.length,3],
+                    cast(index_type)0,(cast(T*)this.v1.orient.support.ptr)[0..4*this.v1.orient.support.length],0);
+                auto d2=NArray!(T,2)([cast(index_type)4*T.sizeof,T.sizeof],[cast(index_type)this.v2.orient.support.length,3],
+                    cast(index_type)0,(cast(T*)this.v2.orient.support.ptr)[0..4*this.v2.orient.support.length],0);
                 auto rAtt=dotAll(d1,d2);
                 addRes(cast(U)rAtt);
             } catch(Exception eTmp){
@@ -530,8 +539,9 @@ struct DynPVector(T,int group){
             }
         }
         void doDofLoop(){
+            assert(pVect.dof.contiguous,"not implemented for non contiguous arrays");
             try{
-                auto resTmp=pVect.dof.data.opApply(loopBody);
+                auto resTmp=pVect.dof.support.opApply(loopBody);
                 if (resTmp!=0) res=resTmp;
             } catch(Exception eTmp){
                 e=new Exception("exception in doDofLoop",__FILE__,__LINE__,eTmp);
@@ -540,7 +550,8 @@ struct DynPVector(T,int group){
         }
         void doOrientLoop(){
             try{
-                auto resTmp=pVect.orient.data.opApply(delegate int(ref Quaternion!(T) q){ // could be flattened using a NArray on pos.data...
+                assert(pVect.orient.contiguous,"not implemented for non contiguous arrays");
+                auto resTmp=pVect.orient.support.opApply(delegate int(ref Quaternion!(T) q){ // could be flattened using a NArray on pos.data...
                     if(auto r=loopBody(q.xyzw.x)) return r;
                     if(auto r=loopBody(q.xyzw.y)) return r;
                     if(auto r=loopBody(q.xyzw.z)) return r;
@@ -674,29 +685,30 @@ class DynPMatrix(T,int g1,int g2){
         assert(rowIdxs[1]==3*v2.pos.length,"unexpected size of v2.pos");
         assert(rowIdxs[2]-rowIdxs[1]==4*v2.orient.length,"unexpected size of v2.orient");
         assert(rowIdxs[3]-rowIdxs[2]==v2.dof.length,"unexpected size of v2.dof");
-        scope v2Pos=a2NA(v2.pos.data.basicData);
-        scope v2Orient=a2NA(v2.orient.data.basicData);
-        scope v2Dof=a2NA(v2.dof.data.basicData);
+        /+assert(v2.arrayMap.contiguous && v1.arrayMap.contiguous,"not implemented for non contiguous segArrays");
+        scope v2Pos=a2NA(v2.pos.support.basicData);
+        scope v2Orient=a2NA(v2.orient.support.basicData);
+        scope v2Dof=a2NA(v2.dof.support.basicData);
         T myscaleV2=scaleV2;
         if (v1.pos!is null){
-             assert(3*v1.pos.data.length==colIdxs[1],"unexpected size of v1.pos");
-             scope v0=a2NA(v1.pos.data.basicData);
+             assert(3*v1.pos.support.length==colIdxs[1],"unexpected size of v1.pos");
+             scope v0=a2NA(v1.pos.support.basicData);
              dot!(T,2,V,1,U,1)(blocks[0][0],v0,v2Pos,scaleRes,myscaleV2);
              dot!(T,2,V,1,U,1)(blocks[1][0],v0,v2Orient,scaleRes,myscaleV2);
              dot!(T,2,V,1,U,1)(blocks[2][0],v0,v2Dof,scaleRes,myscaleV2);
              myscaleV2=1;
          }
          if (v1.orient!is null){
-             assert(3*v1.orient.data.length==colIdxs[2]-colIdxs[1],"unexpected size of v1.orient");
-             scope v0=a2NA(v1.orient.data.basicData);
+             assert(3*v1.orient.support.length==colIdxs[2]-colIdxs[1],"unexpected size of v1.orient");
+             scope v0=a2NA(v1.orient.support.basicData);
              dot!(T,2,V,1,U,1)(blocks[0][1],v0,v2Pos,scaleRes,myscaleV2);
              dot!(T,2,V,1,U,1)(blocks[1][1],v0,v2Orient,scaleRes,myscaleV2);
              dot!(T,2,V,1,U,1)(blocks[2][1],v0,v2Dof,scaleRes,myscaleV2);
              myscaleV2=1;
          }
          if (v1.pos!is null){
-             assert(v1.dof.data.length==colIdxs[3]-colIdxs[2],"unexpected size of v1.pos");
-             scope v0=a2NA(v1.dof.data.basicData);
+             assert(v1.dof.support.length==colIdxs[3]-colIdxs[2],"unexpected size of v1.pos");
+             scope v0=a2NA(v1.dof.support.basicData);
              dot!(T,2,V,1,U,1)(blocks[0][2],v0,v2Pos,scaleRes,myscaleV2);
              dot!(T,2,V,1,U,1)(blocks[1][2],v0,v2Orient,scaleRes,myscaleV2);
              dot!(T,2,V,1,U,1)(blocks[2][2],v0,v2Dof,scaleRes,myscaleV2);
@@ -704,7 +716,7 @@ class DynPMatrix(T,int g1,int g2){
          }
         if (myscaleV2!=1){
             v2*=myscaleV2;
-        }
+        }+/
     }
     /// transposed matrix times the vector v1 in v2: v2 = scaleV2*v2+scaleRes*M^T*v1
     void matTVectMult(V,U)(DynPVector!(V,g1)v1,DynPVector!(U,g2)v2,U scaleRes=1,U scaleV2=0){
@@ -713,29 +725,30 @@ class DynPMatrix(T,int g1,int g2){
         assert(colIdxs[1]==3*v2.pos.length,"unexpected size of v2.pos");
         assert(colIdxs[2]-colIdxs[1]==4*v2.orient.length,"unexpected size of v2.orient");
         assert(colIdxs[3]-colIdxs[2]==v2.dof.length,"unexpected size of v2.dof");
-        scope v2Pos=a2NA(v2.pos.data.basicData);
-        scope v2Orient=a2NA(v2.orient.data.basicData);
-        scope v2Dof=a2NA(v2.dof.data.basicData);
+        assert(v2.arrayMap.contiguous && v1.arrayMap.contiguous,"not implemented for non contiguous segArrays");
+        scope v2Pos=a2NA(v2.pos.support.basicData);
+        scope v2Orient=a2NA(v2.orient.support.basicData);
+        scope v2Dof=a2NA(v2.dof.support.basicData);
         T myscaleV2=scaleV2;
         if (v1.pos!is null){
-            assert(3*v1.pos.data.length==colIdxs[1],"unexpected size of v1.pos");
-            scope v0=a2NA(v1.pos.data.basicData);
+            assert(3*v1.pos.support.length==colIdxs[1],"unexpected size of v1.pos");
+            scope v0=a2NA(v1.pos.support.basicData);
             dot(blocks[0][0],v0,v2Pos,scaleRes,myscaleV2,0,0);
             dot(blocks[0][1],v0,v2Orient,scaleRes,myscaleV2,0,0);
             dot(blocks[0][2],v0,v2Dof,scaleRes,myscaleV2,0,0);
             myscaleV2=1;
         }
         if (v1.orient!is null){
-            assert(3*v1.orient.data.length==colIdxs[2]-colIdxs[1],"unexpected size of v1.orient");
-            scope v0=a2NA(v1.orient.data.basicData);
+            assert(3*v1.orient.support.length==colIdxs[2]-colIdxs[1],"unexpected size of v1.orient");
+            scope v0=a2NA(v1.orient.support.basicData);
             dot(blocks[1][0],v0,v2Pos,scaleRes,myscaleV2,0,0);
             dot(blocks[1][1],v0,v2Orient,scaleRes,myscaleV2,0,0);
             dot(blocks[1][2],v0,v2Dof,scaleRes,myscaleV2,0,0);
             myscaleV2=1;
         }
         if (v1.pos!is null){
-            assert(v1.dof.data.length==colIdxs[3]-colIdxs[2],"unexpected size of v1.pos");
-            scope v0=a2NA(v1.dof.data.basicData);
+            assert(v1.dof.support.length==colIdxs[3]-colIdxs[2],"unexpected size of v1.pos");
+            scope v0=a2NA(v1.dof.support.basicData);
             dot(blocks[2][0],v0,v2Pos,scaleRes,myscaleV2,0,0);
             dot(blocks[2][1],v0,v2Orient,scaleRes,myscaleV2,0,0);
             dot(blocks[2][2],v0,v2Dof,scaleRes,myscaleV2,0,0);
@@ -842,9 +855,18 @@ class DynamicsVarsStruct(T){
             if (v.orient is null) v.orient=pool.newOrient();
             if (v.dof is null)    v.dof=pool.newDof();
         } else {
-            if (v.pos is null)    v.pos=new SegmentedArray!(Vector!(V,3))(pool.posStruct);
-            if (v.orient is null) v.orient=new SegmentedArray!(Quaternion!(V))(pool.orientStruct);
-            if (v.dof is null)    v.dof=new SegmentedArray!(V)(pool.dofStruct);
+            if (v.pos is null)    {
+                auto vMap=new SegArrMemMap!(Vector!(V,3))(pool.posStruct);
+                v.pos=vMap.newArray();
+            }
+            if (v.orient is null) {
+                auto oMap=new SegArrMemMap!(Vector!(V,3))(pool.orientStruct);
+                v.orient=oMap.newArray();
+            }
+            if (v.dof is null)    {
+                auto dofMap=new SegArrMemMap!(V)(pool.dofStruct);
+                v.dof=dofMap.newArray();
+            }
         }
     }
     

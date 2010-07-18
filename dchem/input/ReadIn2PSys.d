@@ -130,12 +130,14 @@ ParticleSys!(T) readIn2PSys(T)(ReadSystem rIn,
     // particleStruct, superParticle
     index_type[] kindDims=new index_type[](cast(size_t)fullRange.kEnd);
     kindDims[]=1;
-    auto particlesStruct=new SegmentedArrayStruct("particleStruct",fullSystem,fullRange,kindDims);
-    auto particles=new SegmentedArray!(PIndex)(particlesStruct,sortedPIndex,fullRange,kindStarts);
-    auto superParticle=new SegmentedArray!(PIndex)(particlesStruct);
+    auto particlesStruct=new SegmentedArrayStruct("particlesStruct",fullSystem,fullRange,kindDims);
+    auto pMapIdx=new SegArrMemMap!(PIndex)(particlesStruct,KindRange.all);
+    auto particles=pMapIdx.newArray(sortedPIndex,fullRange);
+    auto superParticle=pMapIdx.newArray();
     auto resShift=levels[0].kEnd;
     auto chainShift=levels[1].kEnd;
-    scope nSub=new SegmentedArray!(size_t)(particlesStruct,BulkArray!(size_t).dummy,KindRange(levels[0].kEnd,levels[3].kEnd));
+    auto pMapKSizeT=new SegArrMemMap!(size_t)(particlesStruct,KindRange(levels[0].kEnd,levels[3].kEnd));
+    scope nSub=pMapKSizeT.newArray();
     nSub[]=0;
     foreach(p;rIn.particles){
         auto resIdx=PIndex(resShift+p.resIndex.kind,p.resIndex.particle);
@@ -148,11 +150,11 @@ ParticleSys!(T) readIn2PSys(T)(ReadSystem rIn,
         atomicAdd(*(nSub.ptrI(p,0)),cast(size_t)1);
     }
     auto sysIdx=PIndex(levels[3].kStart,0);
-    superParticle[levels[2]].data[]=sysIdx;
-    *nSub.ptrI(sysIdx,0)=superParticle[levels[2]].data.length;
+    superParticle[levels[2]].support[]=sysIdx;
+    *nSub.ptrI(sysIdx,0)=superParticle[levels[2]].support.length;
     
     /// kinds particleKinds
-    auto kindsData=BulkArray!(ParticleKind)(rIn.pKinds.length+rIn.resKinds.length+rIn.chainKinds.length+2);
+    auto kindsData=BulkArray!(ParticleKind)(rIn.pKinds.length+rIn.resKinds.length+rIn.chainKinds.length+1);
     foreach(i,pk; rIn.pKinds){
         kindsData[i]=pkindsMap(pk,cast(LevelIdx)0,pk.nextParticle.kind);
     }
@@ -168,7 +170,8 @@ ParticleSys!(T) readIn2PSys(T)(ReadSystem rIn,
     auto kindDims2=new index_type[](kindDims.length);
     kindDims2[]=0;
     auto kindsStruct=new SegmentedArrayStruct("kindsStruct",fullSystem,fullRange,kindDims2,SegmentedArrayStruct.Flags.Min1);
-    auto particleKinds=new SegmentedArray!(ParticleKind)(kindsStruct,kindsData);
+    auto kindMapPKind=new SegArrMemMap!(ParticleKind)(kindsStruct,KindRange.all);
+    auto particleKinds=kindMapPKind.newArray(kindsData);
     
     /// subparticles
     index_type[] nSubparticles=new index_type[](cast(size_t)levels[3].kEnd);
@@ -200,8 +203,9 @@ ParticleSys!(T) readIn2PSys(T)(ReadSystem rIn,
         }
     }
 
-    auto subParticlesStruct=new SegmentedArrayStruct("subparticleStruct",fullSystem,KindRange(levels[1].kStart,levels[3].kEnd),nSubparticles[levels[1].kStart..levels[3].kEnd]);
-    auto subParticleIdxs=new SegmentedArray!(PIndex)(subParticlesStruct);
+    auto subParticlesStruct=new SegmentedArrayStruct("subParticlesStruct",fullSystem,KindRange(levels[1].kStart,levels[3].kEnd),nSubparticles[levels[1].kStart..levels[3].kEnd]);
+    auto subPMapPIndex=new SegArrMemMap!(PIndex)(subParticlesStruct);
+    auto subParticleIdxs=subPMapPIndex.newArray();
     nSub[]=0;
     foreach(lIdx,superP;superParticle[KindRange(levels[0].kStart,levels[2].kEnd)].sLoop){ // sequential, we need to guarantee a deterministic result
         nSub.dtype* idxAtt;
@@ -220,7 +224,8 @@ ParticleSys!(T) readIn2PSys(T)(ReadSystem rIn,
         }
     }
     if (e!is null) throw e;
-    if (nSub.data.guard!is null) nSub.data.guard.release();
+    pMapKSizeT.rmUser();
+    nSub.giveBack();
     
     // sysStruct
     auto sysStruct=new SysStruct(rIn.name, fullSystem, externalOrder, levels,
@@ -287,9 +292,10 @@ ParticleSys!(T) artificialPSys(T)(size_t nPos, size_t nOrient,size_t nDof,
     // particleStruct, superParticle
     index_type[] kindDims=new index_type[](cast(size_t)fullRange.kEnd);
     kindDims[]=1;
-    auto particlesStruct=new SegmentedArrayStruct("particleStruct",fullSystem,fullRange,kindDims);
-    auto particles=new SegmentedArray!(PIndex)(particlesStruct,sortedPIndex,fullRange,kindStarts);
-    auto superParticle=new SegmentedArray!(PIndex)(particlesStruct);
+    auto particlesStruct=new SegmentedArrayStruct("particlesStruct",fullSystem,fullRange,kindDims);
+    auto partMapPIndex=new SegArrMemMap!(PIndex)(particlesStruct);
+    auto particles=partMapPIndex.newArray(sortedPIndex);
+    auto superParticle=partMapPIndex.newArray();
     
     superParticle[LocalPIndex(0,0),0]=PIndex();
 
@@ -306,7 +312,8 @@ ParticleSys!(T) artificialPSys(T)(size_t nPos, size_t nOrient,size_t nDof,
     auto kindDims2=new index_type[](kindDims.length);
     kindDims2[]=0;
     auto kindsStruct=new SegmentedArrayStruct("kindsStruct",fullSystem,fullRange,kindDims2,SegmentedArrayStruct.Flags.Min1);
-    auto particleKinds=new SegmentedArray!(ParticleKind)(kindsStruct,kindsData);
+    auto kindsMapPKind=new SegArrMemMap!(ParticleKind)(kindsStruct);
+    auto particleKinds=kindsMapPKind.newArray(kindsData);
     
     /// subparticles
     index_type[] nSubparticles=new index_type[](1);
@@ -324,9 +331,11 @@ ParticleSys!(T) artificialPSys(T)(size_t nPos, size_t nOrient,size_t nDof,
         }
     }
 
-    auto subParticlesStruct=new SegmentedArrayStruct("subparticleStruct",fullSystem,KindRange(levels[1].kStart,levels[$-1].kEnd),nSubparticles[levels[1].kStart..levels[$-1].kEnd]);
-    auto subParticleIdxs=new SegmentedArray!(PIndex)(subParticlesStruct);
-    scope nSub=new SegmentedArray!(size_t)(particlesStruct,BulkArray!(size_t).dummy,KindRange(levels[0].kEnd,levels[$-1].kEnd));
+    auto subParticlesStruct=new SegmentedArrayStruct("subParticlesStruct",fullSystem,KindRange(levels[1].kStart,levels[$-1].kEnd),nSubparticles[levels[1].kStart..levels[$-1].kEnd]);
+    auto subPMapPIdx=new SegArrMemMap!(PIndex)(subParticlesStruct);
+    auto subParticleIdxs=subPMapPIdx.newArray();
+    auto pMapSizeT=new SegArrMemMap!(size_t)(particlesStruct,KindRange(levels[0].kEnd,levels[$-1].kEnd));
+    scope nSub=pMapSizeT.newArray();
     nSub[]=0;
     foreach(lIdx,superP;superParticle[KindRange(levels[0].kStart,levels[$-2].kEnd)].sLoop){ // sequential, we need to guarantee a deterministic result
         nSub.dtype* idxAtt;
@@ -345,7 +354,8 @@ ParticleSys!(T) artificialPSys(T)(size_t nPos, size_t nOrient,size_t nDof,
         }
     }
     if (e!is null) throw e;
-    if (nSub.data.guard!is null) nSub.data.guard.release();
+    pMapSizeT.rmUser();
+    nSub.giveBack(); nSub=null;
     
     // sysStruct
     auto sysStruct=new SysStruct("sys", fullSystem, externalOrder, levels,
