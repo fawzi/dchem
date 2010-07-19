@@ -18,7 +18,7 @@ int main(char[][]args){
         sout("Expected a single argument (inputfile)\n");
         return 1;
     }
-    auto parser=new TextParser!(char)(toReaderT!(char)((new DataFileInput(args[1])).input));
+    auto parser=new TextParser!(char)(toReaderT!(char)((new DataFileInput(args[1])).file.input));
     SegmentedArray!(real) sArr;
     auto rFile=new RootInput();
     rFile.readInput(parser,serr.call);
