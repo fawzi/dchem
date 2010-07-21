@@ -23,6 +23,7 @@ import blip.narray.NArray;
 import gobo.blas.Types:BlasTypeForType;
 import blip.core.Traits: ctfe_i2a;
 import dchem.sys.DynVars;
+import blip.math.Math: min,max;
 
 /// various levels of duplication
 enum PSDupLevel{

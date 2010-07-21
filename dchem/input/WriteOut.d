@@ -9,6 +9,7 @@ import dchem.sys.SegmentedArray;
 import blip.serialization.Serialization;
 import blip.sync.Atomic;
 import blip.container.BulkArray;
+import blip.util.Grow;
 import stdlib=blip.stdc.stdlib;
 
 /// writes out an xyz file

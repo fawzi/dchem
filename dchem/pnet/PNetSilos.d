@@ -30,11 +30,16 @@ class RemotePointEval(T):RemoteTask{
     }
     
 }
-class MasterCalculator{
+class MasterCalculator:Sampler{
+    InputField method;
+    mixin myFieldMixin!();
+
+    ParticleSys!(Real) refPointReal;
+    ParticleSys!(LowP) refPointLowP;
+
     Set!(PointAndDir) inExploration; /// point directions that are in exploration
     Set!(Point) inEvaluation; /// points that are in evaluation
     Set!(Point) toEvaluate; /// points that should be avaluated
-    Deque!(CalculationContext) waitingContexts; /// contexts that can be used to do evaluations
     size_t overPrepare=0; /// number of extra calculation to prepare
     ExplorerI!(T)[] explorers; /// explorers that can create new work
     

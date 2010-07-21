@@ -20,6 +20,7 @@ import blip.io.Console;
 import blip.util.Convert;
 import blip.core.Traits;
 import blip.container.Cache;
+import blip.stdc.string: memcpy;
 
 enum ParaFlags{
     FullPara,
