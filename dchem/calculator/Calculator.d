@@ -20,6 +20,7 @@ import tango.sys.Process;
 import blip.io.IOArray;
 import blip.io.NullStream;
 import tango.io.vfs.model.Vfs;
+public import dchem.calculator.CalculatorModels;
 
 /// Limits the number of contexts that can be created/active
 class ContextLimiter:InputElement{
@@ -133,7 +134,7 @@ class ContextLimiterClient:Method{
             res=false;
             log("contextLimiter has to be valid, and of type dchem.ContextLimiter in ")(myFieldName)("\n");
         }
-        if (method is null || method.method() is null){
+        if (method is null || cast(Method)method.contentObj() is null){
             res=false;
             log("method has to be valid, and a method in ")(myFieldName)("\n");
         }
@@ -141,16 +142,16 @@ class ContextLimiterClient:Method{
     }
     /// gets a calculator to perform calculations with this method, if possible reusing the given history
     CalculationContext getCalculator(bool wait, ubyte[]history){
-        assert(cl!is null && method.method!is null);
-        return cl.createContext(&method.method.getCalculator,wait,history);
+        assert(cl!is null && cast(Method)method.contentObj() !is null);
+        return cl.createContext(&(cast(Method)method.contentObj).getCalculator,wait,history);
     }
     /// drops the history with the given id
     void dropHistory(ubyte[]history){
-        method.method.dropHistory(history);
+        (cast(Method)method.contentObj).dropHistory(history);
     }
     /// clears all history
     void clearHistory(){
-        method.method.clearHistory();
+        (cast(Method)method.contentObj).clearHistory();
     }
     /// url to access this from other processes
     char[] exportedUrl(){
@@ -185,7 +186,6 @@ class CalcContext:CalculationContext{
     ChangeLevel _changeLevel; /// 0: first time, 1: all changed, 2: only pos changed, 3: small pos change, 4: extrapolable pos change
     Method _method;
     Real maxChange;
-    MultiConstraint _constraints;
     
     void localExec(RemoteTask r){
         r.execute(Variant(this));
@@ -194,11 +194,12 @@ class CalcContext:CalculationContext{
     this(char[] contextId){
         this._contextId=contextId;
         _nCenter=new NotificationCenter();
-        _constraints=new MultiConstraint();
         // register to the world...
     }
-    MultiConstraint constraints(){ return _constraints; }
+    ConstraintI!(Real) constraintsReal(){ return null; }
+    ConstraintI!(LowP) constraintsLowP(){ return null; }
     char[] contextId(){ return _contextId; }
+    Precision activePrecision() { return Precision.Real; }
     ParticleSys!(Real) pSysReal() { return _pSysReal; }
     ParticleSys!(LowP) pSysLowP() { return _pSysLowP; }
     NotificationCenter nCenter()  { return _nCenter; }

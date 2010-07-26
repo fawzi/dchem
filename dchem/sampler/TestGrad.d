@@ -23,7 +23,6 @@ class TestGrad:Sampler{
     Real maxOffsetCFact=0.5;
     Real maxEDiffErr=1.0e-5;
     InputField method;
-    mixin myFieldMixin!();
     CharSink _log;
     ubyte[] history;
     ParticleSys!(Real) centralPointReal;
@@ -39,6 +38,7 @@ class TestGrad:Sampler{
         }
     }
     
+    mixin myFieldMixin!();
     mixin(serializeSome("dchem.TestGrad",
     `dx: the discretization amount (derivatives are approximated with +dx/2..dx/2)
     maxDxFact: maximum distance between the two evaluation points (needs to be larger than 1)
@@ -115,7 +115,7 @@ class TestGrad:Sampler{
             int i=0;
             bool iterator(ref CalculationContext ctx){
                 if (i<2) {
-                    ctx=context.method.method.getCalculator(true,context.history);
+                    ctx=(cast(Method)context.method.contentObj).getCalculator(true,context.history);
                     ++i;
                     return true;
                 }
@@ -187,7 +187,7 @@ class TestGrad:Sampler{
     
     /// does the checks
     void run(){
-        auto m=method.method(); // method.method;
+        auto m=cast(Method)method.contentObj(); // method.method;
         if (m is null) throw new Exception("invalid method in field "~myFieldName,__FILE__,__LINE__);
         CalculationContext c=m.getCalculator(true,null);
         size_t nDim;
@@ -226,7 +226,7 @@ class TestGrad:Sampler{
     bool verify(CharSink log){
         bool res=true;
         auto s=dumper(log);
-        if (method is null || method.typeId!=InputField.TypeId.Method){
+        if (method is null || cast(Method)method.contentObj is null){
             s("Error: method has to be valid and contain a method in field ")(myFieldName)("\n");
             res=false;
         }

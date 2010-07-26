@@ -15,6 +15,7 @@ import Path=tango.io.Path;
 import blip.io.Console;
 import dchem.util.ExecCmd;
 import dchem.calculator.ProcContext;
+import dchem.input.ReadCoordFile;
 
 class TemplateExecuter: Method {
     InputField superTemplate;
@@ -221,10 +222,10 @@ class ExecuterContext:CalcContext{
         
         templateH.evalTemplates(0,true);
         execCmd(input.setupCommand());
-        if (input.startConfig is null || input.startConfig.config is null){
+        if (input.startConfig is null || cast(Config)input.startConfig.contentObj is null){
             throw new Exception("Error: startConfiguration in field "~input.myFieldName~" should be set to a valid configuration",__FILE__,__LINE__);
         }
-        auto pSys=input.startConfig.config.particleSysReal();
+        auto pSys=(cast(Config)input.startConfig.contentObj).particleSysReal();
         
         if (pSys.nCenter is null)
             pSys.nCenter=nCenter;

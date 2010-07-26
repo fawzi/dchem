@@ -24,7 +24,7 @@ class SinglePoint:Sampler{
     
     /// does the single point calculation
     void run(){
-        auto m=method.method; // method.method;
+        auto m=cast(Method)method.contentObj;
         if (m is null) throw new Exception("invalid method in field "~myFieldName,__FILE__,__LINE__);
         sout("preparing to calculate\n");
         CalculationContext c=m.getCalculator(true,null);
@@ -54,7 +54,7 @@ class SinglePoint:Sampler{
     bool verify(CharSink log){
         bool res=true;
         auto s=dumper(log);
-        if (method is null || method.typeId!=InputField.TypeId.Method){
+        if (method is null || cast(Method)method.contentObj){
             s("Error: method has to be valid and contain a method")(myFieldName)("\n");
             res=false;
         }
