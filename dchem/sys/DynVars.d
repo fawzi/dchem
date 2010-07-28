@@ -22,6 +22,7 @@ enum{
     DxType=1,
     DualDxType=2,
 }
+
 /// this is at the same time a pool and a structure for a DynPVector
 /// setup as follow: init, update *Structs, possibly consolidateStructs, allocPools, possibly consolidate
 class DynPVectStruct(T){
@@ -299,7 +300,15 @@ struct DynPVector(T,int group){
         auto x=this;
         mixin(dynPVectorOp(["x","y"],"x*=y;",true,false));
     }
-    
+    /// outer product supported only if t or u are scalars
+    static V outerOp(T,U,V,R,M)(T t,U u,V v,R scaleA,M scaleRes){
+        static if(is(T.dtype)){
+            v.axpby(t,u*scaleA,scaleRes);
+        } else {
+            v.axpby(u,t*scaleA,scaleRes);
+        }
+        return v;
+    }
     void opSliceAssign(V)(DynPVector!(V,group) b){
         enum{ weak=false }
         auto a=this;
@@ -321,12 +330,6 @@ struct DynPVector(T,int group){
             }
             idx-=len;
         }
-        if (cell!is null){
-            if (idx<9){
-                return cell.h.cell[idx];
-            }
-            idx-=9;
-        }
         if (dof!is null){
             assert(dof.contiguous,"not implemented for non contiguous arrays");
             auto len=dof.dataLength;
@@ -342,6 +345,12 @@ struct DynPVector(T,int group){
                 return orient.support[idx/3].xyzw.cell[idx%3];
             }
         }
+        if (cell!is null){
+            if (idx<9){
+                return cell.h.cell[idx];
+            }
+            idx-=9;
+        }
         throw new Exception("index out of bounds",__FILE__,__LINE__);
     }
 
@@ -355,13 +364,6 @@ struct DynPVector(T,int group){
                 return;
             }
             idx-=len;
-        }
-        if (cell!is null){
-            if (idx<9){
-                cell.h.cell[idx]=val;
-                return;
-            }
-            idx-=9;
         }
         if (dof!is null){
             assert(dof.contiguous,"not implemented for non contiguous arrays");
@@ -387,6 +389,13 @@ struct DynPVector(T,int group){
                 }
                 return;
             }
+        }
+        if (cell!is null){
+            if (idx<9){
+                cell.h.cell[idx]=val;
+                return;
+            }
+            idx-=9;
         }
         throw new Exception("index out of bounds",__FILE__,__LINE__);
     }
@@ -517,20 +526,48 @@ struct DynPVector(T,int group){
     T norm2(){
         return cast(T)sqrt(this.opDot(*this));
     }
-    
-    struct OpApplyStruct{
+    // this is *really* badly hacked in
+    struct OpApplyStruct(int para){
         int res=0;
         Exception e=null;
         int delegate(ref T)loopBody;
+        int delegate(ref size_t,ref T)loopBody2;
         DynPVector *pVect;
         
         void doPosLoop(){
             if (this.res!=0) return;
             try{
-                auto resTmp=pVect.pos.pLoop.opApply(delegate int(ref Vector!(T,3) v){ // could be flattened using a NArray on pos.data like the dot...
+                static if (para!=0){
+                    auto loopS=pVect.pos.pDataLoop;
+                } else {
+                    auto loopS=pVect.pos.sDataLoop;
+                }
+                auto resTmp=loopS.opApply(delegate int(ref Vector!(T,3) v){ // could be flattened using a NArray on pos.data like the dot...
                     if (auto res=loopBody(v.x)) return res;
                     if (auto res=loopBody(v.y)) return res;
                     if (auto res=loopBody(v.z)) return res;
+                    return 0;
+                });
+            } catch (Exception eTmp){
+                e=new Exception("exception in doPosLoop",__FILE__,__LINE__,eTmp);
+                res=-1;
+            }
+        }
+        void doPosLoop2(){
+            if (this.res!=0) return;
+            try{
+                static if (para!=0){
+                    auto loopS=pVect.pos.pDataLoop;
+                } else {
+                    auto loopS=pVect.pos.sDataLoop;
+                }
+                auto resTmp=loopS.opApply(delegate int(ref size_t i,ref Vector!(T,3) v){ // could be flattened using a NArray on pos.data like the dot...
+                    auto iB=3*i;
+                    if (auto res=loopBody2(iB,v.x)) return res;
+                    auto iB1=iB+1;
+                    if (auto res=loopBody2(iB1,v.y)) return res;
+                    auto iB2=iB+2;
+                    if (auto res=loopBody2(iB2,v.z)) return res;
                     return 0;
                 });
             } catch (Exception eTmp){
@@ -548,6 +585,20 @@ struct DynPVector(T,int group){
                 res=-1;
             }
         }
+        void doDofLoop2(){
+            assert(pVect.dof.contiguous,"not implemented for non contiguous arrays");
+            try{
+                size_t i0=pVect.pos.arrayStruct.dataLength *3;
+                auto resTmp=pVect.dof.support.opApply(delegate int(ref size_t i,ref T el){
+                    auto ii=i0+i;
+                    return loopBody2(ii,el);
+                });
+                if (resTmp!=0) res=resTmp;
+            } catch(Exception eTmp){
+                e=new Exception("exception in doDofLoop",__FILE__,__LINE__,eTmp);
+                res=-1;
+            }
+        }
         void doOrientLoop(){
             try{
                 assert(pVect.orient.contiguous,"not implemented for non contiguous arrays");
@@ -555,6 +606,26 @@ struct DynPVector(T,int group){
                     if(auto r=loopBody(q.xyzw.x)) return r;
                     if(auto r=loopBody(q.xyzw.y)) return r;
                     if(auto r=loopBody(q.xyzw.z)) return r;
+                    q.normalize();
+                });
+                if (resTmp!=0) res=resTmp;
+            } catch(Exception eTmp){
+                e=new Exception("exception in doOrientLoop",__FILE__,__LINE__,eTmp);
+                res=-1;
+            }
+        }
+        void doOrientLoop2(){
+            try{
+                size_t i0=3*pVect.pos.arrayStruct.dataLength+pVect.dof.arrayStruct.dataLength;
+                assert(pVect.orient.contiguous,"not implemented for non contiguous arrays");
+                auto resTmp=pVect.orient.support.opApply(delegate int(ref size_t i,ref Quaternion!(T) q){ // could be flattened using a NArray on pos.data...
+                    auto iQ0=3*i+i0;
+                    if(auto r=loopBody2(iQ0,q.xyzw.x)) return r;
+                    auto iQ1=iQ0+1;
+                    if(auto r=loopBody2(iQ1,q.xyzw.y)) return r;
+                    auto iQ2=iQ0+2;
+                    if(auto r=loopBody2(iQ2,q.xyzw.z)) return r;
+                    q.normalize();
                 });
                 if (resTmp!=0) res=resTmp;
             } catch(Exception eTmp){
@@ -564,28 +635,68 @@ struct DynPVector(T,int group){
         }
         void doOpApply(){
             if (pVect.pos!is null){
-                Task("DynPVectorOpApplyPos",&doPosLoop).autorelease.submitYield();
+                static if (para!=0) Task("DynPVectorOpApplyPos",&doPosLoop).autorelease.submitYield();
+                else doPosLoop();
+            }
+            if (pVect.dof!is null){
+                static if (para!=0) Task("DynPVectorOpApplyDof",&doDofLoop).autorelease.submitYield();
+                else doDofLoop();
+            }
+            if (pVect.orient!is null){
+                static if (para!=0) Task("DynPVectorOpApplyOrient",&doOrientLoop).autorelease.submit();
+                else doOrientLoop();
             }
             if (pVect.cell!is null){
                 auto resTmp=pVect.cell.h.opApply(loopBody);
                 if (resTmp!=0) res=resTmp;
             }
+        }
+        void doOpApply2(){
+            if (pVect.pos!is null){
+                static if (para!=0) Task("DynPVectorOpApplyPos2",&doPosLoop2).autorelease.submitYield();
+                else doPosLoop2();
+            }
             if (pVect.dof!is null){
-                Task("DynPVectorOpApplyDof",&doDofLoop).autorelease.submitYield();
+                static if (para!=0) Task("DynPVectorOpApplyDof2",&doDofLoop2).autorelease.submitYield();
+                else doDofLoop2();
             }
             if (pVect.orient!is null){
-                Task("DynPVectorOpApplyOrient",&doOrientLoop).autorelease.submit();
+                static if (para!=0) Task("DynPVectorOpApplyOrient2",&doOrientLoop2).autorelease.submit();
+                else doOrientLoop2();
+            }
+            if (pVect.cell!is null){
+                auto i0=pVect.pos.arrayStruct.dataLength*3+pVect.orient.arrayStruct.dataLength*3
+                    +pVect.dof.arrayStruct.dataLength;
+                auto resTmp=pVect.cell.h.opApply(delegate int(ref size_t i, ref T el){
+                    auto ii=i+i0;
+                    return loopBody2(ii,el);
+                });
+                if (resTmp!=0) res=resTmp;
             }
         }
+        int opApply(int delegate(ref T)loopBody){
+            this.loopBody=loopBody;
+            Task("DynPVectorOpApply",&this.doOpApply).autorelease.executeNow();
+            if (this.e!is null) throw this.e;
+            return this.res;
+        }
+        int opApply(int delegate(ref size_t,ref T)loopBody){
+            this.loopBody2=loopBody;
+            Task("DynPVectorOpApply",&this.doOpApply2).autorelease.executeNow();
+            if (this.e!is null) throw this.e;
+            return this.res;
+        }
     }
-    int opApply(int delegate(ref T)loopBody){
-        auto oAp=new OpApplyStruct; // keep on stack???
-        oAp.loopBody=loopBody;
-        Task("DynPVectorOpApply",&oAp.doOpApply).autorelease.executeNow();
-        if (oAp.e!is null) throw oAp.e;
-        return oAp.res;
+    OpApplyStruct!(1) pLoop(size_t optimalBlockSize=1){
+        OpApplyStruct!(1) oAp; // remove from stack???
+        oAp.pVect=this;
+        return oAp;
     }
-    
+    OpApplyStruct!(0) sLoop(){
+        OpApplyStruct!(0) oAp; // remove from stack???
+        oAp.pVect=this;
+        return oAp;
+    }
     DynPVector emptyCopy(){
         DynPVector res;
         if (cell!is null) res.cell=cell.dup();

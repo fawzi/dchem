@@ -4,6 +4,7 @@ import blip.serialization.Serialization;
 import dchem.sys.ParticleSys;
 import dchem.sys.PIndexes;
 import dchem.sys.DynVars;
+import dchem.sys.Constraints;
 import dchem.pnet.DirArray;
 import dchem.input.RootInput;
 import dchem.Common;
@@ -11,6 +12,12 @@ import dchem.input.WriteOut;
 import blip.parallel.smp.Wait;
 import blip.util.RefCount;
 import blip.container.GrowableArray;
+import blip.time.Time;
+import blip.time.Clock;
+import blip.util.NotificationCenter;
+import dchem.calculator.CalculatorModels;
+import blip.math.IEEE;
+import blip.math.random.Random;
 
 /// unique key for a point, dimensions might change
 /// key might have some special values,
@@ -52,7 +59,10 @@ struct Point{
         } else {
             return cast(hash_t)data;
         }
-    } 
+    }
+    int opCmp(Point p2){
+        return ((data>p2.data)?1:((data==p2.data)?0:-1));
+    }
 }
 
 enum :uint{ invalidDir=uint.max }
@@ -145,25 +155,24 @@ struct DirDistances(T){
     T cartesianDirDist; /// distance in the cartesian metric from the perfect direction point
     /// all values are set
     bool full(){
-        return !(isNAN(dualDist)||isNAN(cartesianDist)||
-            isNAN(dualCos)||isNAN(cartesianCos)|| 
-            isNAN(dualDirDist)||isNAN(cartesianDirDist));
+        return !(isNaN(dualDist)||isNaN(cartesianDist)||
+            isNaN(dualCos)||isNaN(cartesianCos)|| 
+            isNaN(dualDirDist)||isNaN(cartesianDirDist));
     }
-    bool veryFar(MainPointI!(T) p){
-        if (!(isNAN(dualDist)||isNAN(cartesianDist))){
-            return false;
-        }
-        if (dualDist>p.dualDistMax && cartesianDist>p.cartesianDistMax){
+    bool veryFar(LocalSilosI!(T) silos){
+        if (((!isNaN(xDist)) && silos.maxMoveInternal()>0 && xDist>silos.maxMoveInternal())||
+            ((!isNaN(dualDist)) && silos.maxMoveDual()>0 && dualDist>silos.maxMoveDual())||
+            ((!isNaN(cartesianDist)) && silos.maxMoveCartesian()>0 && cartesianDist>silos.maxMoveCartesian()))
+        {
             return true;
         }
         return false;
     }
-    bool neighbor(MainPointI!(T) p){
-        if (!(isNAN(dualDist)||isNAN(cartesianDist))){
-            return false;
-        }
-        if (dualDist>p.dualDistMax && cartesianDist>p.cartesianDistMax){
-            return false;
+    bool neighbor(LocalSilosI!(T) silos,Real eDist1,Real eDist2){
+        if (veryFar(silos)) return false;
+        if (((!isNaN(dualDist)) && (dualDist<=eDist1*silos.maxNormDual || dualDist<=eDist2*silos.maxNormDual))||
+            ((!isNaN(cartesianDist)) && cartesianDist<=silos.maxNormCartesian)){
+            return true;
         }
         return true;
     }
@@ -183,7 +192,7 @@ struct DirDistances(T){
 enum Prob{
     Unlikely=0, /// from the current information it is unlikely that the point has that feature
     Possible=1, /// one indicator is pointing toward the point having that feature
-    Probable=2, /// it is likely that the point has that feature
+    Likely=2, /// it is likely that the point has that feature
     Confirmed=3, /// it has been confirmed that the point has that feature
 }
 /// flags of the point
@@ -228,21 +237,21 @@ Prob minimumForGFlags(uint gFlags){
     if ((gFlags&GFlags.NeighValsDecrease)!=0) return Prob.Unlikely;
     /// the next one accepts all elements of a flat potential as minima, which while logially correct overcrowds the special points
     /// add requirement that AlongForcesDecrease is 0 ???
-    if ((gFlags&GFlags.AlongForcesIncrease)!=0) return (((gFlags&GFlags.FullyEvaluated)!=0)?Prob.Confirmed:Prob.Probable);
+    if ((gFlags&GFlags.AlongForcesIncrease)!=0) return (((gFlags&GFlags.FullyEvaluated)!=0)?Prob.Confirmed:Prob.Likely);
     if ((gFlags&GFlags.NeighValsIncrease)!=0) return Prob.Possible;
     return Prob.Unlikely;
 }
 /// probability of having a critical point close by for the given gFlags
 Prob criticalPointForGFlags(uint gFlags){
-    if ((gFlags&GFlags.AlongForcesIncrease)!=0) return Prob.Probable;
-    if ((gFlags&GFlags.AlongGradientDecrease)!=0) return Prob.Probable;
+    if ((gFlags&GFlags.AlongForcesIncrease)!=0) return Prob.Likely;
+    if ((gFlags&GFlags.AlongGradientDecrease)!=0) return Prob.Likely;
     return Prob.Unlikely;
 }
 /// probability of having a saddle point
 Prob saddlePointForGFlags(uint gFlags){
-    if (criticalPointForGFlags(gFlags)==Prob.Probable){
+    if (criticalPointForGFlags(gFlags)==Prob.Likely){
         if ((gFlags&GFlags.AttractorBorder)!=0){
-            return Prob.Probable;
+            return Prob.Likely;
         }
         if ((gFlags&GFlags.NeighValsIncrease)!=0 && (gFlags&GFlags.NeighValsDecrease)!=0){
             return Prob.Likely;
@@ -301,7 +310,7 @@ interface MainPointI(T){
     LocalGrowableArray!(PointAndDir) neighbors();
     /// neighbor distances, stored only if requested. 6 numbers for each neighbor:
     /// dualDist, cartDist, cosDual, rDistDual, cartCos, cartRDist
-    LocalGrowableArray!(T) neighDistances();
+    LocalGrowableArray!(DirDistances!(T)) neighDistances();
     /// scale of mindir to recover the dual gradient (useful??)
     T minDirScale();
     /// exploration size for this point (used to establish neighbors,...) 
@@ -339,9 +348,9 @@ interface MainPointI(T){
     /// returns direction 0 if the gradient has to be evaluated, an invalid direction if the current point is in evaluation,
     /// and an invalid point only if all direction are explored/ the point should not be explored
     /// if lastIsLast is true then the last direction (gradient) is explored as last
-    PointAndDir exploreNext(DirFlags methodDirs=null,bool lastIsLast=true);
+    PointAndDir exploreNext(FlagsArray methodDirs=null,bool lastIsLast=true);
     /// a point in the given direction in the dual space
-    DynPVector!(T,DualDxType) dualDir(uint dir);
+    DynPVector!(T,DualDxType) createDualDir(uint dir);
     /// energy of the current point
     Real energy();
     /// calculates the position exploring from here in the given direction
@@ -369,8 +378,10 @@ interface MainPointI(T){
     void localNeighEnergy(PointAndDir[] neigh,Real e);
     /// adds an energy evaluation for the given point (that should be a neighbor of this point)
     void addEnergyEvalOther(Point p,Real e);
+    /// the gradient of a neighbor was calculated (and possibly also the energy for the first time)
+    void localNeighGrad(PointAndDir[] neigh,LazyMPLoader!(T)mainPoint,Real e);
     /// adds an energy evaluation for the given point (that should be a neighbor of this point)
-    void addGradEvalOther(Point p,LazyMPLoader!(T)mainPoint,Real e);
+    void addGradEvalOther(LazyMPLoader!(T)p,Real e);
     
     /// adds the energy to this point
     /// energy must be valid
@@ -393,7 +404,6 @@ interface MainPointI(T){
 /// lazy loader of points
 class LazyMPLoader(T){
     Point point;
-    LocalSilosI!(T) silos;
     MainPointI!(T) _mainPoint;
     WaitCondition waitPoint;
     Time maxTime;
@@ -407,7 +417,7 @@ class LazyMPLoader(T){
         return _mainPoint!is null;
     }
     // if needed loads the mainPoint, otherwise returns the cached value
-    MainPointI!(T)mainPoint(){
+    MainPointI!(T)mainPoint(LocalSilosI!(T) silos){
         if(_mainPoint is null){
             if (exception){
                 throw exception;
@@ -455,16 +465,18 @@ class LazyMPLoader(T){
     /// if weakUpdate is true tries to get the newest version that is locally available
     /// the time is used to decide if the cached version is new enough, or a new version has to be
     /// fetched from the owning silos
-    this(LocalSilosI!(T) silos,Point point,bool weakUpdate,Time time){
-        this.silos=silos;
+    this(Point point,bool weakUpdate,Time time){
         this.point=point;
         this.weakUpdate=weakUpdate;
         this.maxTime=time;
     }
     /// ditto
-    this(LocalSilosI!(T) silos,Point point,bool weakUpdate=true){
-        this(silos,point,weakUpdate,Clock.now);
+    this(Point point,bool weakUpdate=true){
+        this(point,weakUpdate,Clock.now);
     }
+    this(){}
+    mixin(serializeSome("dchem.LazyMPLoader!("~T.stringof~")",`point|weakUpdate|maxTime`));
+    mixin printOut!();
 }
 
 /// calls that make an exploration progress, and correspond to notifications that are called
@@ -481,9 +493,9 @@ interface ExplorationObserverI(T){
     /// a neighbor point has calculated its energy (and not the gradient)
     /// neighbors might be restricted to silos or not
     void neighborHasEnergy(Point p,Point[] neighbors,Real energy);
-    /// a neighbor point has calculated its gradient (and energy)
+    /// the neighbor point p has calculated its gradient (and energy)
     /// neighbors might be restricted to silos or not
-    void neighborHasGradient(Point p,Point[] neighbors, PSysWriter!(T)pSys);
+    void neighborHasGradient(LazyMPLoader!(T)p, Point[] neighbors, Real energy);
     
     /// finished exploring the given local point (remove it from the active points), bcasts finishedExploringPoint
     void finishedExploringPointLocal(LocalSilosI!(T) silos,Point);
@@ -493,15 +505,6 @@ interface ExplorationObserverI(T){
     /// (called upon collisions)
     void dropPoint(SKey,Point);
 }
-
-/// an exploration observer generator (what is created by the input)
-interface ExplorationObserverGen:InputElement{
-    ExplorationObserverI!(Real) observerReal(LocalSilosI!(Real) silos);
-    ExplorationObserverI!(LowP) observerLowP(LocalSilosI!(LowP) silos);
-}
-
-/// define observerT extractor helper
-mixin(genTypeTMixin("ExplorationObserver","observer","LocalSilosI!(T)silos","silos"));
 
 /// an object that can offer new points to explore
 /// actually should not inherit from ExplorationObserverI, but this way we avoid multiple inheritance bugs
@@ -513,16 +516,6 @@ interface ExplorerI(T):ExplorationObserverI!(T){
     /// should speculatively calculate the gradient? PNetSilos version calls addEnergyEvalLocal
     bool speculativeGradient(Point p,Real energy);
 }
-
-
-/// an exploration generator (what is created by the input)
-interface ExplorerGen:ExplorationObserverGen{
-    ExplorerI!(Real) explorerReal(LocalSilosI!(Real) silos);
-    ExplorerI!(LowP) explorerLowP(LocalSilosI!(LowP) silos);
-}
-
-/// define explorerT extractor helper
-mixin(genTypeTMixin("Explorer","explorer","LocalSilosI!(T)silos","silos"));
 
 alias ulong SKey; /// silos key
 
@@ -558,6 +551,14 @@ interface PNetSilosI(T):ExplorationObserverI!(T){
 }
 
 interface LocalSilosI(T): PNetSilosI!(T) {
+    /// random number generator
+    RandomSync rand();
+    /// writes out a log message (at once)
+    void logMsg(void delegate(void delegate(char[]))writer);
+    /// writes out a log message
+    void logMsg(char[]msg);
+    
+    
     /// adds an extra observer that will be notified about the network changes
     void addObserver(ExplorationObserverI!(T) o);
     /// removes the given observer if present
@@ -568,7 +569,7 @@ interface LocalSilosI(T): PNetSilosI!(T) {
     void rmExplorer(ExplorerI!(T)o);
     
     /// reference position, this should be used just to create other ParticleSystem, never directly
-    ParticleSystem!(T) refPos();
+    ParticleSys!(T) refPos();
     /// constraints for this system
     ConstraintI!(T) constraints();
     /// if the gradient is cheap to compute
@@ -585,6 +586,24 @@ interface LocalSilosI(T): PNetSilosI!(T) {
     Point newPointAt(DynPVector!(T,XType) newPos);
     
     // values to define the point net topology
+    
+    // quick cutoffs
+    /// if bigger than zero quickly discards all points that are further than this value in internal units
+    T maxMoveInternal();
+    /// if bigger than zero quickly discards all points that are further than this value in the cartesian space
+    T maxMoveCartesian();
+    /// if bigger than zero quickly discards all points that are further than this value in the dual space
+    T maxMoveDual();
+    
+    // neighs
+    /// points that are less than maxNormCartesian apart are considered neighbors
+    T maxNormCartesian();
+    /// points that are less than maxNormDual apart (in units of explorationSize) are cosidered neighbors
+    /// (this is used also to accept exploratios)
+    T maxNormDual();
+    
+    /// minimum move in internal units to accept a direction
+    T minMoveInternal();
     /// minimum norm of uint vector after projection of null direction to be considered as a valid direction
     T minProjectionResidual();
     /// maximum cosinus of the angle between two vectors that are still considered in the same direction in dual space 
@@ -603,8 +622,6 @@ interface LocalSilosI(T): PNetSilosI!(T) {
     /// minimum norm in the real (cartesian) space for the real movement (after constraints,...)
     /// for a self generated direction to be accepted
     T minRealNormSelf2();
-    /// max norm in the dual T space to accept an exploration (in units of explorationSize)
-    T maxNormDual();
     /// explorationSize
     T explorationSize();
     /// square of the maximum distance from the optimal direction point in explorationSize units
@@ -618,6 +635,7 @@ interface LocalSilosI(T): PNetSilosI!(T) {
     /// length that is considered 0: the invalid directions should be orthogonal to the dualDir, so that
     /// the lenght along them should be exactly 0, but nomerical error might make them slightly larger than 0
     T zeroLen();
+    
     /// a local point (possibly a copy), is retained, and needs to be released (thus the create in the name)
     /// the time t is used to decide if a cached version can be used
     MainPointI!(T)createLocalPoint(Point p,Time t);
@@ -638,3 +656,21 @@ interface SilosWorkerGen:InputElement{
 
 /// define silosWorkerT extractor helper
 mixin(genTypeTMixin("SilosWorker","silosWorker","",""));
+
+/// an exploration observer generator (what is created by the input)
+interface ExplorationObserverGen:InputElement{
+    ExplorationObserverI!(Real) observerReal(LocalSilosI!(Real) silos);
+    ExplorationObserverI!(LowP) observerLowP(LocalSilosI!(LowP) silos);
+}
+
+/// define observerT extractor helper
+mixin(genTypeTMixin("ExplorationObserver","observer","LocalSilosI!(T)silos","silos"));
+
+/// an exploration generator (what is created by the input)
+interface ExplorerGen:ExplorationObserverGen{
+    ExplorerI!(Real) explorerReal(LocalSilosI!(Real) silos);
+    ExplorerI!(LowP) explorerLowP(LocalSilosI!(LowP) silos);
+}
+
+/// define explorerT extractor helper
+mixin(genTypeTMixin("Explorer","explorer","LocalSilosI!(T)silos","silos"));

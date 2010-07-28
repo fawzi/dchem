@@ -924,15 +924,30 @@ final class SegmentedArray(T){
             
             "",`
             for (size_t ii=0;ii<xMKindDims;++ii){
-                yPtr[ii] = convertTo!(T)((*yPtr)*b+(*xPtr)*a);
+                yPtr[ii] = convertTo!(T)(yPtr[ii]*b+xPtr[ii]*a);
             }`,""]));
         }
     }
     
     static if (is(typeof(basicDtype.init*basicDtype.init))){
         void opMulAssign()(basicDtype scale){
-            scope a=a2NA(this.data.basicData);
-            a*=scale;
+            if (contiguous){
+                scope a=a2NA(this.support.basicData);
+                a*=scale;
+            } else {
+                auto optimalBlockSize=defaultOptimalBlockSize;
+                auto x=this;
+                mixin(segArrayMonoLoop(ParaFlags.FullPara|ParaFlags.DataLoop,"iterContext",["x"],
+                "basicDtype a;","",
+                "mainContext.a=scale;",`
+                visitKind=visitKind&&(!outOfRange);`,"",
+                ["","for(size_t mIdx=0;mIdx<T.sizeof/basicDtype.sizeof;++mIdx){ (cast(basicDtype*)xPtr)[mIdx] *= a; }","",
+
+                "",`
+                for (size_t ii=0;ii<xMKindDims*(T.sizeof/basicDtype.sizeof);++ii){
+                    (cast(basicDtype*)xPtr)[ii] *= a;
+                }`,""]));
+            }
         }
     }
     void opMulAssign(V)(SegmentedArray!(V) y){

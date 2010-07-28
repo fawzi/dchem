@@ -92,13 +92,13 @@ body{
         S vOrtC=-1/(-c+cast(S)1);
         v2M*=vOrtC;
         v2Ortho[i]=cast(S)0;
-        v2M.axpby(v1m,vOrtC*(-v2Val+1)+1);
+        axpby(v2M,v1m,vOrtC*(-v2Val+1)+1);
         outer(v2Ortho,v2M,m,cast(S)1,cast(S)1);
     } else {
         S vOrtC=-1/(c+cast(S)1);
         v2M*=vOrtC;
         v2Ortho[i]=cast(S)0;
-        v2M.axpby(v1m,vOrtC*(-v2Val+1)-1);
+        axpby(v2M,v1m,vOrtC*(-v2Val+1)-1);
         outer(v2Ortho,v2M,m,cast(S)1,cast(S)1);
     }
     return m;
