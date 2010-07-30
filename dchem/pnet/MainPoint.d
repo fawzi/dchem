@@ -4,12 +4,13 @@ import dchem.Common;
 import dchem.sys.ParticleSys;
 import dchem.sys.DynVars;
 import dchem.calculator.CalculatorModels;
+import dchem.calculator.Calculator;
 import blip.io.BasicIO;
 import blip.serialization.Serialization;
 import tango.math.random.Random;
 import blip.rtest.RTest;
-import Atomic=blip.sync.Atomic;
-import blip.math.Math:max,abs;
+import blip.sync.Atomic;
+import blip.math.Math:max,abs,pow2;
 import tango.util.container.more.Heap;
 import blip.container.BatchedGrowableArray;
 import tango.util.container.HashSet;
@@ -26,6 +27,9 @@ import blip.parallel.smp.WorkManager;
 import dchem.util.Rotate;
 import blip.time.Clock;
 import blip.time.Time;
+import blip.narray.NArray;
+import blip.math.IEEE;
+import blip.util.LocalMem;
 
 /// structure that collects togheter all points of the same owner (useful to bcast chuncks)
 class PointToOwner{
@@ -225,7 +229,8 @@ struct GFlagsChange{
 struct PointNeighbors(T){
     Point point;
     PointAndDir[] neighbors;
-    DirDistances!(T) dirDist;
+    DirDistances!(T)[] dirDist;
+    Time time;
     mixin(serializeSome("dchem.PointNeighbors!("~T.stringof~")","point|neighbors|dirDist"));
     mixin printOut!();
 }
@@ -269,6 +274,7 @@ class MainPoint(T):MainPointI!(T){
     /// bit-or of GFlags of the current point
     uint gFlags(){ return _gFlags; }
     uint _gFlags;
+    size_t refCount;
 
     /// if this point is a local copy, and not the "main" point
     bool isLocalCopy(){
@@ -631,27 +637,30 @@ class MainPoint(T):MainPointI!(T){
                 neighAtt.deallocData();
                 dirDist1.deallocData();
             }
+            auto localPoint=localContext.createLocalPoint(newPoint,Clock.now);
+            scope(exit){ localPoint.release(); }
+            auto newPos=localPoint.pos.dynVars.x;
             auto dDir=addDirsOf(newPos,newPoint,localPoint.explorationSize,neighAtt,dirDist1);
             return addNeighbors(neighAtt.data,dirDist1.data,true);
         }
         // communicate to neighbors
-        auto neigToNotify=new PointToOwner(&localContext.ownerOfPoint,delegate Point(size_t i){ return neighs[i].points; },neighs.length);
+        auto neigToNotify=new PointToOwner(&localContext.ownerOfPoint,delegate Point(size_t i){ return neighs[i].point; },neighs.length);
         foreach (iPts;neigToNotify.pLoop){
-            localContext.silos[iPts.owner].addPointToLocalNeighs(point,iPts.points);
+            localContext.silosForKey(iPts.owner).addPointToLocalNeighs(point,iPts.points);
         }
         // notify
-        PointNeighbors pn;
+        PointNeighbors!(T) pn;
         pn.point=point;
         pn.neighbors=neighs;
         pn.dirDist=dirDist;
+        pn.time=Clock.now;
         localContext.nCenter.notify("PointHasNewNeighbors",Variant(pn));
-        assert(!discarded,"did discard valid point");
         return true;
     }
 
     /// checks if the point passed is a neighbor of this point, if it is checks the directions blocked by this
     /// point.
-    bool checkNeighbors(DynPVector!(T,XType)newPos,Point newPoint,T pSize) {
+    bool checkIfNeighbor(DynPVector!(T,XType)newPos,Point newPoint,T pSize) {
         // ignore if the point is already in the neighbors
         synchronized(this){
             if (findFirstPred(neighbors.data,delegate bool(PointAndDir p){ return p.point==newPoint; })!=neighbors.length){
@@ -694,10 +703,11 @@ class MainPoint(T):MainPointI!(T){
         if (dDist.veryFar(localContext)) return dDist;
         auto deriv1=pos.dynVars.dVarStruct.emptyDx();
         deriv1[]=0;
-        pos.addToTSpace(diff,deriv1);
+        pos.addToTSpace!(T)(diff,deriv1);
         diff.giveBack();
         // make an optimized version when the overlap is the identity??
-        auto deriv1Dual=pos.toDualTSpace(deriv1,deriv1Dual);
+        auto deriv1Dual=pos.dynVars.dVarStruct.emptyDualDx();
+        pos.toDualTSpace!(T)(deriv1,deriv1Dual);
         // original norm in dual space
         auto origNorm=sqrt(deriv1Dual.norm2());
         dDist.dualDist=origNorm;
@@ -706,28 +716,28 @@ class MainPoint(T):MainPointI!(T){
             veryClose=true;
         }
         // norm in cartesian units (T space approx)
-        normCartesian=sqrt(pos.dotInTSpace(deriv1,deriv1Dual));
+        auto normCartesian=sqrt(pos.dotInTSpace(deriv1,deriv1Dual));
         dDist.cartesianDist=normCartesian;
         if (dDist.veryFar(localContext)) return dDist;
-        if (normCartesian<localContext.minRealNorm){
+        if (normCartesian<localContext.minRealNormSelf2){
             veryClose=true;
         }
         if (!dDist.neighbor(localContext,explorationSize,pSize)) return dDist;
         if (hasFrameOfRef){
             uint dirMax=invalidDir;
             size_t iMax;
-            if (origNorm>minNormDual*explorationSize && origNorm<maxNormDual*explorationSize){ // this direction is the "main" direction and should be the first
+            if (origNorm>localContext.minNormDual*explorationSize && origNorm<localContext.maxNormDual*explorationSize){ // this direction is the "main" direction and should be the first
                 // it is a neighbor in some direction
                 DynPVector!(T,DualDxType) deriv2Dual;
                 /// checking which direction of the dual space we are really exploring
                 synchronized(this){
-                    if (minDir is null){
+                    if (minDir.isDummy){
                         deriv2Dual=rotateVEi(minDir,0,deriv1Dual);
                     }
                 }
                 if (! deriv2Dual.isDummy()){
                     volatile T maxVal=0;
-                    iMax;
+                    iMax=0;
                     foreach (i,v;deriv2Dual.pLoop){
                         auto vp=abs(v);
                         if (vp>maxVal){
@@ -743,16 +753,16 @@ class MainPoint(T):MainPointI!(T){
                     bool noDir=false;
                     auto cosVal=maxVal/origNorm;
                     if (cosVal>localContext.sameDirCosAngle()){
-                        auto dOpt2=pow(localContext.optimalNormDual*explorationSize-maxVal,2)+pow(origNorm,2)-pow(maxVal,2);
-                        auto dOpt=((dOpt2>0)?cast(T)sqrt(dOpt2):cast(T)0);
-                        if (dOpt<dirDualSize){
+                        auto dOpt2=pow2(explorationSize-maxVal)+pow2(origNorm)-pow2(maxVal);
+                        if (dOpt2<localContext.dirDualSize2){
+                            auto dOpt=((dOpt2>0)?cast(T)sqrt(dOpt2):cast(T)0);
                             DirDistances!(T) dDist1=dDist;
-                            neighAtt.append(PointAndDir(newPoint,dirMax));
+                            neighAtt(PointAndDir(newPoint,dirMax));
                             added=true;
                             dDist1.dualDirDist=dOpt;
                             dDist1.dualCos=cosVal;
-                            dirDist.append(dDist1);
-                            auto actualDirFlags=exploredDirs.atomicCAS(iMax,GFlags.Explored,GFlags.Free);
+                            dirDist(dDist1);
+                            auto actualDirFlags=exploredDirs.atomicCAS(iMax,DirFlags.Explored,DirFlags.Free);
                         }
                     }
                     deriv2Dual.giveBack();
@@ -762,12 +772,22 @@ class MainPoint(T):MainPointI!(T){
             // check for ill defined directions in cartesian space
             auto deriv2=rotateVEi(minDir.toGroup!(DxType)(),0,deriv1);
             // length of the directions in cartesian units
-            auto ov=pos.maybeOverlap();
-            scope rotOv=rotateVEi(minDir.toGroup!(DxType)(),0,ov.data.T.dup(true));
-            auto lenDirs=diag(rotOv);
+            auto ov=pos.maybeDerivOverlap();
+            NArray!(T,1) lenDirs;
+            if (ov!is null){
+                DynPMatrix!(T,DxType,DualDxType) rotOv;
+                rotOv=new DynPMatrix!(T,DxType,DualDxType)(ov.colGroup,ov.rowGroup,ov.data.T.dup(true));
+                //rotateVEi(minDir.toGroup!(DxType)(),0,rotOv);
+                // should probably transpose and rotate again??? to check
+                assert(0,"to do: should be checked");
+                lenDirs=diag(rotOv.data);
+            } else {
+                lenDirs=repeat(ones!(T)(1),ndim)[0]; // should maybe give a function to construct this directly...
+            }
             unaryOpStr!("*aPtr0=sqrt(*aPtr0);")(lenDirs);
             if (dirMax!=invalidDir){
                 // complete data of dDist
+                auto idealLen=explorationSize*lenDirs[iMax];
                 auto dDist1=dirDist[dirDist.length-1];
                 dDist1.cartesianCos=deriv2[iMax]/normCartesian;
                 auto dOpt2=pow2(normCartesian)-pow2(deriv2[iMax])
@@ -776,45 +796,45 @@ class MainPoint(T):MainPointI!(T){
             }
             // loop on all directions checking cartesian thresholds
             auto dim=ndim;
-            for(idim=0;idim<dim;++idim){
-                auto idealLen=explorationSize*lenDirs[i];
-                if (abs(normCartesian-idealLen)<minRealNorm &&
-                    abs(deriv2[idim])>=localContext.sameDirCosAngleCartesian()*explorationSize*lenDirs[i])
+            for(size_t idim=0;idim<dim;++idim){
+                auto idealLen=explorationSize*lenDirs[idim];
+                if (abs(normCartesian-idealLen)<localContext.minRealNormSelf2 &&
+                    abs(deriv2[idim])>=localContext.sameDirCosAngleCartesian()*explorationSize*lenDirs[idim])
                 {
                     auto dOpt2=pow2(normCartesian)-pow2(deriv2[idim])
                         +localContext.inDirCartesianScale2()*pow2(abs(deriv2[idim])-idealLen);
-                    if (dOpt2<=dirCartesianSize2){
+                    if (dOpt2<=localContext.dirCartesianSize2){
                         auto dirAtt=toDir(idim,deriv2[idim]<0);
                         if (dirAtt!=dirMax){
-                            dirFlags.atomicCAS(dirAtt,DirFlags.Explored,DirFlags.Free);
+                            exploredDirs.atomicCAS(dirAtt,DirFlags.Explored,DirFlags.Free);
                             if (idealLen<=localContext.zeroLen()){ // don't store directions for invalid dirs
                                 DirDistances!(T) dDist1=dDist;
                                 dDist1.cartesianCos=deriv2[idim]/normCartesian;
                                 dDist1.cartesianDirDist=((dOpt2>0)?sqrt(dOpt2):0);
                                 added=true;
-                                neighAtt.append(PointAndDir(newPoint,dirAtt));
-                                dirDist.append(dDist1);
+                                neighAtt(PointAndDir(newPoint,dirAtt));
+                                dirDist(dDist1);
                             }
                         }
                     }
                 }
             }
         }
-        if (veryClose || origNorm<=minNormDual*explorationSize){
+        if (veryClose || origNorm<=localContext.minNormDual*explorationSize){
             added=true;
-            neighAtt.approx(PointAndDir(newPoint,0));
-            dirDist.append(dDist);
+            neighAtt(PointAndDir(newPoint,0));
+            dirDist(dDist);
         }
         if ((!added)){
-            if (origNorm<=maxNormDual*explorationSize+localContext.zeroLen()){
+            if (origNorm<=localContext.maxNormDual*explorationSize+localContext.zeroLen()){
                 added=true;
-                neighAtt.append(PointAndDir(newPoint,nDirs)); // not in a specific direction
-                dirDist.append(dDist);
+                neighAtt(PointAndDir(newPoint,ndirs)); // not in a specific direction
+                dirDist(dDist);
             } else {
                 assert(origNorm<=localContext.maxNormDual*pSize+localContext.zeroLen());
                 added=true;
-                neighAtt.append(PointAndDir(newPoint,invalidDir)); // a neighbor of the other point
-                dirDist.append(dDist);
+                neighAtt(PointAndDir(newPoint,invalidDir)); // a neighbor of the other point
+                dirDist(dDist);
             }
         }
         return dDist;
@@ -822,13 +842,14 @@ class MainPoint(T):MainPointI!(T){
     /// adds the given point as neighbor
     void addNeighbor(Point p){
         synchronized(this){
-            if (findFirstPred(neighbors.data,delegate bool(PointAndDir p){ return p.point==newPoint; })!=neighbors.length){
+            if (findFirstPred(neighbors.data,delegate bool(PointAndDir pDir){ return pDir.point==p; })!=neighbors.length){
                 return;
             }
         }
-        auto op=localContext.ownerOfPoint(p);
-        DynPVector!(T,XType) newPos=localContext.silos[op].pointPosLocal(p).dynPVector(pos);
-        
+        auto tNow=Clock.now;
+        auto mPoint=localContext.createLocalPoint(p,tNow);
+        scope(exit){ mPoint.release(); }
+        DynPVector!(T,XType) newPos=mPoint.pos.dynVars.x;
         PointAndDir[128] buf;
         auto neighAtt=lGrowableArray(buf,0);
         DirDistances!(T)[128] bufDirDist;
@@ -838,16 +859,17 @@ class MainPoint(T):MainPointI!(T){
             dirDist.deallocData();
         }
         bool hasGrad=hasFrameOfRef;
-        auto res=addDirsOf(newPos,newPoint,pSize,neighAtt,dirDist);
+        auto res=addDirsOf(newPos,p,mPoint.explorationSize,neighAtt,dirDist);
         if (neighAtt.length==0){
-            neighAtt.append(PointAndDir(p,invalidDir),res,hasGrad);
+            neighAtt(PointAndDir(p,invalidDir));
+            dirDist(res);
         }
         addNeighbors(neighAtt.data,dirDist.data,hasGrad);
     }
     /// evaluates with the given context, returns if an evaluate was really done
     bool evalWithContext(CalculationContext c,ExplorerI!(T)expl){
         bool calcE=(gFlags&GFlags.EnergyEvaluated)==0;
-        bool calcF=((gFlags&GFlags.GradientEvaluated)==0 && (cheapGrad()||gFlags&GFlags.GradientInProgress));
+        bool calcF=((gFlags&GFlags.GradientEvaluated)==0 && (localContext.cheapGrad()||gFlags&GFlags.GradientInProgress));
         if (calcE||calcF){
             Real e=pos.dynVars.potentialEnergy;
             mixin(withPSys(`pSys[]=pos;`,"c."));
@@ -883,7 +905,6 @@ class MainPoint(T):MainPointI!(T){
             }
             if (calcF){
                 if ((gFlags&GFlags.LocalCopy)!=0){
-                    assert(target is activeExplorers[localContext.key],"non local copy and not local");
                     target.addGradEvalLocal(point,pSysWriter(pos));
                 } else {
                     didGradEval();
@@ -910,38 +931,39 @@ class MainPoint(T):MainPointI!(T){
     }
     /// the energy of a neighbor was calculated
     void localNeighEnergy(PointAndDir[] neigh,Real e){
-        typeof(gFlags) oldGFlags;
+        typeof(_gFlags) oldGFlags;
         synchronized(this){
-            if (isNaN(energy)) {
-                assert((gFlags&GFlags.InProgress)!=0,"invalid energy and not in progress");
+            if (isNaN(energy) || (gFlags&GFlags.EnergyEvaluated)==0) {
+                assert((gFlags&GFlags.EnergyInfo)==GFlags.InProgress,collectAppender(delegate void(CharSink s){
+                    dumper(s)("invalid energy and not in progress in point ")(this); }));
                 localContext.logMsg(delegate void(CharSink s){
-                    dumper(s)("skipping energy info (")(e)(") of neighbor ")(neighbor)(" of point ")(point)
+                    dumper(s)("skipping energy info (")(e)(") of neighbor ")(neigh)(" of point ")(point)
                         (" as this point doesn't have a calculated energy yet");
                 });
                 return;
             }
-            auto oldGFlags=gFlags;
+            oldGFlags=gFlags;
             if (e<energy && (gFlags&GFlags.NeighValsDecrease)==0){
-                gFlags|=GFlags.NeighValsDecrease;
+                _gFlags|=GFlags.NeighValsDecrease;
             }else if (e>energy){
-                gFlags|=GFlags.NeighValsIncrease;
+                _gFlags|=GFlags.NeighValsIncrease;
             } else {
-                gFlags|=GFlags.NeighValsSame;
+                _gFlags|=GFlags.NeighValsSame;
             }
         }
         // check for special directions
         uint lastDir=ndirs-1;
-        for(iNeigh=0;iNeigh<neigh.length;++iNeigh){
+        for(size_t iNeigh=0;iNeigh<neigh.length;++iNeigh){
             if (neigh[iNeigh].dir==1){ // along the force
                 synchronized(this){
-                    if (e<=energy) gFlags|=GFlags.AlongForcesDecrease;
-                    if (e>=energy) gFlags|=GFlags.AlongForcesIncrease;
+                    if (e<=energy) _gFlags|=GFlags.AlongForcesDecrease;
+                    if (e>=energy) _gFlags|=GFlags.AlongForcesIncrease;
                 }
             }
-            if (neigh[iNeigh]==lastDir){ // along the gradient
+            if (neigh[iNeigh].dir==lastDir){ // along the gradient
                 synchronized(this){
-                    if (e<=energy) gFlags|=GFlags.AlongGradientDecrease;
-                    if (e>=energy) gFlags|=GFlags.AlongGradientIncrease;
+                    if (e<=energy) _gFlags|=GFlags.AlongGradientDecrease;
+                    if (e>=energy) _gFlags|=GFlags.AlongGradientIncrease;
                 }
             }
         }
@@ -965,7 +987,7 @@ class MainPoint(T):MainPointI!(T){
                     if (p!=neighbors[iEnd].point) break;
                     ++iEnd;
                 }
-                localCopy.appendArr(neighbors[iStart..iEnd]);
+                localCopy.appendArr(neighbors.data[iStart..iEnd]);
                 iStart=iEnd;
             }
         }
@@ -993,7 +1015,7 @@ class MainPoint(T):MainPointI!(T){
             }
             pos.dynVars.potentialEnergy=e;
             oldGFlags=gFlags;
-            gFlags=(gFlags & ~GFlags.EnergyInfo)|GFlags.EnergyKnown;
+            _gFlags=(gFlags & ~GFlags.EnergyInfo)|GFlags.EnergyKnown;
         }
         notifyGFlagChange(oldGFlags);
         updateNeighE();
@@ -1008,15 +1030,15 @@ class MainPoint(T):MainPointI!(T){
             localNeigh.appendArr(neighbors.data);
         }
         auto lData=localNeigh.data;
-        auto nPts=PointToOwner(&localContext.ownerOfPoint,delegate Point(size_t i){ return lData[i].point; },
+        auto nPts=new PointToOwner(&localContext.ownerOfPoint,delegate Point(size_t i){ return lData[i].point; },
             lData.length);
         localNeigh.deallocData();
-        auto energies=lMem!(Real)(nPts.points.length);
+        auto energies=lMem.allocArr!(Real)(nPts.points.length);
         uint newGFlags=0;
         foreach (i;nPts.pLoop){
-            auto silo=localContext.silosForKey(owner);
+            auto silo=localContext.silosForKey(i.owner);
             silo.neighborHasEnergy(point,i.points,energy);
-            auto energ=silo.energyForPointsLocal(i.points,energies[i.localLb,i.localUb]);
+            auto energ=silo.energyForPointsLocal(i.points,energies[i.localLb..i.localUb]);
             auto nPts=i.points.length;
             for(size_t iPts=0;iPts<nPts;++iPts){
                 addEnergyEvalOther(i.points()[iPts],energies[i.localLb+iPts]);
@@ -1025,10 +1047,90 @@ class MainPoint(T):MainPointI!(T){
         uint oldGFlags;
         synchronized(this){
             oldGFlags=gFlags;
-            gFlags=(gFlags & ~GFlags.EnergyInfo)|GFlags.EnergyEvaluated;
+            _gFlags=(gFlags & ~GFlags.EnergyInfo)|GFlags.EnergyEvaluated;
         }
         notifyGFlagChange(oldGFlags);
     }
+    
+    /// the gradient of a neighbor was calculated (and possibly also the energy for the first time)
+    void localNeighGrad(PointAndDir[] neigh,LazyMPLoader!(T)mainPoint,Real e){
+        typeof(_gFlags) oldGFlags;
+        synchronized(this){
+            if (isNaN(energy) || (gFlags&GFlags.EnergyEvaluated)==0) {
+                assert((gFlags&GFlags.EnergyInfo)==GFlags.InProgress,collectAppender(delegate void(CharSink s){
+                    dumper(s)("invalid energy and not in progress in point ")(this); }));
+                localContext.logMsg(delegate void(CharSink s){
+                    dumper(s)("skipping energy info (")(e)(") of neighbor ")(neigh)(" of point ")(point)
+                        (" as this point doesn't have a calculated energy yet");
+                });
+                return;
+            }
+            oldGFlags=gFlags;
+            if (e<energy && (gFlags&GFlags.NeighValsDecrease)==0){
+                _gFlags|=GFlags.NeighValsDecrease;
+            }else if (e>energy){
+                _gFlags|=GFlags.NeighValsIncrease;
+            } else {
+                _gFlags|=GFlags.NeighValsSame;
+            }
+        }
+        // check for special directions
+        uint lastDir=ndirs-1;
+        for(size_t iNeigh=0;iNeigh<neigh.length;++iNeigh){
+            if (neigh[iNeigh].dir==1){ // along the force
+                synchronized(this){
+                    if (e<=energy) _gFlags|=GFlags.AlongForcesDecrease;
+                    if (e>=energy) _gFlags|=GFlags.AlongForcesIncrease;
+                }
+                if (hasFrameOfRef){
+                    // to do: this is the place to put gradient based topology info, will be useful with free energy
+                    //auto nPoint=mainPoint.mainPoint(localContext);
+                    //nPoint.pos.dynVars.mddx // scalar prod with minDir, expected to be >0 (if it is a "normal" point), comparing with minDirScale gives an idea of the curvature
+                }
+            }
+            if (neigh[iNeigh].dir==lastDir){ // along the gradient
+                synchronized(this){
+                    if (e<=energy) _gFlags|=GFlags.AlongGradientDecrease;
+                    if (e>=energy) _gFlags|=GFlags.AlongGradientIncrease;
+                }
+                if (hasFrameOfRef){
+                    // to do: this is the place to put gradient based topology info, will be useful with free energy
+                    //auto nPoint=mainPoint.mainPoint(localContext);
+                    //nPoint.pos.dynVars.mddx // scalar prod with minDir, expected to be >0 (if it is a "normal" point), comparing with minDirScale gives an idea of the curvature
+                }
+            }
+        }
+        notifyGFlagChange(oldGFlags);
+    }
+    /// adds an energy evaluation for the given point (that should be a neighbor of this point)
+    void addGradEvalOther(LazyMPLoader!(T)mp,Real e){
+        PointAndDir[128] buf;
+        LocalGrowableArray!(PointAndDir) localCopy=lGrowableArray(buf,0);
+        Point p=mp.point;
+        // find neighbor
+        synchronized(this){
+            size_t iStart=0;
+            while (1){
+                while(iStart<neighbors.length){
+                    if (p==neighbors[iStart].point) break;
+                    ++iStart;
+                }
+                if (iStart==neighbors.length) break;
+                size_t iEnd=iStart+1;
+                while(iEnd<neighbors.length){
+                    if (p!=neighbors[iEnd].point) break;
+                    ++iEnd;
+                }
+                localCopy.appendArr(neighbors.data[iStart..iEnd]);
+                iStart=iEnd;
+            }
+        }
+        if (localCopy.length!=0){
+            localNeighGrad(localCopy.data,mp,e);
+        }
+        localCopy.deallocData();
+    }
+    
     /// adds the gradient to this point
     /// energy must be valid
     /// gFlags is updated at the end assigning directions to all neighbors
@@ -1039,10 +1141,10 @@ class MainPoint(T):MainPointI!(T){
         synchronized(this){
             oldGFlags=gFlags;
             if ((gFlags&GFlags.EnergyEvaluated)==0){
-                gFlags=(gFlags & ~GFlags.EnergyInfo)|GFlags.EnergyKnown;
+                _gFlags=(gFlags & ~GFlags.EnergyInfo)|GFlags.EnergyKnown;
                 newE=true;
             }
-            gFlags=(gFlags & ~GFlags.GradientInfo)|GFlags.GradientKnown;
+            _gFlags=(gFlags & ~GFlags.GradientInfo)|GFlags.GradientKnown;
         }
         buildMinDir();
         PointAndDir[128] buf;
@@ -1052,21 +1154,21 @@ class MainPoint(T):MainPointI!(T){
             neighbors.clearData();
         }
         auto lData=localNeigh.data;
-        auto nPts=PointToOwner(&localContext.ownerOfPoint,delegate Point(size_t i){ return lData[i].point;},
+        auto nPts=new PointToOwner(&localContext.ownerOfPoint,delegate Point(size_t i){ return lData[i].point;},
             lData.length);
         Real[] energies;
         uint newGFlags=0;
         Time tNow=Clock.now;
         auto thisP=new LazyMPLoader!(T)(point,true,tNow);
         foreach (i;nPts.pLoop){
-            auto silo=localContext.silosForKey(owner);
+            auto silo=localContext.silosForKey(i.owner);
             silo.neighborHasGradient(thisP,i.points, energy);
             auto nPts=i.points.length;
             for(size_t iPts=0;iPts<nPts;++iPts){
                 auto pointAtt=i.points()[iPts];
                 scope(exit){ pAtt.release(); }
                 auto pAtt=localContext.createLocalPoint(pointAtt,tNow);
-                checkNeighbors(pAtt.pos, pointAtt);
+                checkIfNeighbor(pAtt.pos.dynVars.x, pointAtt,pAtt.explorationSize);
                 if (!isNaN(pAtt.energy)){
                     if (pAtt.hasFrameOfRef){
                         auto otherP=new LazyMPLoader!(T)(pointAtt,true,tNow);
@@ -1082,32 +1184,37 @@ class MainPoint(T):MainPointI!(T){
     }
     /// builds the direction toward the minimum
     void buildMinDir(){
-        assert((gFlags&GFlags.GradientEvaluated),"needs gradient");
-        auto newMinDir=pos.dynVars.emptyDualDx();
-        pos.toDualTSpace(pos.dx,newMinDir);
+        assert((gFlags&GFlags.GradientInfo)==GFlags.GradientKnown,"needs gradient");
+        auto newMinDir=pos.dynVars.dVarStruct.emptyDualDx();
+        pos.toDualTSpace(pos.dynVars.mddx,newMinDir);
         auto n2=newMinDir.norm2();
         if (n2==0){
             newMinDir[0]=1;
-            minDirScale=0;
+            _minDirScale=0;
         } else {
-            minDirScale=sqrt(n2);
+            _minDirScale=sqrt(n2);
             newMinDir*=cast(T)(1/minDirScale);
         }
         synchronized(this){
-            minDir=newMinDir;
+            _minDir=newMinDir;
         }
     }
     
     void retain(){
-        assert(refCount!=0,"refCount was 0 in retain");
-        atomicAdd(refCount,1);
+        if (atomicAdd(refCount,cast(size_t)1)==0){
+            throw new Exception("refCount was 0 in retain",__FILE__,__LINE__);
+        }
     }
     void release(){
-        assert(refCount!=0,"refCount was 0 in retain");
-        atomicAdd(refCount,-1);
-        if (refCount==0){
-            if ((gFlags&GFlags.LocalCopy)!=0){
-                
+        synchronized(localContext){
+            auto oldV=atomicAdd(refCount,-cast(size_t)1);
+            if (oldV==0){
+                throw new Exception("refCount was 0 before release",__FILE__,__LINE__);
+            }
+            if (oldV==1){
+                if ((gFlags&GFlags.LocalCopy)!=0){
+                    localContext.dropCachedPoint(this);
+                }
             }
         }
     }

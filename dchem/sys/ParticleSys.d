@@ -961,7 +961,7 @@ class ParticleSys(T): CopiableObjectI,Serializable
     void toDualTSpace(DynPVector!(T,DxType)deriv,DynPVector!(T,DualDxType)dualDeriv,T scaleRes=1,T scaleDualDeriv=0){
         auto overlapInv=maybeDerivOverlapInv();
         if (overlapInv!is null){
-            overlapInv.matVectMult!(T,T)(deriv,dualDeriv,scaleRes,scaleDualDeriv);
+            overlapInv.matVectMult(deriv,dualDeriv,scaleRes,scaleDualDeriv);
         } else { // assumes two groups ar actually equal
             dualDeriv.axpby(deriv.toGroup!(2)(),scaleRes,scaleDualDeriv);
         }
@@ -970,7 +970,7 @@ class ParticleSys(T): CopiableObjectI,Serializable
     void fromDualTSpace(DynPVector!(T,DualDxType)dualDeriv,DynPVector!(T,DxType)deriv,T scaleRes=1,T scaleDeriv=0){
         auto overlap=maybeDerivOverlap();
         if (overlap!is null){
-            overlap.matVectMult!(T,T)(dualDeriv,deriv,scaleRes,scaleDeriv);
+            overlap.matVectMult(dualDeriv,deriv,scaleRes,scaleDeriv);
         } else {
             deriv.axpby(dualDeriv.toGroup!(1)(),scaleRes,scaleDeriv);
         }

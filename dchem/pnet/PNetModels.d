@@ -319,6 +319,8 @@ interface MainPointI(T){
     uint gFlags();
     /// if this point is a local copy, and not the "main" point
     bool isLocalCopy();
+    /// if the point has a local frame of reference (i.e. minDir)
+    bool hasFrameOfRef();
     
     // *** topology, utility methods
     /// probability of having a minimum close by (utility method)
@@ -368,7 +370,7 @@ interface MainPointI(T){
     void addNeighbor(Point p);
     /// internal method, adds the pre-processed points&dirs to the list of neighbors and notifies neighbors
     /// returns true if the points were really added
-    bool addNeighbors(PointAndDir[] neighs,DirDistances!(T) dirDists,bool hadGrad);
+    bool addNeighbors(PointAndDir[] neighs,DirDistances!(T)[] dirDists,bool hadGrad);
     
     /// evaluates with the given context, returns if an evaluate was really done
     bool evalWithContext(CalculationContext c,ExplorerI!(T) expl);
@@ -625,7 +627,7 @@ interface LocalSilosI(T): PNetSilosI!(T) {
     /// explorationSize
     T explorationSize();
     /// square of the maximum distance from the optimal direction point in explorationSize units
-    T dirSize2();
+    T dirDualSize2();
     /// special scale used in the cartesian space to rescale the direction perfectly in the direction direction
     T inDirCartesianScale2();
     /// square of maximum distance from the optimal direction point in cartesian units
@@ -641,6 +643,8 @@ interface LocalSilosI(T): PNetSilosI!(T) {
     MainPointI!(T)createLocalPoint(Point p,Time t);
     /// makes a point "public" informing other silos that that region has been explored
     void bcastPoint(Point p);
+    /// drops a cached point (the point is not in use anymore)
+    void dropCachedPoint(MainPointI!(T)p);
 }
 
 /// an object that works on a LocalSilos
