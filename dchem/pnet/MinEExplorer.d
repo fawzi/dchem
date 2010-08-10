@@ -22,6 +22,20 @@ class MinEExplorerDef:InputElement{
     
 }
 
+// exploration:
+// find smallest energy still "free"
+// evaluate next direction of it
+// apply constraints, if movement is too small declare it as fully visited and neighbor 1
+// bcast point as explored
+// possibly wait for non collision confirmation
+// start calculation
+// if too close to existing points stop calculation???
+// when calculation is finished
+// if mainpoint:
+//    gradient -> orient neighbors, compile visited flags, perform topology analysis (attractor, min,max,...)
+//    second deriv check
+// else store energy, first deriv check??
+
 /// an object that can offer new points to explore
 /// actually should not inherit from ExplorationObserverI, but this way we avoid multiple inheritance bugs
 class MinEExplorer(T):ExplorerI(T){
@@ -41,7 +55,7 @@ class MinEExplorer(T):ExplorerI(T){
     }
     /// communicates that the given point is being expored
     /// flags: communicate doubleEval?
-    void addExploredPoint(SKey owner,Point point,PSysWriter!(T) pos,uint flags){
+    void addExploredPoint(SKey owner,Point point,PSysWriter!(T) pos,T pSize,uint flags){
         if (!isNAN(pos.potentialEnergy)){
             assert((flags&MainPoint!(T).GFlags.EnergyInfo)=MainPoint!(T).GFlags.EnergyKnown,"non NAN energy, but not EnergyKnown");
             if ((flags&(MainPoint!(T).GFlags.DoNotExplore|MainPoint!(T).GFlags.FullyExplored))==0){

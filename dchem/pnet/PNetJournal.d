@@ -156,7 +156,7 @@ class PNetJournal(T):ExplorationObserverI{
     }
     /// communicates that the given point is being expored
     /// flags: communicate doubleEval?
-    void addExploredPoint(SKey owner,Point point,PSysWriter!(T) pos,uint flags){
+    void addExploredPoint(SKey owner,Point point,PSysWriter!(T) pos,T pSize,uint flags){
         if (context.logOtherStart || owner==silos.key){
             this.serialLock.lock();
             scope(exit){ this.serialLock.unlock(); }

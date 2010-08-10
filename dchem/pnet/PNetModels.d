@@ -210,7 +210,7 @@ enum GFlags{
     DoNotExplore=(1<<4),            /// no further exploration should be performed starting from this point
     FullyExplored=(1<<5),           /// all directions around this point have been explored
     FullyEvaluated=(1<<6),          /// all directions around this point have been explored and evaluated
-    OldApprox=(1<<7),               /// energy/gradient are based on old data, newer better data should be available
+    OldApprox=(1<<7),               /// energy/gradient are based on old data, newer better data should be available (also set when dropped)
     LocalCopy=(1<<8),               /// this MainPoint is a local copy done for efficency reasons (localContext is not the owner)
     AlongForces=(3<<9),             /// codify what happens going along the minimuma direction
     AlongForcesUnknow=0,            /// not yet claculated
@@ -398,6 +398,8 @@ interface MainPointI(T){
     void didGradEval();
     // /// builds the direction toward the minimum (internal method)
     // void buildMinDir();
+    /// marks this point as dropped
+    void drop();
     
     void retain();
     void release();
@@ -489,14 +491,14 @@ interface ExplorationObserverI(T){
     /// sets inProgress to false
     void addGradEvalLocal(Point p,PSysWriter!(T) pSys);
     /// communicates that the given point is being expored
-    /// flags: communicate doubleEval?
-    void addExploredPoint(SKey owner,Point point,PSysWriter!(T) pos,uint flags);
+    /// pSize is the point size, flags the flags of the point
+    void addExploredPoint(SKey owner,Point point,PSysWriter!(T) pos,T pSize,uint flags);
     
     /// a neighbor point has calculated its energy (and not the gradient)
-    /// neighbors might be restricted to silos or not
+    /// neighbors should be restricted to silos
     void neighborHasEnergy(Point p,Point[] neighbors,Real energy);
     /// the neighbor point p has calculated its gradient (and energy)
-    /// neighbors might be restricted to silos or not
+    /// neighbors should be restricted to silos
     void neighborHasGradient(LazyMPLoader!(T)p, Point[] neighbors, Real energy);
     
     /// finished exploring the given local point (remove it from the active points), bcasts finishedExploringPoint
@@ -527,8 +529,6 @@ interface PNetSilosI(T):ExplorationObserverI!(T){
     void shutdown();
     /// key of this silos
     SKey key();
-    /// where the journal is kept
-    char[] journalPos();
     /// load (usage) of the silos in some arbitrary units
     Real load();
     
@@ -580,12 +580,14 @@ interface LocalSilosI(T): PNetSilosI!(T) {
     NotificationCenter nCenter();
     /// owner of the given point
     SKey ownerOfPoint(Point);
+    /// the next free silos
+    SKey nextFreeSilos();
     /// silos for the given key
     PNetSilosI!(T)silosForKey(SKey s);
     /// local point mainpoint (the real reference point)
     MainPointI!(T) mainPointL(Point);
-    /// creates a new point somwhere in the network
-    Point newPointAt(DynPVector!(T,XType) newPos);
+    /// creates a new point in this silos located at newPos, the point is not yet broadcasted
+    Point newLocalPointAt(DynPVector!(T,XType) newPos);
     
     // values to define the point net topology
     

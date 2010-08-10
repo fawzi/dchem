@@ -638,8 +638,19 @@ final class SegmentedArray(T){
     T opIndex(PIndex p,index_type i){
         return *ptrI(p,i);
     }
+    void opSliceAssign(V)(V v){
+        static if (is(typeof(opSliceAssignEl(v)))){
+            opSliceAssignEl(v);
+        } else static if (is(typeof(this.opSliceAssignT(v)))){
+            this.opSliceAssignT(v);
+        } else static if (is(typeof(v.copyTo(this)))){
+            v.copyTo(this);
+        } else {
+            static assert(0,"cannot assign from "~V.stringof~" to SegmentedArray!("~T.stringof~")");
+        }
+    }
     /// copies from an array to this
-    void opSliceAssign(V)(SegmentedArray!(V) val){
+    void opSliceAssignT(V)(SegmentedArray!(V) val){
         static if (is(T==V)) {
             if (val is this) return;
         }
@@ -668,7 +679,7 @@ final class SegmentedArray(T){
         }
     }
     /// copies from an array to this
-    void opSliceAssign()(T val){
+    void opSliceAssignEl(T val){
         int kEnd=kRange.kEnd-kRange.kStart;
         auto kStarts=arrayMap.arrayStruct.kindStarts[kRange.kStart-arrayMap.arrayStruct.kRange.kStart..$];
         for (int ik=0;ik<kEnd;++ik){
@@ -695,7 +706,7 @@ final class SegmentedArray(T){
                 val.guard.release();
                 val.guard=arrayMap.poolChunks.getObj();
             }
-            val.opSliceAssign!(T)(this);
+            val.opSliceAssignT!(T)(this);
         } else {
             if (val.arrayMap.arrayStruct != arrayMap.arrayStruct){
                 val.clear();
@@ -704,7 +715,7 @@ final class SegmentedArray(T){
                 val.reset(newMap,newMap.poolChunks.getObj());
                 if (val.guard!is null) val.guard.release();
             }
-            val.opSliceAssign!(T)(this);
+            val.opSliceAssignT!(T)(this);
         }
     }
     /// returns a copy of the segmented array

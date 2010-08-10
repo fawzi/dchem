@@ -24,6 +24,7 @@ import gobo.blas.Types:BlasTypeForType;
 import blip.core.Traits: ctfe_i2a;
 import dchem.sys.DynVars;
 import blip.math.Math: min,max;
+import blip.util.RefCount;
 
 /// various levels of duplication
 enum PSDupLevel{
@@ -894,7 +895,7 @@ class ParticleSys(T): CopiableObjectI,Serializable
         } else static if (is(typeof(p.copyTo(this)))){
             p.copyTo(this);
         } else {
-            static assert(0,"no assignment possible from type "~V.stringof);
+            static assert(0,"no assignment possible from type "~V.stringof~" to ParticleSys!("~T.stringof~")");
         }
     }
     
@@ -1028,6 +1029,10 @@ class ParticleSys(T): CopiableObjectI,Serializable
         }
     }
     
+    void release0(){
+        dynVars.giveBack();
+    }
+    mixin RefCountMixin!();
     mixin(serializeSome("dchem.sys.ParticleSys",
         `sysStruct: structure of the system (particle, particle kinds,...)
         dynVars: dynamic variables (position,cell,velocities,forces,...)

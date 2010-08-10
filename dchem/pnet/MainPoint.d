@@ -275,10 +275,17 @@ class MainPoint(T):MainPointI!(T){
     uint gFlags(){ return _gFlags; }
     uint _gFlags;
     size_t refCount;
-
+    PoolI!(MainPoint) pool;
+    
     /// if this point is a local copy, and not the "main" point
     bool isLocalCopy(){
         return (gFlags&GFlags.LocalCopy)!=0;
+    }
+    /// if the point is explorable
+    bool isExplorable(){
+        auto flags=gFlags;
+        return (flags&GFlags.EnergyInfo)==GFlags.EnergyEvaluated &&
+            (flags&(GFlags.DoNotExplore|GFlags.FullyExplored|GFlags.FullyEvaluated|GFlags.OldApprox))==0;
     }
     /// if the frame of reference is set
     bool hasFrameOfRef(){
@@ -308,6 +315,11 @@ class MainPoint(T):MainPointI!(T){
         res.minDirScale=minDirScale;
         res.explorationSize=explorationSize;
         return res;
+    }
+    
+    this(LocalSilosI!(T) localContext, PoolI!(MainPoint) p){
+        this._localContext=localContext;
+        this.pool=p;
     }
     
     /// constructor
@@ -1130,7 +1142,10 @@ class MainPoint(T):MainPointI!(T){
         }
         localCopy.deallocData();
     }
-    
+    /// marks this point as dropped
+    void drop(){
+        _gFlags|=GFlags.OldApprox|GFlags.DoNotExplore;
+    }
     /// adds the gradient to this point
     /// energy must be valid
     /// gFlags is updated at the end assigning directions to all neighbors
@@ -1217,6 +1232,16 @@ class MainPoint(T):MainPointI!(T){
                 }
             }
         }
+    }
+    void opSliceAssign(T)(DriedPoint!(T)p){
+        _point=p.point;
+        pos[]=p.pos;
+        minDir[]=p.minDir;
+        _exploredDirs=p.exploredDirs;
+        _neighbors=p.neighbors;
+        _minDirScale=p.minDirScale;
+        _explorationSize=p.explorationSize;
+        _gFlags=p.gFlags;
     }
 }
 

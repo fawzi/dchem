@@ -220,37 +220,12 @@ struct SegArrWriter(T){
     /// copies to an array of the given type, this might cast (checks kindStarts to decide if reinterpret the memory or cast/convert)
     void copyTo(V)(SegmentedArray!(V) s){
         assert(s!is null,"copy to only to allocated arrays");
-        if (s.arrayMap is arrayMap){
-            s.support()[]=data;
-        } else {
-            if (arrayMap is null){
-                arrayMap=new SegArrMemMap!(T)(s.arrayStruct);
-                
-            }
-        }
-        if (cast(void*)s.data.ptr is cast(void*)data.ptr) {
-            assert(s.data.length*V.sizeof==data.length*T.sizeof,"unexpected length");
-            return;
-        }
-        static if(is(T==V)){
-            assert(kindStarts==s.kindStarts,"different kindStarts");
-            s.data.data[]=data;
-        } else static if (is(SegmentedArray!(V).basicDtype==T)){
-            assert(data.length==s.data.basicData.length,"same basictype, but different lengths");
-            s.data.basicData()[]=data;
-        } else {
-            if (kindStarts==s.kindStarts){
-                selfArr=toSegArr(s.arrayMap);
-                s[]=selfArr;
-            } else {
-                if (s.data.length*V.sizeof==data.length*T.sizeof){
-                    void*sPtr=s.data.ptr;
-                    void*myPtr=data.ptr;
-                    sPtr[0..data.length*T.sizeof]=myPtr[0..data.length*T.sizeof];
-                } else {
-                    assert(0,"could not copy to the array");
-                }
-            }
+        uint dimMult=V.sizeof/T.sizeof;
+        auto dData=BulkArray!(V)((cast(V*)data.ptr)[0..data.length/dimMult],data.guard);
+        foreach (k;kRange){
+            auto ik=k-kRange.kStart;
+            s[k][]=dData[kindOffsets[ik]*dimMult..
+                (kindOffsets[ik]+kindStarts[ik+1]-kindStarts[ik])*dimMult];
         }
     }
 }
@@ -297,7 +272,7 @@ struct DynPVectorWriter(T,int group){
         return res;
     }
     /// copies to an array of the given type, this might cast (checks kindStarts to decide if reinterpret the memory or cast/convert)
-    void copyTo(V,int group2)(ref DynPVectorWriter!(V,group2)v){
+    void copyTo(V,int group2)(ref DynPVector!(V,group2)v){
         static assert(group2==group,"copy only to same group");
         if (cell.length!=0){
             assert(cell.length==9,"invalid cell length");
@@ -326,7 +301,7 @@ struct PSysWriter(T){
     DynPVectorWriter!(T,DxType) dx;
     DynPVectorWriter!(T,DxType) mddx;
     Real potentialEnergy;
-    Serializable hVars;
+    HiddenVars hVars;
     mixin(serializeSome("dchem.PSysWriter!("~T.stringof~")","potentialEnergy|x|dx|mddx|hVars"));
     mixin printOut!();
     /// creates a writer for the given ParticleSys
@@ -343,11 +318,11 @@ struct PSysWriter(T){
     /// (checks kindStarts to decide if reinterpret the memory or cast/convert)
     void copyTo(V)(ParticleSys!(V) pSys){
         assert(pSys!is null,"cannot copy to null pSys");
-        pSys.potentialEnergy=potentialEnergy;
+        pSys.dynVars.potentialEnergy=potentialEnergy;
         // could be smarter about reusing memory...
         if (x.isNonNull()) {
             pSys.checkX();
-            pSys.dynVars.x[]=x;
+            x.copyTo!(V,XType)(pSys.dynVars.x); // explicit instantiation of //pSys.dynVars.x[]=x;
         }
         if (dx.isNonNull()){
             pSys.checkDx();
@@ -358,7 +333,7 @@ struct PSysWriter(T){
             pSys.dynVars.mddx[]=mddx;
         }
         if (pSys.hVars !is null){
-            pSys.hVars[]=hVars;
+            pSys.hVars.opSliceAssign(hVars);
         }
     }
 }

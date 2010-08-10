@@ -316,19 +316,29 @@ struct DynPVector(T,int group){
         }
         return v;
     }
-    void opSliceAssign(V,int gg)(DynPVector!(V,gg) b){
+    void opSliceAssignT(V,int gg)(DynPVector!(V,gg) b){
         static assert(gg==group,"slice assign only within the same group");
         enum{ weak=false }
         auto a=this;
         mixin(dynPVectorOp(["a","b"],"a[]=b;",true,true));
     }
-    void opSliceAssign()(T val){
+    void opSliceAssignEl(T val){
         if (cell!is null)   cell[]=val;
         if (pos!is null)    pos[] =Vector!(T,3)(val,val,val);
         if (orient!is null) orient[]=Quaternion!(T).identity; // not really possible, not a vector...
         if (dof!is null)    dof[]=val;
     }
-    
+    void opSliceAssign(V)(V v){
+        static if (is(typeof(opSliceAssignEl(v)))){
+            opSliceAssignEl(v);
+        } else static if (is(typeof(this.opSliceAssignT(v)))){
+            this.opSliceAssignT(v);
+        } else static if (is(typeof(v.copyTo(*this)))){
+            v.copyTo(*this);
+        } else {
+            static assert(0,"cannot assign from "~V.stringof~" to DynPVector!("~T.stringof~","~ctfe_i2a(group)~")");
+        }
+    }
     T opIndex(size_t idx){
         if (pos!is null){
             auto len=3*pos.dataLength;
@@ -1108,7 +1118,7 @@ struct DynamicsVars(T){
         dVarStruct.checkAllocDynPVect(&mddx);
     }
     
-    void opSliceAssign(V)(ref DynamicsVars!(V) d2){
+    void opSliceAssignT(V)(ref DynamicsVars!(V) d2){
         assert((dVarStruct is null && d2.dVarStruct is null)|| dVarStruct is d2.dVarStruct || dVarStruct == d2.dVarStruct,
             "incompatible structures");
         potentialEnergy=d2.potentialEnergy;
@@ -1116,13 +1126,23 @@ struct DynamicsVars(T){
         dx[]=d2.dx;
         mddx[]=d2.mddx;
     }
-    void opSliceAssign()(T val){
-        assert((dVarStruct is null && val.dVarStruct is null)|| dVarStruct is val.dVarStruct || dVarStruct == val.dVarStruct,
-            "incompatible structures");
+    void opSliceAssignEl(T val){
+        assert((dVarStruct !is null),"invalid structures");
         potentialEnergy=0;
         x[]=val;
         dx[]=val;
         mddx[]=val;
+    }
+    void opSliceAssign(V)(V v){
+        static if (is(typeof(opSliceAssignEl(v)))){
+            opSliceAssignEl(v);
+        } else static if (is(typeof(this.opSliceAssignT(v)))){
+            this.opSliceAssignT(v);
+        } else static if (is(typeof(v.copyTo(*this)))){
+            v.copyTo(*this);
+        } else {
+            static assert(0,"cannot assign from "~V.stringof~" to DynamicsVars!("~T.stringof~")");
+        }
     }
     void axpby(V)(DynamicsVars!(V) v,V a,T b){
         x.axpby(v.x,a,b);

@@ -1,6 +1,11 @@
 /// data stored for each local point, storage efficient for data that needs to be stored for each point (dense)
 /// useful to unbundle extra method data from the points
 module dchem.pnet.DenseLocalPointArray;
+import blip.container.BatchedGrowableArray;
+import blip.serialization.Serialization;
+import dchem.pnet.PNetModels;
+import blip.util.BinSearch;
+import blip.sync.Atomic;
 
 enum { batchSize=512 }
 
@@ -11,7 +16,7 @@ class DenseLocalPointArray(T){
     
     T opIndex(Point k){
         synchronized(this){
-            auto idx=lbound(keys,k);
+            auto idx=lBound(keys,k);
             assert(idx<keys.length && keys[idx]==k,"could not find local key "~k.toString());
             if (values.length<idx){
                 return T.init;
@@ -20,26 +25,39 @@ class DenseLocalPointArray(T){
         }
     }
     T* ptrI(Point k){
-        auto idx=lbound(keys,k);
-        assert(idx<keys.length && keys[idx]==k,"could not find local key "~k.toString());
+        size_t nKeys=keys.length;
+        readBarrier();
+        auto idx=lBound(keys,k,0,nKeys);
+        assert(idx<nKeys && keys[idx]==k,"could not find local key "~k.toString());
         if (values.length<idx){
             values.growTo(keys.length);
         }
-        return &(values[idx]);
+        return values.ptrI(idx);
     }
     void opIndexAssign(T val,Point k){
         synchronized(this){
-            *ptrI()=val;
+            *ptrI(k)=val;
         }
     }
-    /+static if (T U:U*){
-        int opApply(int delegate(ref U el)){
-            synchronized(this){
-                auto k=keys.view();
-                values.growTo(k.length);
-                auto v=values.view();
-            }
-            //v.sLoop()
+    
+    int opApply(int delegate(ref Point,ref T el)loopBody){
+        auto ks=keys.view();
+        synchronized(this){
+            values.growTo(ks.length);
         }
-    }+/
+        foreach(i,k;ks){
+            auto res=loopBody(k,*values.ptrI(i));
+            if (res!=0) return res;
+        }
+        return 0;
+    }
+    
+    size_t length(){
+        return keys.length;
+    }
+    
+    this(){
+        keys=new BatchedGrowableArray!(Point,batchSize)();
+        values=new BatchedGrowableArray!(T,batchSize)();
+    }
 }
