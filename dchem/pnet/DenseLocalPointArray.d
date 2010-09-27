@@ -39,6 +39,18 @@ class DenseLocalPointArray(T){
             *ptrI(k)=val;
         }
     }
+    T* opIn_r(Point k){
+        size_t nKeys=keys.length;
+        readBarrier();
+        auto idx=lBound(keys,k,0,nKeys);
+        if (idx<nKeys && keys[idx]==k){
+            if (values.length<idx){
+                values.growTo(keys.length);
+            }
+            return values.ptrI(idx);
+        }
+        return null;
+    }
     
     int opApply(int delegate(ref Point,ref T el)loopBody){
         auto ks=keys.view();

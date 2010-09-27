@@ -18,6 +18,8 @@ import blip.util.NotificationCenter;
 import dchem.calculator.CalculatorModels;
 import blip.math.IEEE;
 import blip.math.random.Random;
+import blip.container.Cache;
+import blip.container.Pool;
 
 /// unique key for a point, dimensions might change
 /// key might have some special values,
@@ -317,8 +319,18 @@ interface MainPointI(T){
     T explorationSize();
     /// bit-or of GFlags of the current point
     uint gFlags();
+    /// atomic cas on the flags of this point
+    uint gFlagsAtomicCAS(uint newVal,uint oldVal);
+    /// atomic op on the flags of this point
+    uint gFlagsAtomicOp(uint delegate(uint) op);
     /// if this point is a local copy, and not the "main" point
     bool isLocalCopy();
+    /// if the point is explorable
+    bool isExplorable();
+    /// if the point is still valid (ie. not superseded or dropped)
+    bool isValid();
+    /// it the point was broadcasted to all silos
+    bool isPublic();
     /// if the point has a local frame of reference (i.e. minDir)
     bool hasFrameOfRef();
     
@@ -396,17 +408,17 @@ interface MainPointI(T){
     /// creates dualDir, minDirScale, updates gFlags, assign directions to all neighbors
     /// might modify the attractor, and notifies neighbors
     void didGradEval();
-    // /// builds the direction toward the minimum (internal method)
-    // void buildMinDir();
-    /// marks this point as dropped
-    void drop();
+    /// marks this point as dropped, returns true if the point was not yet dropped
+    bool drop();
     
     void retain();
     void release();
+    /// assign from a dired point
+    void opSliceAssign(DriedPoint!(T));
 }
 
 /// lazy loader of points
-class LazyMPLoader(T){
+class LazyMPLoader(T):Serializable{
     Point point;
     MainPointI!(T) _mainPoint;
     WaitCondition waitPoint;
@@ -414,8 +426,11 @@ class LazyMPLoader(T){
     bool weakUpdate;
     Exception exception;
     mixin RefCountMixin!();
+    PoolI!(LazyMPLoader) pool;
     void release0(){
         if (_mainPoint!is null) _mainPoint.release();
+        _mainPoint=null;
+        if (pool!is null) pool.giveBack(this);
     }
     bool hasPoint(){
         return _mainPoint!is null;
@@ -469,97 +484,148 @@ class LazyMPLoader(T){
     /// if weakUpdate is true tries to get the newest version that is locally available
     /// the time is used to decide if the cached version is new enough, or a new version has to be
     /// fetched from the owning silos
-    this(Point point,bool weakUpdate,Time time){
+    this(Point point,bool weakUpdate,Time time,PoolI!(LazyMPLoader) pool=null){
         this.point=point;
         this.weakUpdate=weakUpdate;
         this.maxTime=time;
+        this.pool=pool;
     }
     /// ditto
     this(Point point,bool weakUpdate=true){
         this(point,weakUpdate,Clock.now);
     }
     this(){}
+    typeof(this) postUnserialize(Unserializer s){
+        maxTime=Clock.now; // reset time as it cannot be assumed to be synchronized between different computers
+        return this;
+    }
     mixin(serializeSome("dchem.LazyMPLoader!("~T.stringof~")",`point|weakUpdate|maxTime`));
     mixin printOut!();
+    
+    static PoolI!(LazyMPLoader) gPool;
+    static this(){
+        gPool=cachedPool(function LazyMPLoader(PoolI!(LazyMPLoader)p){
+            return new LazyMPLoader(Point(0),true,Time(0),p);
+        });
+    }
+    static LazyMPLoader opCall(Point point,bool weakUpdate,Time time,PoolI!(LazyMPLoader) pool=null){
+        auto res=gPool.getObj();
+        res.maxTime=time;
+        res.weakUpdate=weakUpdate;
+        res.point=point;
+        return res;
+    }
+    static LazyMPLoader opCall(Point point,bool weakUpdate=true){
+        return LazyMPLoader.opCall(point,weakUpdate,Clock.now);
+    }
 }
 
-/// calls that make an exploration progress, and correspond to notifications that are called
+alias ulong SKey; /// silos key
+enum SKeyVal:SKey{
+    Invalid=0,
+    Any=1,
+    All=2
+}
+
+/// calls that make an exploration progress, and correspond to notifications that are called.
+///
+/// All methods begin with an SKey that is the "target" of the message, and could also be used
+/// for redundancy/load balancing in the future. This approach make it easy to hide a complex
+/// parallel network behind a single connection.
 interface ExplorationObserverI(T){
-    /// adds energy for a local point and bCasts addEnergyEval
-    void addEnergyEvalLocal(Point p,Real energy);
-    /// adds gradient value to a point that should be owned. Energy if not NAN replaces the previous value
+    /// stops a silos
+    /// at the moment there is no support for dynamic adding/removal of silos, (worth adding???)
+    /// so s should be only SKeyVal.All
+    void shutdown(SKey s);
+    /// adds energy for a point local to s and bCasts addEnergyEval
+    void addEnergyEvalLocal(SKey s,Point p,Real energy);
+    /// adds gradient value to a point that should be owned by s. Energy if not NAN replaces the previous value
     /// sets inProgress to false
-    void addGradEvalLocal(Point p,PSysWriter!(T) pSys);
-    /// communicates that the given point is being expored
+    void addGradEvalLocal(SKey s,Point p,PSysWriter!(T) pSys);
+    /// communicates to s that the given point is being explored
     /// pSize is the point size, flags the flags of the point
-    void addExploredPoint(SKey owner,Point point,PSysWriter!(T) pos,T pSize,uint flags);
+    void publishPoint(SKey s,SKey owner,Point point,PSysWriter!(T) pos,T pSize,uint flags);
     
     /// a neighbor point has calculated its energy (and not the gradient)
-    /// neighbors should be restricted to silos
-    void neighborHasEnergy(Point p,Point[] neighbors,Real energy);
+    /// neighbors should be restricted to s
+    void neighborHasEnergy(SKey s,Point p,Point[] neighbors,Real energy);
     /// the neighbor point p has calculated its gradient (and energy)
     /// neighbors should be restricted to silos
-    void neighborHasGradient(LazyMPLoader!(T)p, Point[] neighbors, Real energy);
+    void neighborHasGradient(SKey s,LazyMPLoader!(T)p, Point[] neighbors, Real energy);
     
-    /// finished exploring the given local point (remove it from the active points), bcasts finishedExploringPoint
-    void finishedExploringPointLocal(LocalSilosI!(T) silos,Point);
     /// finished exploring the given point (remove it from the active points)
-    void finishedExploringPoint(Point);
+    void finishedExploringPoint(SKey s,Point,SKey owner);
+    /// informs silos s that source has done the initial processing of point p0,
+    /// and p0 is now known and collision free
+    void didLocalPublish(SKey s,Point p0,SKey source);
     /// drops all calculation/storage connected with the given point, the point will be added with another key
     /// (called upon collisions)
-    void dropPoint(SKey,Point);
+    void publishCollision(SKey,Point);
 }
 
 /// an object that can offer new points to explore
 /// actually should not inherit from ExplorationObserverI, but this way we avoid multiple inheritance bugs
+/// these method are not public/remote
 interface ExplorerI(T):ExplorationObserverI!(T){
     /// returns a point to evaluate
-    Point pointToEvaluate();
+    Point pointToEvaluate(SKey);
     /// called when an evaluation fails, flags: attemptRetry/don't Retry
-    void evaluationFailed(Point,uint flags);
+    void evaluationFailed(SKey s,Point,uint flags);
     /// should speculatively calculate the gradient? PNetSilos version calls addEnergyEvalLocal
-    bool speculativeGradient(Point p,Real energy);
+    bool speculativeGradient(SKey s,Point p,Real energy);
 }
 
-alias ulong SKey; /// silos key
+/// a task that can be transferred to a silos and performed there
+interface RemoteSilosOpI(T):Serializable{ // could be Serializable and SilosWorkerI, avoiding it due to compiler bugs
+    void workOn(LocalSilosI!(T)silos);
+    void stop();
+}
 
 /// interface of a silos (storage) of the point network
-interface PNetSilosI(T):ExplorationObserverI!(T){
-    /// stops all silos (at the moment there is no support for dynamic adding/removal of silos, worth adding???)
-    void shutdown();
-    /// key of this silos
-    SKey key();
-    /// load (usage) of the silos in some arbitrary units
-    Real load();
+///
+/// just like ExplorationObserverI all methods have SKey as first argument (see there for the rationale)
+interface PNetSilosI(T):ExplorerI!(T){
+    /// load (usage) of the silos s in some arbitrary units
+    Real load(SKey s);
     
-    /// returns the position of the given local point
-    PSysWriter!(T)pointPosLocal(Point);
-    /// returns the position of the given point
-    PSysWriter!(T)pointPos(Point);
     /// energy for the local points (NAN if not yet known)
-    Real[] energyForPointsLocal(Point[],Real[]);
+    Real[] energyForPointsLocal(SKey s,Point[],Real[]);
     /// energy for the points (NAN if not yet known)
-    Real[] energyForPoints(Point[],Real[]);
-    /// returns a snapshot of the given point
-    DriedPoint!(T)mainPoint(Point);
-    /// returns a snapshot of the given point that is local to this silos
-    DriedPoint!(T)mainPointLocal(Point);
+    Real[] energyForPoints(SKey s,Point[],Real[]);
+    /// returns a snapshot of the given point (asking first silos s)
+    DriedPoint!(T)mainPoint(SKey s,Point);
+    /// returns a snapshot of the given point that is local to the silos s
+    DriedPoint!(T)mainPointLocal(SKey s,Point);
+    /// owner of the given point (asking s first)
+    SKey pointOwner(SKey s,Point);
+    /// the next free silos (for storage)
+    SKey nextFreeSilos(SKey s);
+
     /// tells the local points neighs that they have p0 as neighbor
-    void addPointToLocalNeighs(Point p0,Point[]neighs);
+    void addPointToLocalNeighs(SKey s,Point p0,Point[]neighs);
     /// tells the local point p0 that neighDirs (computed when p0 gradient was hadGrad) should be added to it
-    bool addNeighDirsToLocalPoint(Point p0,PointAndDir[]neighDirs,DirDistances!(T)[]dirDists,bool hadGrad);
-    /// informs that source has processed point p0
-    void processedLocal(Point p0,SKey source);
+    bool addNeighDirsToLocalPoint(SKey s,Point p0,PointAndDir[]neighDirs,DirDistances!(T)[]dirDists,bool hadGrad);
+    /// operation to be executed on the given silos
+    void executeLocally(SKey s,RemoteSilosOpI!(T) op);
+    
+    /// dictionary with the values of the various properties
+    Real[char[]] propertiesDict(SKey s);
+    // expose creation & bcast of points and update from dried points? merging should be done carefully to avoid problems... so for now you should do them via executeLocal...
 }
 
+/// local interface, to a silos (basically a silos client)
 interface LocalSilosI(T): PNetSilosI!(T) {
+    /// if this silos is owner of the key k (note that using this rather than having a single key per silos
+    /// will allow more complex interpretations of SKey in the future...)
+    bool hasKey(SKey k);
     /// random number generator
     RandomSync rand();
     /// writes out a log message (at once)
     void logMsg(void delegate(void delegate(char[]))writer);
     /// writes out a log message
     void logMsg(char[]msg);
-    
+    /// owner of the given point (just a utility method)
+    SKey ownerOfPoint(Point);
     
     /// adds an extra observer that will be notified about the network changes
     void addObserver(ExplorationObserverI!(T) o);
@@ -578,16 +644,6 @@ interface LocalSilosI(T): PNetSilosI!(T) {
     bool cheapGrad();
     /// local notification center
     NotificationCenter nCenter();
-    /// owner of the given point
-    SKey ownerOfPoint(Point);
-    /// the next free silos
-    SKey nextFreeSilos();
-    /// silos for the given key
-    PNetSilosI!(T)silosForKey(SKey s);
-    /// local point mainpoint (the real reference point)
-    MainPointI!(T) mainPointL(Point);
-    /// creates a new point in this silos located at newPos, the point is not yet broadcasted
-    Point newLocalPointAt(DynPVector!(T,XType) newPos);
     
     // values to define the point net topology
     
@@ -640,24 +696,34 @@ interface LocalSilosI(T): PNetSilosI!(T) {
     /// the lenght along them should be exactly 0, but nomerical error might make them slightly larger than 0
     T zeroLen();
     
+    /// creates a new point located at newPos in this silos, the point is not yet broadcasted
+    /// not all silos might support creation of local points, use nextFreeSilos to get a silos
+    /// thas supports it, use executeLocally to create, setup & publish a point...
+    MainPointI!(T) newPointAt(DynPVector!(T,XType) newPos);
+    /// local point mainpoint (the real reference point)
+    MainPointI!(T) mainPointL(Point);
+    /// publishes the local point given.
+    /// Returns the pubblished point which might be different fron the argument if a collision did happen.
+    MainPointI!(T) bcastPoint(MainPointI!(T));
     /// a local point (possibly a copy), is retained, and needs to be released (thus the create in the name)
     /// the time t is used to decide if a cached version can be used
     MainPointI!(T)createLocalPoint(Point p,Time t);
-    /// makes a point "public" informing other silos that that region has been explored
-    void bcastPoint(Point p);
     /// drops a cached point (the point is not in use anymore)
     void dropCachedPoint(MainPointI!(T)p);
+
+    /// an url that can be used to contact the silos core
+    char[] silosCoreUrl();
 }
 
 /// an object that works on a LocalSilos
-interface SilosWorker(T){
+interface SilosWorkerI(T){
     void workOn(LocalSilosI!(T) silos);
 }
 
 /// a loader of points (what is created by the input)
 interface SilosWorkerGen:InputElement{
-    SilosWorker!(Real) workerReal();
-    SilosWorker!(LowP) workerLowP();
+    SilosWorkerI!(Real) silosWorkerReal();
+    SilosWorkerI!(LowP) silosWorkerLowP();
 }
 
 /// define silosWorkerT extractor helper
@@ -680,3 +746,15 @@ interface ExplorerGen:ExplorationObserverGen{
 
 /// define explorerT extractor helper
 mixin(genTypeTMixin("Explorer","explorer","LocalSilosI!(T)silos","silos"));
+
+/// help structure 
+struct CachedPoint(T){
+    MainPointI!(T) mainPoint;
+    Time lastSync;
+}
+
+/// list of the properties exposed by LocalSilosI (useful for ctfe)
+const char[] propertiesList=`discretizationStep|minProjectionResidual|sameDirCosAngle|minNormDual|minNormDualSelf
+    minRealNormSelf0|minRealNormSelf1|maxNormDual|explorationSize|dirSize2|dirCartesianSize2
+    maxMoveInternal|maxMoveCartesian|maxMoveDual|maxNormCartesian|minMoveInternal|sameDirCosAngleCartesian|
+    minRealNormSelf2|dirDualSize2|inDirCartesianScale2|zeroLen`;

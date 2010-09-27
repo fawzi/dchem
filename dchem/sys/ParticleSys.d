@@ -37,7 +37,9 @@ enum PSDupLevel{
     SysStruct=0x20,         /// duplicates the system structure
     SysStructContents=0x40, /// duplicates the system structure contents
     HiddenVars=0x80,        /// duplicates hidden variables
-    All=PSysLevel|DynProperties|SysStruct|SysStructContents|HiddenVars /// duplicates all
+    DynPNullE=0x100,        /// nullifies the energy if DynProperties are duplicated
+    All=PSysLevel|DynProperties|SysStruct|SysStructContents|HiddenVars, /// duplicates all
+    EmptyDyn=DynPNullX|DynPNullDx|DynPNullMddx|PSysLevel|DynProperties|HiddenVars, /// duplicates the structure, but uses an empty dynamic info
 }
 
 /// simple interface that offers the basic derivative transfer types
@@ -809,6 +811,7 @@ class ParticleSys(T): CopiableObjectI,Serializable
         if ((l&PSDupLevel.DynPNullX))     dVar.x.clear();
         if ((l&PSDupLevel.DynPNullDx))    dVar.dx.clear();
         if ((l&PSDupLevel.DynPNullMddx))  dVar.mddx.clear();
+        if ((l&PSDupLevel.DynPNullE))     dVar.potentialEnergy=Real.init;
         static if(is(T==V)){
             if ((l&PSDupLevel.DynProperties)==0){
                 return this;

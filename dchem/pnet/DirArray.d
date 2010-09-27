@@ -227,4 +227,7 @@ class FlagsArray{
         }
         s("}");
     }
+    void clearData(){
+        data[]=0;
+    }
 }

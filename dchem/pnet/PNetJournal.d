@@ -37,7 +37,7 @@ class PNetJournal(T):ExplorationObserverI{
     
     struct JournalEntry{
         enum Kind:int{
-            PointGrad, StartPoint,FinishedPoint,DropPoint,EvalE
+            PointGrad, StartPoint,FinishedPoint,publishCollision,EvalE
         }
         Kind kind;
         uint flags;
@@ -68,9 +68,9 @@ class PNetJournal(T):ExplorationObserverI{
             res.point=point;
             return res;
         }
-        static JournalEntry DropPoint(Point p){
+        static JournalEntry publishCollision(Point p){
             JournalEntry res;
-            res.kind=Kind.DropPoint;
+            res.kind=Kind.publishCollision;
             res.point=point;
             return res;
         }
@@ -156,7 +156,7 @@ class PNetJournal(T):ExplorationObserverI{
     }
     /// communicates that the given point is being expored
     /// flags: communicate doubleEval?
-    void addExploredPoint(SKey owner,Point point,PSysWriter!(T) pos,T pSize,uint flags){
+    void publishPoint(SKey owner,Point point,PSysWriter!(T) pos,T pSize,uint flags){
         if (context.logOtherStart || owner==silos.key){
             this.serialLock.lock();
             scope(exit){ this.serialLock.unlock(); }
@@ -182,11 +182,11 @@ class PNetJournal(T):ExplorationObserverI{
     }
     /// drops all calculation/storage connected with the given point, the point will be added with another key
     /// (called upon collisions)
-    void dropPoint(SKey s,Point p){
+    void publishCollision(SKey s,Point p){
         if (context.logOtherStart|| s==silos.key){
             this.serialLock.lock();
             scope(exit){ this.serialLock.unlock(); }
-            jSerial(JournalEntry.DropPoint(p));
+            jSerial(JournalEntry.publishCollision(p));
         }
     }
 }

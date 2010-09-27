@@ -187,8 +187,8 @@ class CalcContext:CalculationContext{
     Method _method;
     Real maxChange;
     
-    void localExec(RemoteTask r){
-        r.execute(Variant(this));
+    void executeLocally(RemoteCCTask r){
+        r.workOn(this);
     }
 
     this(char[] contextId){

@@ -20,6 +20,13 @@ import blip.BasicModels;
 import dchem.sys.Constraints;
 import tango.io.vfs.model.Vfs;
 
+/// a task that can be excuted locally on the calculation context
+interface RemoteCCTask: Serializable{
+    /// starts the task with the given CalculationContext
+    void workOn(CalculationContext);
+    /// might stop the task, or not, might return immediatly (even if the task is still running)
+    void stop();
+}
 
 /// calculator setup (chooses the method to perform each calculation)
 interface Method:InputElement{
@@ -109,6 +116,8 @@ interface CalculationContext{
     ubyte[]storeHistory();
     /// url to access this from other processes
     char[] exportedUrl();
+    /// execute the operation t locally on the context
+    void executeLocally(RemoteCCTask t);
 }
 
 /// templatized way to extract the pSys from a CalculationContext

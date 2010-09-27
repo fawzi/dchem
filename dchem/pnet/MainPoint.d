@@ -287,6 +287,12 @@ class MainPoint(T):MainPointI!(T){
         return (flags&GFlags.EnergyInfo)==GFlags.EnergyEvaluated &&
             (flags&(GFlags.DoNotExplore|GFlags.FullyExplored|GFlags.FullyEvaluated|GFlags.OldApprox))==0;
     }
+    bool isValid(){
+        return (gFlags&GFlags.OldApprox)==0;
+    }
+    bool isPublic(){
+        return (gFlags&GFlags.PointBcasted)!=0;
+    }
     /// if the frame of reference is set
     bool hasFrameOfRef(){
         return (gFlags&GFlags.GradientInfo)==GFlags.GradientEvaluated;
@@ -316,16 +322,32 @@ class MainPoint(T):MainPointI!(T){
         res.explorationSize=explorationSize;
         return res;
     }
-    
-    this(LocalSilosI!(T) localContext, PoolI!(MainPoint) p){
+    /// if given the neighbor are taken into ownership, and freed by this object.
+    this(LocalSilosI!(T) localContext, PoolI!(MainPoint) p,PointAndDir[] neighbors=[]){
         this._localContext=localContext;
         this.pool=p;
+        this._pos=localContext.refPos.dup(PSDupLevel.EmptyDyn);
+        this._gFlags=GFlags.None;
+        this._explorationSize=cast(T)localContext.explorationSize();
+        this._minDirScale=T.init;
+        //this._minDir.clear();
+        this._exploredDirs=new FlagsArray(ndirs);
+        this._neighbors=lGrowableArray(neighbors,neighbors.length,GASharing.Global);
     }
     
+    void clear(){
+        if (pos!is null) this.pos.dynVars.deallocData();
+        this._gFlags=GFlags.None;
+        this._explorationSize=cast(T)localContext.explorationSize();
+        this._minDirScale=T.init;
+        this._minDir.clear();
+        this._exploredDirs.clearData();
+        this._neighbors.clearData();
+    }
     /// constructor
     this(LocalSilosI!(T) localContext,Point point,ParticleSys!(T) pos,uint gFlags,
         T explorationSize,DynPVector!(T,DualDxType) minDir,T minDirScale=T.init,
-        FlagsArray exploredDirs=null,PointAndDir[] neighbors=null)
+        FlagsArray exploredDirs=null,PointAndDir[] neighbors=null,PoolI!(MainPoint)pool=null)
     {
         this._localContext=localContext;
         this._point=point;
@@ -336,6 +358,7 @@ class MainPoint(T):MainPointI!(T){
         this._minDir=minDir;
         this._minDirScale=minDirScale;
         this._exploredDirs=exploredDirs;
+        this.pool=pool;
         if (this._exploredDirs is null){
             this._exploredDirs=new FlagsArray(ndirs);
         }
@@ -346,6 +369,23 @@ class MainPoint(T):MainPointI!(T){
     {
         DynPVector!(T,DualDxType) minD;
         this(localContext,point,pos,gFlags,explorationSize,minD);
+    }
+    /// atomic cas on the flags of this point
+    uint gFlagsAtomicCAS(uint newVal,uint oldVal){
+        synchronized(this){
+            if (_gFlags==oldVal){
+                _gFlags=newVal;
+            }
+            return _gFlags;
+        }
+    }
+    /// atomic op on the flags of this point
+    uint gFlagsAtomicOp(uint delegate(uint) op){
+        synchronized(this){
+            auto oldV=_gFlags;
+            _gFlags=op(oldV);
+            return oldV;
+        }
     }
     /// explores the next direction, immediately marks it as in exploration
     /// returns direction 0 if the gradient has to be evaluated, an invalid direction if the current point is in evaluation,
@@ -623,7 +663,7 @@ class MainPoint(T):MainPointI!(T){
     } body {
         if (neighs.length==0) return true; // return false?
         if (isLocalCopy){
-            bool added=localContext.silosForKey(localContext.ownerOfPoint(point)).addNeighDirsToLocalPoint(point,neighs,dirDist,hadGradient);
+            bool added=localContext.addNeighDirsToLocalPoint(localContext.ownerOfPoint(point),point,neighs,dirDist,hadGradient);
             return added;
         }
         bool gradChanged=false;
@@ -658,7 +698,7 @@ class MainPoint(T):MainPointI!(T){
         // communicate to neighbors
         auto neigToNotify=new PointToOwner(&localContext.ownerOfPoint,delegate Point(size_t i){ return neighs[i].point; },neighs.length);
         foreach (iPts;neigToNotify.pLoop){
-            localContext.silosForKey(iPts.owner).addPointToLocalNeighs(point,iPts.points);
+            localContext.addPointToLocalNeighs(iPts.owner,point,iPts.points);
         }
         // notify
         PointNeighbors!(T) pn;
@@ -898,13 +938,13 @@ class MainPoint(T):MainPointI!(T){
                     dumper(s)("invalid energy after calculation in point ")(point);
                 }),__FILE__,__LINE__);
             }
-            auto target=localContext.silosForKey(localContext.ownerOfPoint(point));
+            auto target=localContext.ownerOfPoint(point);
             if (!calcF){
-                target.addEnergyEvalLocal(point,e);
+                localContext.addEnergyEvalLocal(target,point,e);
             }
             bool calcMore=false;
             if (!calcF && expl!is null){
-                calcMore=expl.speculativeGradient(point,e);
+                calcMore=expl.speculativeGradient(target,point,e);
             } else {
                 addEnergyEvalLocal(e);
             }
@@ -917,7 +957,7 @@ class MainPoint(T):MainPointI!(T){
             }
             if (calcF){
                 if ((gFlags&GFlags.LocalCopy)!=0){
-                    target.addGradEvalLocal(point,pSysWriter(pos));
+                    localContext.addGradEvalLocal(target,point,pSysWriter(pos));
                 } else {
                     didGradEval();
                 }
@@ -1048,9 +1088,9 @@ class MainPoint(T):MainPointI!(T){
         auto energies=lMem.allocArr!(Real)(nPts.points.length);
         uint newGFlags=0;
         foreach (i;nPts.pLoop){
-            auto silo=localContext.silosForKey(i.owner);
-            silo.neighborHasEnergy(point,i.points,energy);
-            auto energ=silo.energyForPointsLocal(i.points,energies[i.localLb..i.localUb]);
+            auto silo=i.owner;
+            localContext.neighborHasEnergy(silo,point,i.points,energy);
+            auto energ=localContext.energyForPointsLocal(silo,i.points,energies[i.localLb..i.localUb]);
             auto nPts=i.points.length;
             for(size_t iPts=0;iPts<nPts;++iPts){
                 addEnergyEvalOther(i.points()[iPts],energies[i.localLb+iPts]);
@@ -1142,9 +1182,19 @@ class MainPoint(T):MainPointI!(T){
         }
         localCopy.deallocData();
     }
-    /// marks this point as dropped
-    void drop(){
-        _gFlags|=GFlags.OldApprox|GFlags.DoNotExplore;
+    /// marks this point as dropped returns true if it hadn't been dropped yet...
+    bool drop(){
+        synchronized(this){
+            auto oldFlags=_gFlags;
+            if (oldFlags&GFlags.LocalCopy){
+                throw new Exception("cannot drop local copies of point",__FILE__,__LINE__);
+            }
+            _gFlags|=GFlags.OldApprox|GFlags.DoNotExplore;
+            if ((oldFlags&GFlags.OldApprox)==0){
+                return true;
+            }
+            return false;
+        }
     }
     /// adds the gradient to this point
     /// energy must be valid
@@ -1174,10 +1224,10 @@ class MainPoint(T):MainPointI!(T){
         Real[] energies;
         uint newGFlags=0;
         Time tNow=Clock.now;
-        auto thisP=new LazyMPLoader!(T)(point,true,tNow);
+        auto thisP=LazyMPLoader!(T)(point,true,tNow);
         foreach (i;nPts.pLoop){
-            auto silo=localContext.silosForKey(i.owner);
-            silo.neighborHasGradient(thisP,i.points, energy);
+            auto silo=i.owner;
+            localContext.neighborHasGradient(silo,thisP,i.points, energy);
             auto nPts=i.points.length;
             for(size_t iPts=0;iPts<nPts;++iPts){
                 auto pointAtt=i.points()[iPts];
@@ -1186,7 +1236,7 @@ class MainPoint(T):MainPointI!(T){
                 checkIfNeighbor(pAtt.pos.dynVars.x, pointAtt,pAtt.explorationSize);
                 if (!isNaN(pAtt.energy)){
                     if (pAtt.hasFrameOfRef){
-                        auto otherP=new LazyMPLoader!(T)(pointAtt,true,tNow);
+                        auto otherP=LazyMPLoader!(T)(pointAtt,true,tNow);
                         addGradEvalOther(otherP,pAtt.energy);
                         otherP.release();
                     } else {
@@ -1233,7 +1283,7 @@ class MainPoint(T):MainPointI!(T){
             }
         }
     }
-    void opSliceAssign(T)(DriedPoint!(T)p){
+    void opSliceAssign(DriedPoint!(T)p){
         _point=p.point;
         pos[]=p.pos;
         minDir[]=p.minDir;

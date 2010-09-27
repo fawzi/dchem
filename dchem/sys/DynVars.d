@@ -1229,6 +1229,13 @@ struct DynamicsVars(T){
         mddx.clear;
         dVarStruct=null;
     }
+    /// deallocs the data stored in the vector
+    void deallocData(){
+        x.giveBack();
+        dx.giveBack();
+        mddx.giveBack();
+        potentialEnergy=T.init;
+    }
     mixin(serializeSome("dchem.sys.DynamicsVars("~T.stringof~")","potentialEnergy|x|dx|mddx"));
     mixin printOut!();
 }

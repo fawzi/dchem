@@ -1,25 +1,13 @@
 /// describes the root input file
 module dchem.input.RootInput;
-//import dchem.sys.ParticleSys;
-//import dchem.sys.SegmentedArray;
 import blip.serialization.Serialization;
 import blip.text.TextParser;
 import blip.io.BasicIO;
 import blip.io.Console;
-//import dchem.input.ReadIn;
 import dchem.Common;
 import blip.util.TangoLog;
 import blip.core.Variant;
-//import blip.io.StreamConverters;
-//import tango.io.stream.DataFile;
-//import tango.io.FilePath;
-//import dchem.input.ReadIn2PSys;
-//import blip.util.NotificationCenter;
-//import dchem.sys.PIndexes;
 import blip.BasicModels;
-//import dchem.sys.Constraints;
-//import tango.io.vfs.model.Vfs;
-//import tango.sys.Process;
 
 /// represents a task that can be sent over to another computer
 interface RemoteTask:Serializable{

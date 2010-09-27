@@ -30,6 +30,8 @@ import blip.container.Cache;
 import blip.container.Pool;
 import dchem.sys.DynVars;
 import blip.util.LocalMem;
+import blip.parallel.smp.Wait;
+import blip.io.Console;
 
 struct LoadStats{
     Real load;
@@ -40,22 +42,50 @@ struct LoadStats{
         return ((load<l2.load)?-1:((load==l2.load)?cmp(cast(long)silosKey,cast(long)l2.silosKey):1));
     }
 }
-/+
-class RemotePointEval(T):RemoteTask{
+
+class SilosRegistry(T){
+    HashMap!(char[],LocalSilosI!(T)) localSilos;
+    void registerSilos(char[]url,LocalSilosI!(T) silos){
+        synchronized(localSilos){
+            auto lSil=url in localSilos;
+            if (lSil !is null && silos!is (*lSil)){
+                throw new Exception("overwriting silos for url "~url,__FILE__,__LINE__);
+            }
+            localSilos[url]=silos;
+        }
+    }
+    LocalSilosI!(T) proxyForUrl(char[] url){
+        synchronized(localSilos){
+            auto lSil=url in localSilos;
+            if (lSil !is null){
+                (*lSil).retain;
+                return lSil;
+            }
+        }
+        
+        auto prx=ProtocolHandler.proxyForUrl(url);
+        auto silos=cast(PNetSilosI!(T))cast(Object)prx;
+    }
+}
+
+
+class RemotePointEval(T):RemoteCCTask{
     Point point;
-    char[] ownerUrl;
+    char[] silosCoreUrl;
     CalculationContext ctx;
-    mixin(serializeSome("dchem.minEE.RemotePointEval!("~T.stringof~")","point|ownerUrl"));
+    LocalSilosI!(T) localSilos;
+    mixin(serializeSome("dchem.minEE.RemotePointEval!("~T.stringof~")","point|silosCoreUrl"));
     
     this(){}
     this(Point p,char[]oUrl){
         point=p;
-        ownerUrl=oUrl;
+        silosCoreUrl=oUrl;
     }
-    void execute(Variant args){
-        auto ctx=cast(ActiveExplorer!(T))cast(Object)ProtocolHandler.proxyForUrl(ownerUrl);
-        auto pPos=ctx.pointPos(point); // get real point
-        ctx=args.get!(CalculationContext)();
+    void workOn(CalculationContext ctx){
+        //localSilos=
+        //auto ctx=cast(CalculationContext)cast(Object)ProtocolHandler.proxyForUrl(ownerUrl);
+        //auto pPos=ctx.pointPos(point); // get real point
+        //ctx=args.get!(CalculationContext)();
     }
     void stop(){
         if (ctx!is null) ctx.stop();
@@ -63,7 +93,7 @@ class RemotePointEval(T):RemoteTask{
     }
     
 }
-class MasterCalculator:Sampler{
+/+class MasterCalculator:Sampler{
     InputField method;
     mixin myFieldMixin!();
 
@@ -124,6 +154,8 @@ class SilosGen:Sampler{
     /// the current method for energy evaluation
     InputField evaluator;
 
+    /// base name of the silos
+    char[] baseName="Silos";
     /// precision with which the points are stored
     char[] precision="LowP";
     /// list of observers and explorers
@@ -259,14 +291,20 @@ class SilosGen:Sampler{
     }
 
     void run(){
+        ulong n;
+        rand(n); // hopefully unique
+        char[] name=collectAppender(delegate void(CharSink s){
+            dumper(s)(baseName)(n);
+        });
+        SKey newKey=cast(SKey)n;
         if (precision=="LowP"){
-            auto silos=new PNetSilos!(LowP)(this);
+            auto silos=new PNetSilos!(LowP)(this,name,newKey);
             synchronized(this){
                 silosLowP~=silos;
             }
             silos.run();
         } else if (precision=="Real"){
-            auto silos=new PNetSilos!(Real)(this);
+            auto silos=new PNetSilos!(Real)(this,name,newKey);
             synchronized(this){
                 silosReal~=silos;
             }
@@ -289,39 +327,130 @@ class SilosGen:Sampler{
     
 }
 
-char[][] ctfeSplit(char[] splitChars,char[]str,bool skipEmpty){
-    char[][]res;
-    size_t i=0;
-    foreach(j,c;str){
-        foreach (c2;splitChars){
-            if (c==c2){
-                if ((!skipEmpty)||j>i){
-                    res~=str[i..j];
-                }
-                i=j+1;
-            }
-        }
-    }
-    if (i<str.length) res~=str[i..$];
-    return res;
-}
-
 char[] realFromInput(char[]props){
     char[] res;
-    foreach(property;ctfeSplit("| \n",props,true)){
+    auto propsP=ctfeSplit("| \n",props,true);
+    foreach(property;propsP){
         if (property.length>0){
             res~=`
-            T `~property~`(){
-                return cast(T)input.`~property~`;
-            }`;
+    T `~property~`(){
+        return cast(T)input.`~property~`;
+    }`;
         }
     }
+    res~=`
+    Real[char[]] propertiesDict0(){
+        Real[char[]] res;`;
+    foreach(property;propsP){
+        if (property.length>0){
+            res~=`
+        res["`~property~`"]=input.`~property~`;`;
+        }
+    }
+    res~=`
+    }`;
     return res;
 }
 
-struct CachedPoint(T){
-    MainPoint!(T) mainPoint;
-    Time lastSync;
+/// helper class to track publishing of points
+/// we hack in the reuse because we know that there is *always* one (and only one) waiter
+class PointBcastProgress(T){
+    PNetSilos!(T) localContext;
+    MainPointI!(T) pointToBCast;
+    HashMap!(SKey,int) publishLevel;
+    long waitingName=1;
+    WaitConditionT!(false) nameKnown;
+    PointBcastProgress nextPoint;
+    PoolI!(PointBcastProgress) pool;
+    this(PoolI!(PointBcastProgress)p){ pool=p; }
+    this(MainPointI!(T) p,PoolI!(PointBcastProgress)pool=null){
+        pointToBCast=p;
+        this.pool=pool;
+        this.localContext=cast(PNetSilos!(T))cast(Object)p.localContext;
+        this.nameKnown=new WaitConditionT!(false)(&this.nameIsKnown);
+        assert(this.localContext!is null);
+    }
+    void clear(){
+        pointToBCast=null;
+    }
+    static PoolI!(PointBcastProgress) gPool;
+    static this(){
+        gPool=cachedPool(function PointBcastProgress(PoolI!(PointBcastProgress)p){
+            return new PointBcastProgress(p);
+        });
+    }
+    void reset(MainPointI!(T) p){
+        pointToBCast=p;
+        this.localContext=cast(PNetSilos!(T))cast(Object)p.localContext;
+        assert(this.localContext!is null);
+    }
+    static PointBcastProgress opCall(MainPointI!(T)p){
+        auto nP=gPool.getObj();
+        nP.reset(p);
+        return nP;
+    }
+    void publish(){
+        foreach(sK,sL;localContext.silos){
+            synchronized(this){
+                ++waitingName;
+            }
+            sL.publishPoint(sK,localContext._key,pointToBCast.point,pSysWriter(pointToBCast.pos),
+                pointToBCast.explorationSize,pointToBCast.gFlags);
+        }
+        synchronized(this){
+            --waitingName;
+        }
+    }
+    bool nameIsKnown(){
+        assert(waitingName>=0);
+        return waitingName==0;
+    }
+    void communicateCollision(){
+        bool addNew=false;
+        auto dP=pointToBCast.driedPoint();
+        synchronized(this){
+            if (pointToBCast.drop){
+                addNew=true;
+            }
+        }
+        PointBcastProgress nextPP;
+        if (addNew){
+            auto np=localContext.newPointAt(pointToBCast.pos.dynVars.x);
+            np[]=dP;
+            nextPP=PointBcastProgress(np);
+            synchronized(localContext.publishingPoints){
+                localContext.publishingPoints[np.point]=nextPP;
+            }
+            nextPP.publish();
+        }
+        synchronized(this){
+            if (nextPP!is null) nextPoint=nextPP;
+            --waitingName;
+        }
+        nameKnown.checkCondition();
+    }
+    void communicatePublish(SKey origin){
+        synchronized(this){
+            --waitingName;
+        }
+        nameKnown.checkCondition();
+    }
+    MainPointI!(T) finalName(){
+        nameKnown.wait();
+        PointBcastProgress nextP;
+        synchronized(this){
+            nextP=nextPoint;
+        }
+        auto res=pointToBCast;
+        if (nextP!is null) {
+            res=nextP.finalName;
+        }
+        if (pool!is null) pool.giveBack(this);
+        synchronized(localContext.publishingPoints){
+            localContext.publishingPoints.removeKey(pointToBCast.point);
+        }
+        return res;
+    }
 }
 
 class PNetSilos(T): LocalSilosI!(T){
@@ -332,17 +461,18 @@ class PNetSilos(T): LocalSilosI!(T){
     }
     RunLevel runLevel;
     SilosGen input;
-    static UniqueNumber!(ulong) nextLocalId;
-    static UniqueNumber!(ulong) nextPntNr;
+    UniqueNumber!(ulong) nextLocalId;
+    UniqueNumber!(ulong) nextPntNr;
     char[] nameId;
     SKey _key;
-    SKey key(){ return _key; }
-    HashMap!(SKey,PNetSilosI!(T)) silos;
+    bool hasKey(SKey k){ return _key==k||k==SKeyVal.Any; }
+    HashMap!(SKey,PNetSilosI!(T)) silos; // contains self
     MinHeapSync!(LoadStats) loads; 
     BatchedGrowableArray!(Point,batchSize) localPointsKeys; // indexes for local owned points
     HashMap!(Point,SKey) owner;
     HashMap!(Point,CachedPoint!(T)) localCache;
-    CalculationContext[Point] localCalcInProgress;
+    HashMap!(Point,CalculationContext) localCalcInProgress;
+    HashMap!(Point,PointBcastProgress!(T)) publishingPoints;
     Set!(Point) calcInProgress;
     DenseLocalPointArray!(MainPointI!(T)) localPoints; /// local points (position,...)
     /// random number generator
@@ -367,31 +497,94 @@ class PNetSilos(T): LocalSilosI!(T){
     /// evaluator
     Method evaluator;
     PoolI!(MainPoint!(T)) pPool;
+    Deque!(SilosWorkerI!(T)) loaders;
+    Deque!(SilosWorkerI!(T)) monitors;
+    Deque!(SilosWorkerI!(T)) finishers;
     
     MainPoint!(T)allocPoint(PoolI!(MainPoint!(T))p){
         return new MainPoint!(T)(this,p);
     }
-    this(SilosGen sGen){
-        input=sGen;
-        pPool=cachedPool(&this.allocPoint);
-        assert(0,"to do: complete init");
+    this(SilosGen sGen,char[] nameId,SKey key,ParticleSys!(T) refPos=null,ConstraintI!(T) constraints=null,
+        CharSink log=sout.call,NotificationCenter _nCenter=null,PoolI!(MainPoint!(T)) pPool=null){
+        this.input=sGen;
+        this.runLevel=RunLevel.Setup;
+        this.nextLocalId=UniqueNumber!(ulong)(1);
+        this.nextPntNr=UniqueNumber!(ulong)(3);
+        this.nameId=nameId;
+        this._key=key;
+        this.silos=new HashMap!(SKey,PNetSilosI!(T))();
+        this.silos[this._key]=this;
+        this.loads=new MinHeapSync!(LoadStats)();
+        this.localPointsKeys=new BatchedGrowableArray!(Point,batchSize)();
+        this.owner=new HashMap!(Point,SKey)();
+        this.localCache=new HashMap!(Point,CachedPoint!(T))();
+        this.localCalcInProgress=new HashMap!(Point,CalculationContext)();
+        this.calcInProgress=new Set!(Point)();
+        this.localPoints=new DenseLocalPointArray!(MainPointI!(T))(); /// local points (position,...)
+        this._rand=new RandomSync();
+        this._refPos=refPos;
+        this._constraints=constraints;
+        this.log=log;
+        this._nCenter=nCenter;
+        if (nCenter is null) this._nCenter=new NotificationCenter();
+        this.explorers=new Deque!(ExplorerI!(T))();
+        this.observers=new Deque!(ExplorationObserverI!(T))();
+        this.evaluator=cast(Method)this.input.evaluator.contentObj;
+        this.pPool=pPool;
+        if (pPool is null) this.pPool=cachedPool(&this.allocPoint);
+        foreach(e;input.explorers){
+            auto o=e.contentObj;
+            if (cast(ExplorerGen)o !is null){
+                auto expl=explorerT!(T)(cast(ExplorerGen)o,this);
+                explorers.append(expl);
+                observers.append(expl);
+            } else {
+                observers.append(observerT!(T)(cast(ExplorationObserverGen)o,this));
+            }
+        }
+        this.loaders=new Deque!(SilosWorkerI!(T))();
+        this.monitors=new Deque!(SilosWorkerI!(T))();
+        this.finishers=new Deque!(SilosWorkerI!(T))();
+        foreach(l;input.loaders){
+            auto swGen=cast(SilosWorkerGen)(l.contentObj());
+            auto sw=silosWorkerT!(T)(swGen);
+            loaders.append(sw);
+        }
+        foreach(m;input.monitors){
+            auto swGen=cast(SilosWorkerGen)(m.contentObj());
+            auto sw=silosWorkerT!(T)(swGen);
+            monitors.append(sw);
+        }
+        foreach(f;input.finishers){
+            auto swGen=cast(SilosWorkerGen)(f.contentObj());
+            auto sw=silosWorkerT!(T)(swGen);
+            finishers.append(sw);
+        }
     }
     /// adds the computed gradient to the point p
-    void addGradEval(Point p,PSysWriter!(T) pSys){
-        auto mp=localPoints[p];
-        synchronized(mp){
-            auto e=mp.pos.dynVars.potentialEnergy;
-            mp.pos[]=pSys;
-            if (isNaN(mp.pos.dynVars.potentialEnergy)) mp.pos.dynVars.potentialEnergy=e;
+    void addGradEvalLocal(SKey s,Point p,PSysWriter!(T) pSys){
+        if (s==SKeyVal.All){
+            foreach (sK,sL;silos){
+                sL.addGradEvalLocal(sK,p,pSys);
+            }
+        } else if (hasKey(s)) {
+            auto mp=localPoints[p];
+            synchronized(mp){
+                auto e=mp.pos.dynVars.potentialEnergy;
+                mp.pos[]=pSys;
+                if (isNaN(mp.pos.dynVars.potentialEnergy)) mp.pos.dynVars.potentialEnergy=e;
+            }
+            mp.didGradEval();
+        } else {
+            silosForKey(s).addGradEvalLocal(s,p,pSys);
         }
-        mp.didGradEval();
     }
     /// writes out a log message
     void logMsg(void delegate(CharSink)writer){
         char[512] buf;
         auto gArr=lGrowableArray(buf,0);
         auto s=dumper(&gArr.appendArr);
-        s("<MinEELog id=\"")(key)("\" time=\"")(Clock.now.ticks)("\">");
+        s("<MinEELog id=\"")(_key)("\" time=\"")(Clock.now.ticks)("\">");
         writer(s.call);
         s("</MinEELog>\n");
     }
@@ -408,21 +601,23 @@ class PNetSilos(T): LocalSilosI!(T){
         return false;
     }
     /// if the gradient should be speculatively calculated. calls addEnergyEvalLocal (in background)
-    bool speculativeGradient(Point p,Real energy){
+    bool speculativeGradient(SKey s,Point p,Real energy){
         bool res=false;
         int i=0;
         foreach(e;explorers){
-            res=res || e.speculativeGradient(p,energy);
+            res=res || e.speculativeGradient(s,p,energy);
         }
         struct EAdd{
-            void delegate(Point,Real) op;
+            void delegate(SKey,Point,Real) op;
+            SKey s;
             Point p;
             Real energy;
             void doOp(){
-                op(p,energy);
+                op(s,p,energy);
             }
         }
         auto eAdd=new EAdd;
+        eAdd.s=s;
         eAdd.energy=energy;
         eAdd.p=p;
         eAdd.op=&addEnergyEvalLocal;
@@ -430,22 +625,23 @@ class PNetSilos(T): LocalSilosI!(T){
         return res;
     }
     
-    mixin(realFromInput(`discretizationStep|minProjectionResidual|sameDirCosAngle|minNormDual|minNormDualSelf
-        minRealNormSelf0|minRealNormSelf1|maxNormDual|explorationSize|dirSize2|dirCartesianSize2
-        maxMoveInternal|maxMoveCartesian|maxMoveDual|maxNormCartesian|minMoveInternal|sameDirCosAngleCartesian|
-        minRealNormSelf2|dirDualSize2|inDirCartesianScale2|zeroLen`));
+    mixin(realFromInput(propertiesList));
+    
+    Real[char[]] propertiesDict(SKey s){
+        if (hasKey(s)){
+            auto res=propertiesDict0();
+            res["cheapGrad"]=cheapGrad();
+            return res;
+        } else {
+            return silosForKey(s).propertiesDict(s);
+        }
+    }
     
     /// returns a globally unique string 
     char[] nextUniqueStr(){
         return collectAppender(delegate void(CharSink s){
             s(nameId); s("_"); writeOut(s,nextLocalId.next());
         });
-    }
-    /// returns a most likely valid point id
-    Point nextPointId(){
-        ushort r;
-        rand()(r);
-        return Point(((nextPntNr.next())<<12)|cast(ulong)(r&0xFFF));
     }
     
     /// returns true if the evaluation of the given point is in progress. Works only master/owner...?
@@ -461,25 +657,40 @@ class PNetSilos(T): LocalSilosI!(T){
     mixin printOut!();
     
     void run(){
-        CalculationContext cInstance=evaluator.getCalculator(true,[]);
-        switch(cInstance.activePrecision()){
-        case Precision.Real:
-            _refPos=cInstance.pSysReal.dupT!(T)(PSDupLevel.All);
-            auto c1=cInstance.constraintsReal();
-            if (c1 !is null)
-                _constraints=constraintT!(T)(c1.constraintGen,_refPos);
-            break;
-        case Precision.LowP:
-            _refPos=cInstance.pSysLowP.dupT!(T)(PSDupLevel.All);
-            auto c2=cInstance.constraintsLowP();
-            if (c2 !is null)
-                _constraints=constraintT!(T)(c2.constraintGen,_refPos);
-            break;
-        default:
-            assert(0,"unknown activePrecision");
+        // setup refPos
+        if (_refPos is null){
+            CalculationContext cInstance=evaluator.getCalculator(true,[]);
+            switch(cInstance.activePrecision()){
+            case Precision.Real:
+                _refPos=cInstance.pSysReal.dupT!(T)(PSDupLevel.All);
+                auto c1=cInstance.constraintsReal();
+                if (c1 !is null)
+                    _constraints=constraintT!(T)(c1.constraintGen,_refPos);
+                break;
+            case Precision.LowP:
+                _refPos=cInstance.pSysLowP.dupT!(T)(PSDupLevel.All);
+                auto c2=cInstance.constraintsLowP();
+                if (c2 !is null)
+                    _constraints=constraintT!(T)(c2.constraintGen,_refPos);
+                break;
+            default:
+                assert(0,"unknown activePrecision");
+            }
         }
         if (_constraints is null) _constraints=new NoConstraint!(T)();
+        
         // run the loaders
+        foreach(sw;loaders){
+            sw.workOn(this);
+        }
+        
+        for(long iExpl=0;iExpl<input.explorationSteps;++iExpl){
+            CalculationContext cInstance=evaluator.getCalculator(true,[]);
+            Point np=pointToEvaluate(SKeyVal.Any);
+            //RemoteEval(np);
+            //if (! np.isValid()) break;
+            
+        }
         //loaders
         // if empty & no explorator, add point at actual evaluator point
         /+
@@ -487,6 +698,7 @@ class PNetSilos(T): LocalSilosI!(T){
             get context
             choose eval host
             remote task on it
+            monitors
 
         remote task:
             start independent task that executes it
@@ -510,30 +722,43 @@ class PNetSilos(T): LocalSilosI!(T){
         return res!is null;
     }
     /// returns the next point to evaluate
-    Point pointToEvaluate(){
-        ExplorerI!(T) e;
-        for (int i=0;i<input.maxExplorationTries;++i){
-            if (!nextExplorer(e)){
-                break;
+    Point pointToEvaluate(SKey s){
+        if (hasKey(s)){
+            ExplorerI!(T) e;
+            for (int i=0;i<input.maxExplorationTries;++i){
+                if (!nextExplorer(e)){
+                    break;
+                }
+                auto res=e.pointToEvaluate(s);
+                if (res.isValid) return res;
             }
-            auto res=e.pointToEvaluate();
-            if (res.isValid) return res;
+            return Point(0); // no valid next computation
+        } else {
+            return silosForKey(s).pointToEvaluate(s);
         }
-        return Point(0); // no valid next computation
+    }
+    /// called when an evaluation fails, flags: attemptRetry/don't Retry
+    void evaluationFailed(SKey s,Point,uint flags){
+        assert(0,"to do");
     }
     
     /// returns the key of the silos with the lowest expected load
-    SKey nextFreeSilos(){
-        auto w=loads.popWait();
-        mixin(mkActionMixin("updLoad","w|silos|loads",`
-        w.load=silos[w.silosKey].load();
-        loads.push(w);`));
-        if (key==w.silosKey){ // local update
-            updLoad();
+    SKey nextFreeSilos(SKey s){
+        if (hasKey(s)){
+            auto w=loads.popWait();
+            auto lCtx=this;
+            mixin(mkActionMixin("updLoad","w|lCtx|loads",`
+            w.load=lCtx.load(w.silosKey);
+            loads.push(w);`));
+            if (hasKey(w.silosKey)){ // local update
+                updLoad();
+            } else {
+                Task("updLoad",updLoad).autorelease.submitYield();
+            }
+            return w.silosKey;
         } else {
-            Task("updLoad",updLoad).autorelease.submitYield();
+            return silosForKey(s).nextFreeSilos(s);
         }
-        return w.silosKey;
     }
     void stop(){
         synchronized(this){
@@ -557,186 +782,321 @@ class PNetSilos(T): LocalSilosI!(T){
     
     // ExplorationObserverI
     /// adds energy for a local point and bCasts addEnergyEval
-    void addEnergyEvalLocal(Point p,Real energy){
-        auto mp=localPoints[p];
-        if (! mp.isLocalCopy){
-            throw new Exception("Local copy in PNetSilos.addEnergyEvalLocal",__FILE__,__LINE__);
-        }
-        mp.addEnergyEvalLocal(energy);
-        foreach(obs;observers){
-            obs.addEnergyEvalLocal(p,energy);
+    void addEnergyEvalLocal(SKey s,Point p,Real energy){
+        if (hasKey(s)) {
+            auto mp=localPoints[p];
+            if (! mp.isLocalCopy){
+                throw new Exception("Local copy in PNetSilos.addEnergyEvalLocal",__FILE__,__LINE__);
+            }
+            mp.addEnergyEvalLocal(energy);
+            foreach(obs;observers){
+                obs.addEnergyEvalLocal(s,p,energy);
+            }
+        } else {
+            silosForKey(s).addEnergyEvalLocal(s,p,energy);
         }
     }
     /// adds gradient value to a point that should be owned. Energy if not NAN replaces the previous value
     /// sets inProgress to false
-    void addGradEvalLocal(Point p,PSysWriter!(T) pSys){
-        auto mp=localPoints[p];
-        if (! mp.isLocalCopy){
-            throw new Exception("Local copy in PNetSilos.addGradEvalLocal",__FILE__,__LINE__);
-        }
-        mp.pos[]=pSys;
-        mp.didGradEval();
-        foreach(obs;observers){
-            obs.addGradEvalLocal(p,pSys);
+    void addGradEvalLocal(SKey s,Point p,PSysWriter!(T) pSys){
+        if (hasKey(s)){
+            auto mp=localPoints[p];
+            if (! mp.isLocalCopy){
+                throw new Exception("Local copy in PNetSilos.addGradEvalLocal",__FILE__,__LINE__);
+            }
+            mp.pos[]=pSys;
+            mp.didGradEval();
+            foreach(obs;observers){
+                obs.addGradEvalLocal(s,p,pSys);
+            }
+        } else {
+            silosForKey(s).addGradEvalLocal(s,p,pSys);
         }
     }
     /// communicates that the given point is being expored
     /// flags: communicate doubleEval?
-    void addExploredPoint(SKey owner,Point newPoint,PSysWriter!(T) pos,T pSize,uint flags){
-        this.owner[newPoint]=owner;
-        foreach(p,mp;localPoints){
-            auto newPos=refPos.dynVars.dVarStruct.emptyX();
-            newPos[]=pos.x;
-            if (mp!is null){
-                mp.checkIfNeighbor(newPos,newPoint,pSize);
+    void publishPoint(SKey s,SKey owner,Point newPoint,PSysWriter!(T) pos,T pSize,uint flags){
+        if (s==SKeyVal.All){
+            foreach (sK,sL;silos){
+                sL.publishPoint(sK,owner,newPoint,pos,pSize,flags);
             }
-            newPos.giveBack();
-        }
-        foreach(obs;observers){
-            obs.addExploredPoint(owner,newPoint,pos,pSize,flags);
+        } else if (hasKey(s)) {
+            bool collision=false;
+            synchronized(this.owner){
+                nextPntNr.ensure(newPoint.data>>12);
+                auto oldV=newPoint in this.owner;
+                if (oldV !is null && (*oldV)!=owner){
+                    collision=true;
+                } else {
+                    this.owner[newPoint]=owner;
+                }
+            }
+            if (collision){
+                // doubly owned point (collision): drop
+                publishCollision(SKeyVal.All,newPoint);
+                return;
+            }
+            silosForKey(owner).didLocalPublish(owner,newPoint,s);
+            foreach(p,mp;localPoints){
+                auto newPos=refPos.dynVars.dVarStruct.emptyX();
+                newPos[]=pos.x;
+                if (mp!is null){
+                    mp.checkIfNeighbor(newPos,newPoint,pSize);
+                }
+                newPos.giveBack();
+            }
+            foreach(obs;observers){
+                obs.publishPoint(s,owner,newPoint,pos,pSize,flags);
+            }
+        } else {
+            silosForKey(s).publishPoint(s,owner,newPoint,pos,pSize,flags);
         }
     }
     
     /// a neighbor point has calculated its energy (and not the gradient)
     /// neighbors should be restricted to silos
-    void neighborHasEnergy(Point p,Point[] neighbors,Real energy){
-        foreach (nP;neighbors){
-            auto mp=localPoints[nP];
-            mp.addEnergyEvalOther(p,energy);
-        }
-        foreach(obs;observers){
-            obs.neighborHasEnergy(p,neighbors,energy);
+    void neighborHasEnergy(SKey s,Point p,Point[] neighbors,Real energy){
+        if (hasKey(s)){
+            foreach (nP;neighbors){
+                auto mp=localPoints[nP];
+                mp.addEnergyEvalOther(p,energy);
+            }
+            foreach(obs;observers){
+                obs.neighborHasEnergy(s,p,neighbors,energy);
+            }
+        } else {
+            silosForKey(s).neighborHasEnergy(s,p,neighbors,energy);
         }
     }
     /// the neighbor point p has calculated its gradient (and energy)
     /// neighbors might be restricted to silos or not
-    void neighborHasGradient(LazyMPLoader!(T)p, Point[] neighbors, Real energy){
-        foreach (nP;neighbors){
-            auto mp=localPoints[nP];
-            mp.addGradEvalOther(p,energy);
-        }
-        foreach(obs;observers){
-            obs.neighborHasGradient(p,neighbors,energy);
+    void neighborHasGradient(SKey s,LazyMPLoader!(T)p, Point[] neighbors, Real energy){
+        if (hasKey(s)){
+            foreach (nP;neighbors){
+                auto mp=localPoints[nP];
+                mp.addGradEvalOther(p,energy);
+            }
+            foreach(obs;observers){
+                obs.neighborHasGradient(s,p,neighbors,energy);
+            }
+        } else {
+            silosForKey(s).neighborHasGradient(s,p,neighbors,energy);
         }
     }
     
     /// finished exploring the given local point (remove it from the active points), bcasts finishedExploringPoint
-    void finishedExploringPointLocal(LocalSilosI!(T) silos,Point point){
-        foreach(obs;observers){
-            obs.finishedExploringPointLocal(silos,point);
-        }
-    }
-    /// finished exploring the given point (remove it from the active points)
-    void finishedExploringPoint(Point point){
-        foreach(obs;observers){
-            obs.finishedExploringPoint(point);
+    void finishedExploringPoint(SKey s,Point point,SKey owner){
+        if (s==SKeyVal.All){
+            foreach(sK,sL;silos){
+                sL.finishedExploringPoint(sK,point,owner);
+            }
+        } else if (hasKey(s)){
+            foreach(obs;observers){
+                obs.finishedExploringPoint(s,point,owner);
+            }
+        } else {
+            silosForKey(s).finishedExploringPoint(s,point,owner);
         }
     }
     /// drops all calculation/storage connected with the given point, the point will be added with another key
     /// (called upon collisions)
-    void dropPoint(SKey sKey,Point point){
-        if (sKey==key){
-            auto mp=localPoints[point];
-            mp.drop();
-        }
-        foreach(obs;observers){
-            obs.dropPoint(sKey,point);
+    void publishCollision(SKey s,Point point){
+        if (s==SKeyVal.All){
+            foreach(sK,sL;silos){
+                sL.publishCollision(sK,point);
+            }
+        } else if (hasKey(s)){
+            MainPointI!(T) mp;
+            synchronized(localPoints){
+                auto mpp=point in localPoints;
+                if (mpp !is null)
+                    mp=*mpp;
+            }
+            if (mp!is null){
+                PointBcastProgress!(T) pp;
+                synchronized(publishingPoints){
+                    pp=publishingPoints[point];
+                }
+                pp.communicateCollision();
+                mp.drop(); // redundant...
+            }
+            foreach(obs;observers){
+                obs.publishCollision(s,point);
+            }
+        } else {
+            silosForKey(s).publishCollision(s,point);
         }
     }
-    
-    // PNetSilosI
-    
+    /// informs that source has processed point p0
+    void didLocalPublish(SKey s,Point p0,SKey source){
+        if (s==SKeyVal.All){
+            foreach(sK,sL;silos){
+                sL.didLocalPublish(sK,p0,source);
+            }
+        } else if (hasKey(s)){
+            PointBcastProgress!(T) pp;
+            synchronized(publishingPoints){
+                pp=publishingPoints[p0];
+            }
+            pp.communicatePublish(source);
+            foreach (obs;observers){
+                obs.didLocalPublish(s,p0,source);
+            }
+        } else {
+            silosForKey(s).didLocalPublish(s,p0,source);
+        }
+    }
     /// stops all silos (at the moment there is no support for dynamic adding/removal of silos, worth adding???)
-    void shutdown(){
-        bool shouldStop=false;
-        synchronized(this){
-            if (runLevel<RunLevel.Stop){
-                runLevel=RunLevel.Stop;
-                shouldStop=true;
+    void shutdown(SKey s){
+        if (s==SKeyVal.All){
+            foreach(sK,sL;silos){
+                sL.shutdown(sK);
             }
-        }
-        if (shouldStop){ // square b-cast, change??
-            foreach(k,sil;silos){
-                sil.shutdown();
+        } else if (hasKey(s)){
+            bool shouldStop=false;
+            synchronized(this){
+                if (runLevel<RunLevel.Stop){
+                    runLevel=RunLevel.Stop;
+                    shouldStop=true;
+                }
             }
+            if (shouldStop){ // square b-cast, change??
+                foreach (obs;observers){
+                    obs.shutdown(s);
+                }
+            }
+        } else {
+            silosForKey(s).shutdown(s);
         }
     }
+
+    // PNetSilosI
+
     /// load (usage) of the silos in some arbitrary units
-    Real load(){
-        return 0.001*localPoints.length;
-    }
-    /// returns the position of the given local point (remove??)
-    PSysWriter!(T)pointPosLocal(Point p){
-        auto mp=localPoints[p];
-        return pSysWriter(mp.pos);
-    }
-    /// returns the position of the given point (remove??)
-    PSysWriter!(T)pointPos(Point p){
-        auto ownr=ownerOfPoint(p);
-        if (ownr==key){
-            return pointPosLocal(p);
+    Real load(SKey s){
+        if (hasKey(s)){
+            return 0.001*localPoints.length;
+        } else {
+            return silosForKey(s).load(s);
         }
-        return silosForKey(ownr).pointPosLocal(p);
     }
+    
     /// energy for the local points (NAN if not yet known)
-    Real[] energyForPointsLocal(Point[] points,Real[] ens){
-        if (ens.length<points.length)
-            ens.length=points.length;
-        foreach(i,p;points){
-            auto mp=localPoints[p];
-            ens[i]=mp.energy;
+    Real[] energyForPointsLocal(SKey s,Point[] points,Real[] ens){
+        if (hasKey(s)){
+            if (ens.length<points.length)
+                ens.length=points.length;
+            foreach(i,p;points){
+                auto mp=localPoints[p];
+                ens[i]=mp.energy;
+            }
+            return ens;
+        } else {
+            return silosForKey(s).energyForPointsLocal(s,points,ens);
         }
-        return ens;
     }
     /// energy for the points (NAN if not yet known)
-    Real[] energyForPoints(Point[]points,Real[] ens){
-        if (ens.length<points.length)
-            ens.length=points.length;
-        auto pO=new PointToOwner(&this.ownerOfPoint,delegate Point(size_t i){
-            return points[i];
-        }, points.length,false);
-        Real[128] buf;
-        auto lMem=LocalMem(buf);
-        foreach (iter;pO){
-            auto kAtt=iter.owner;
-            if (kAtt==key){
+    Real[] energyForPoints(SKey s,Point[]points,Real[] ens){
+        if (hasKey(s)){
+            if (ens.length<points.length)
+                ens.length=points.length;
+            auto pO=new PointToOwner(&this.ownerOfPoint,delegate Point(size_t i){
+                return points[i];
+            }, points.length,false);
+            Real[128] buf;
+            auto lMem=LocalMem(buf);
+            foreach (iter;pO){
                 auto enLoc=lMem.allocArr!(Real)(iter.localUb-iter.localLb);
-                enLoc=energyForPointsLocal(iter.points,enLoc);
+                enLoc=energyForPointsLocal(iter.owner,iter.points,enLoc);
                 foreach(i,j;iter.idx){
                     ens[j]=enLoc[i];
                 }
                 lMem.deallocArr(enLoc);
             }
+            return ens;
+        } else {
+            return silosForKey(s).energyForPoints(s,points,ens);
         }
-        return ens;
     }
     /// returns a snapshot of the given point
-    DriedPoint!(T)mainPoint(Point p){
-        auto ownr=ownerOfPoint(p);
-        if (ownr==key){
-            return mainPointLocal(p);
+    DriedPoint!(T)mainPoint(SKey s,Point p){
+        if (hasKey(s)){
+            auto ownr=ownerOfPoint(p);
+            if (hasKey(ownr)){
+                return mainPointLocal(s,p);
+            }
+            return silosForKey(ownr).mainPointLocal(ownr,p);
+        } else {
+            return silosForKey(s).mainPoint(s,p); // this allows access to non public points...
         }
-        return silosForKey(ownr).mainPointLocal(p);
     }
     /// returns a snapshot of the given point that is local to this silos
-    DriedPoint!(T)mainPointLocal(Point p){
-        auto mp=localPoints[p];
-        return mp.driedPoint;
+    DriedPoint!(T)mainPointLocal(SKey s,Point p){
+        if (hasKey(s)){
+            auto mp=localPoints[p];
+            return mp.driedPoint;
+        } else {
+            silosForKey(s).mainPointLocal(s,p);
+        }
     }
     /// tells the local points neighs that they have p0 as neighbor
-    void addPointToLocalNeighs(Point p0,Point[]neighs){
-        foreach(np;neighs){
-            auto mp=localPoints[np];
-            mp.addNeighbor(p0);
+    void addPointToLocalNeighs(SKey s,Point p0,Point[]neighs){
+        if (hasKey(s)){
+            foreach(np;neighs){
+                auto mp=localPoints[np];
+                mp.addNeighbor(p0);
+            }
+        } else {
+            silosForKey(s).addPointToLocalNeighs(s,p0,neighs);
         }
     }
     /// tells the local point p0 that neighDirs (computed when p0 gradient was hadGrad) should be added to it
-    bool addNeighDirsToLocalPoint(Point p0,PointAndDir[]neighDirs,DirDistances!(T)[]dirDists,bool hadGrad){
-        auto mp=localPoints[p0];
-        return mp.addNeighbors(neighDirs,dirDists,hadGrad);
+    bool addNeighDirsToLocalPoint(SKey s,Point p0,PointAndDir[]neighDirs,DirDistances!(T)[]dirDists,bool hadGrad){
+        if (hasKey(s)){
+            auto mp=localPoints[p0];
+            return mp.addNeighbors(neighDirs,dirDists,hadGrad);
+        } else {
+            silosForKey(s).addNeighDirsToLocalPoint(s,p0,neighDirs,dirDists,hadGrad);
+        }
     }
-    /// informs that source has processed point p0
-    void processedLocal(Point p0,SKey source){
+    /// creates a new point located at newPos in this silos, the point is not yet broadcasted
+    /// not all silos might support creation of local points, use nextFreeSilos to get a silos
+    /// thas supports it, use a RemoteSilosOpI and executeLocally to create, setup & bcast it 
+    MainPointI!(T) newPointAt(DynPVector!(T,XType) newPos){
+        MainPoint!(T) newP=pPool.getObj();
+        newP.pos.checkX();
+        newP.pos.dynVars.x[]=newPos;
+        synchronized(localPoints){ // don't allow null mainpoints...
+            Point np;
+            synchronized(owner){ // generate a point with a small propability of collisions
+                while(1){
+                    ushort r;
+                    rand()(r);
+                    np=Point(((nextPntNr.next())<<12)|cast(ulong)(r&0xFFF));
+                    localPointsKeys.appendEl(np);
+                    auto oldV=np in owner;
+                    if (oldV is null){
+                        owner[np]=this._key;
+                        break;
+                    }// else retry immediately in case of collision
+                }
+            }
+            newP._point=np;
+            localPoints[np]=newP;
+        }
+        return newP;
+    }
+    /// operation to be executed on the given silos
+    void executeLocally(SKey s,RemoteSilosOpI!(T) op){
+        if (s==SKeyVal.All){
+            foreach(sK,sL;silos){
+                sL.executeLocally(sK,op);
+            }
+        } else if (hasKey(s)){
+            op.workOn(this);
+        } else {
+            silosForKey(s).executeLocally(s,op);
+        }
     }
     
     // LocalSilosI
@@ -756,30 +1116,34 @@ class PNetSilos(T): LocalSilosI!(T){
     void rmExplorer(ExplorerI!(T)o){
         explorers.filterInPlace(delegate bool(ExplorerI!(T) i){ return i!is o; });
     }
-    SKey ownerOfPoint(Point p){
-        return owner[p];
+    SKey pointOwner(SKey s,Point p){
+        if (hasKey(s)){
+            synchronized(owner){
+                return owner[p];
+            }
+        } else {
+            silosForKey(s).pointOwner(s,p); // can be useful for not yet broadcasted points
+        }
     }
-    PNetSilosI!(T) silosForKey(SKey k){
-        if (k==key) return this;
+    SKey ownerOfPoint(Point p){
+        return pointOwner(SKeyVal.Any,p);
+    }
+    /// internal method returning the silos for the given key
+    protected PNetSilosI!(T) silosForKey(SKey k){
+        if (k==SKeyVal.Invalid||k==SKeyVal.All){
+            throw new Exception(((k==SKeyVal.Invalid)?"invalid SKey"[]:"broadcast key not acceptable in this context"[]),__FILE__,__LINE__);
+        }
+        if (hasKey(k)) return this;
         return silos[k];
     }
     /// local point mainpoint (the real reference point)
     MainPointI!(T) mainPointL(Point p){
         return localPoints[p];
     }
-    /// creates a new point in this silos located at newPos, the point is not yet broadcasted
-    Point newLocalPointAt(DynPVector!(T,XType) newPos){
-        auto newPoint=nextPointId();
-        auto newP=pPool.getObj();
-        newP.pos.dynVars.checkX();
-        newP.pos.dynVars.x[]=newPos;
-        localPoints[newPoint]=newP;
-        return newPoint;
-    }
     /// a local point (possibly a copy), is retained, and needs to be released (thus the create in the name)
     /// the time t is used to decide if a cached version can be used
     MainPointI!(T)createLocalPoint(Point p,Time t){
-        if (ownerOfPoint(p)==key){
+        if (hasKey(ownerOfPoint(p))){
             auto mp=localPoints[p];
             mp.retain;
             return mp;
@@ -802,18 +1166,18 @@ class PNetSilos(T): LocalSilosI!(T){
             return cachedP.mainPoint;
         }
         cachedP.lastSync=Clock.now;
-        cachedP.mainPoint[]=mainPoint(p);
+        cachedP.mainPoint[]=mainPoint(ownerOfPoint(p),p);
         synchronized(localCache){
             localCache[p]=cachedP;
         }
         return cachedP.mainPoint;
     }
     /// makes a point "public" informing other silos that that region has been explored
-    void bcastPoint(Point p){
-        auto mp=localPoints[p];
-        foreach(s;silos){
-            s.addExploredPoint(key,p,pSysWriter(mp.pos),mp.explorationSize,mp.gFlags);
-        }
+    /// returns the published point (that might be different if there was a collision)
+    MainPointI!(T) bcastPoint(MainPointI!(T) p){
+        auto bcastP=PointBcastProgress!(T)(p);
+        bcastP.publish();
+        return bcastP.finalName();
     }
     /// drops a cached point (the point is not in use anymore)
     void dropCachedPoint(MainPointI!(T)p){
@@ -822,5 +1186,8 @@ class PNetSilos(T): LocalSilosI!(T){
         }
     }
     
+    char[] silosCoreUrl(){
+        assert(0,"to do");
+    }
 }
 

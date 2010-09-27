@@ -55,7 +55,7 @@ class MinEExplorer(T):ExplorerI(T){
     }
     /// communicates that the given point is being expored
     /// flags: communicate doubleEval?
-    void addExploredPoint(SKey owner,Point point,PSysWriter!(T) pos,T pSize,uint flags){
+    void publishPoint(SKey owner,Point point,PSysWriter!(T) pos,T pSize,uint flags){
         if (!isNAN(pos.potentialEnergy)){
             assert((flags&MainPoint!(T).GFlags.EnergyInfo)=MainPoint!(T).GFlags.EnergyKnown,"non NAN energy, but not EnergyKnown");
             if ((flags&(MainPoint!(T).GFlags.DoNotExplore|MainPoint!(T).GFlags.FullyExplored))==0){
@@ -79,7 +79,7 @@ class MinEExplorer(T):ExplorerI(T){
     }
     /// drops all calculation/storage connected with the given point, the point will be added with another key
     /// (called upon collisions)
-    void dropPoint(SKey e,Point p){
+    void publishCollision(SKey e,Point p){
         rmPoint(p);
     }
     
@@ -111,7 +111,7 @@ class MinEExplorer(T):ExplorerI(T){
         rmPoint(p);
     }
     /// should speculatively calculate the gradient? PNetSilos version calls addEnergyEvalLocal
-    bool speculativeGradient(Point p,Real energy){
+    bool speculativeGradient(SKey s,Point p,Real energy){
         synchronized(toExploreMore){
             auto l=toExploreMore.length;
             if (l>0 && heap.data[0].energy>=energy){
