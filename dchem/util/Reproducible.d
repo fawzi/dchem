@@ -11,11 +11,11 @@
 ///
 /// author: fawzi
 module dchem.util.Reproducible;
-import xf.omg.core.Fixed;
-import xf.omg.core.LinearAlgebra;
+import blip.omg.core.Fixed;
+import blip.omg.core.LinearAlgebra;
 
 // useful for conversions to/from fixedReal,fixedReduced (constant, non constant)
-public import xf.omg.Algebra: cscalar,scalar;
+public import blip.omg.Algebra: cscalar,scalar;
 // usage: cscalar!(type,value) and scalar!(type)(value)
 
 /// type useful for real positions

@@ -20,7 +20,7 @@ import blip.parallel.smp.WorkManager;
 import blip.math.Math:sqrt;
 import blip.core.sync.Mutex;
 import blip.narray.NArray;
-import gobo.blas.Types:BlasTypeForType;
+import blip.bindings.blas.Types:BlasTypeForType;
 import blip.core.Traits: ctfe_i2a;
 import dchem.sys.DynVars;
 import blip.math.Math: min,max;

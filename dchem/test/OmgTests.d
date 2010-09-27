@@ -1,5 +1,5 @@
 module dchem.test.OmgTests;
-import xf.omg.core.LinearAlgebra;
+import blip.omg.core.LinearAlgebra;
 import dchem.Common;
 import blip.serialization.Serialization;
 import blip.narray.NArray;

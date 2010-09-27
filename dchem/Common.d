@@ -2,9 +2,9 @@
 module dchem.Common;
 import blip.narray.NArray;
 public import blip.narray.NArray: index_type;
-import xf.omg.core.LinearAlgebra;
-public import xf.omg.core.Algebra: scalar,cscalar;
-public import xf.omg.core.LinearAlgebra:Vector,Quaternion,Matrix;
+import blip.omg.core.LinearAlgebra;
+public import blip.omg.core.Algebra: scalar,cscalar;
+public import blip.omg.core.LinearAlgebra:Vector,Quaternion,Matrix;
 
 alias real   HighP;
 alias double Real;
