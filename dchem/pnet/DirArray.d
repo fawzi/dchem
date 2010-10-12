@@ -8,7 +8,7 @@ import blip.serialization.Serialization;
 import blip.io.BasicIO;
 import blip.container.GrowableArray;
 import Atomic=blip.sync.Atomic;
-
+import blip.math.random.Random;
 /// flags about a direction
 /// after the rewrite there is one bit free here...
 enum DirFlags{
@@ -70,7 +70,7 @@ class FlagsArray{
         data=new size_t[]((dim+bitsPerEl-1)/bitsPerEl);
     }
     /// generates a random FlagsArray array
-    static FlagsArray randomGenerate(Rand r,ref bool acceptable){
+    static FlagsArray randomGenerate(Random r,ref bool acceptable){
         auto dim=generateSize(r,size_t.sizeof);
         auto res=new FlagsArray(dim);
         mkRandomArray(r,res.data,acceptable);
@@ -128,7 +128,7 @@ class FlagsArray{
         auto inBlockIdx=(idx%bitsPerEl)*usedBits;
         auto inBlockMask=~(mask<<inBlockIdx);
         auto localVal=((cast(size_t)val)<<inBlockIdx);
-        atomicOp(data[blockIdx],delegate size_t(size_t oldVal){
+        atomicOp(data[blockIdx],delegate uint(uint oldVal){
             return ((oldVal&inBlockMask)|localVal);
         });
     }
