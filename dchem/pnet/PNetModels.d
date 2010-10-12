@@ -129,6 +129,20 @@ struct PointAndDir{
         e.pDir=*this;
         return e;
     }
+    int opCmp(PointAndDir p2){
+        return ((data>p2.data)?1:((data==p2.data)?0:-1));
+    }
+}
+
+/// a structure to keep point and its energy together
+struct PointAndEnergy{
+    Point point;
+    Real energy;
+    mixin(serializeSome("PointAndEnergy","point|energy"));
+    mixin printOut!();
+    int opCmp(PointAndEnergy p2){
+        return ((energy<p2.energy)?-1:((energy>p2.energy)?1:point.opCmp(p2.point)));
+    }
 }
 
 /// structure to encode a main point efficienly (useful to transfer it o another context)
@@ -567,8 +581,8 @@ interface ExplorationObserverI(T){
 /// actually should not inherit from ExplorationObserverI, but this way we avoid multiple inheritance bugs
 /// these method are not public/remote
 interface ExplorerI(T):ExplorationObserverI!(T){
-    /// returns a point to evaluate
-    Point pointToEvaluate(SKey);
+    /// returns a point to evaluate, calls available when a new point might be available, returns 1 if one should wait, 0 if the explorer has finished exploring
+    Point pointToEvaluate(SKey,delegate void(ExplorerI!(T))available);
     /// called when an evaluation fails, flags: attemptRetry/don't Retry
     void evaluationFailed(SKey s,Point,uint flags);
     /// should speculatively calculate the gradient? PNetSilos version calls addEnergyEvalLocal
@@ -746,12 +760,6 @@ interface ExplorerGen:ExplorationObserverGen{
 
 /// define explorerT extractor helper
 mixin(genTypeTMixin("Explorer","explorer","LocalSilosI!(T)silos","silos"));
-
-/// help structure 
-struct CachedPoint(T){
-    MainPointI!(T) mainPoint;
-    Time lastSync;
-}
 
 /// list of the properties exposed by LocalSilosI (useful for ctfe)
 const char[] propertiesList=`discretizationStep|minProjectionResidual|sameDirCosAngle|minNormDual|minNormDualSelf

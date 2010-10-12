@@ -336,6 +336,10 @@ struct PSysWriter(T){
             pSys.hVars.opSliceAssign(hVars);
         }
     }
+    /// if the system is null
+    bool isNonNull(){
+        return x.isNonNull()||dx.isNonNull()||mddx.isNonNull()||hVars !is null;
+    }
 }
 
 /// helper function, returns a struct that dumps the given ParticleSys

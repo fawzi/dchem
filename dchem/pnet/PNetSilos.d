@@ -33,6 +33,12 @@ import blip.util.LocalMem;
 import blip.parallel.smp.Wait;
 import blip.io.Console;
 
+/// help structure 
+struct CachedPoint(T){
+    MainPoint!(T) mainPoint;
+    Time lastSync;
+}
+
 struct LoadStats{
     Real load;
     SKey silosKey;
@@ -347,7 +353,7 @@ char[] realFromInput(char[]props){
         res["`~property~`"]=input.`~property~`;`;
         }
     }
-    res~=`
+    res~=`return res;
     }`;
     return res;
 }
@@ -492,6 +498,9 @@ class PNetSilos(T): LocalSilosI!(T){
     NotificationCenter _nCenter;
     /// explorers
     Deque!(ExplorerI!(T)) explorers;
+    Deque!(ExplorerI!(T)) activeExplorers;
+    /// parallel enviroment of silos
+    LinearComm silosParaEnv;
     /// observers
     Deque!(ExplorationObserverI!(T)) observers;
     /// evaluator
@@ -686,7 +695,9 @@ class PNetSilos(T): LocalSilosI!(T){
         
         for(long iExpl=0;iExpl<input.explorationSteps;++iExpl){
             CalculationContext cInstance=evaluator.getCalculator(true,[]);
-            Point np=pointToEvaluate(SKeyVal.Any);
+            /+
+            start work asker
+            Point np=pointToEvaluate(SKeyVal.Any,delegate void(ExplorerI!(T)e){});+/
             //RemoteEval(np);
             //if (! np.isValid()) break;
             
@@ -722,7 +733,7 @@ class PNetSilos(T): LocalSilosI!(T){
         return res!is null;
     }
     /// returns the next point to evaluate
-    Point pointToEvaluate(SKey s){
+    Point pointToEvaluate(SKey s,void delegate(ExplorerI!(T))avail){
         if (hasKey(s)){
             ExplorerI!(T) e;
             for (int i=0;i<input.maxExplorationTries;++i){
@@ -1191,3 +1202,4 @@ class PNetSilos(T): LocalSilosI!(T){
     }
 }
 
+PNetSilos!(Real) dummyPNetSilos;

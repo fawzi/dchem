@@ -123,8 +123,6 @@ class TestGrad:Sampler{
             }
             // calc
             foreach(ref c;pLoopIter(&iterator))
-            //CalculationContext c;
-            //while(iterator(c)) 
             {
                 auto dualDir=pSysT!(T)(c).dynVars.dVarStruct.emptyDualDx();
                 dualDir[]=0;
@@ -141,6 +139,7 @@ class TestGrad:Sampler{
                 pSysT!(T)(c).dynVars.x.axpby(context.centralPointT!(T)().dynVars.x,-1,1);
                 dCenter[i-1]=pSysT!(T)(c).dynVars.x.norm2();
                 ens[i-1]=c.potentialEnergy;
+                c.giveBack();
             }
             // check
             coordDx=diff.norm2();

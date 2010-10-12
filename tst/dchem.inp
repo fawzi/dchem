@@ -34,11 +34,22 @@ mullerB:{
     startY:0.1
 }
 
+cLimiter:{
+    class:"dchem.ContextLimiter",
+    maxContexts:1
+}
+
+limitedMB:{
+    class:"dchem.ContextLimiterClient",
+    contextLimiter:{ class:Ref, name:cLimiter}
+    method:{ class:Ref, name:mullerB}
+}
+
 testGrad:{
     class:dchem.TestGrad,
     dx:0.05,
     maxEDiffErr: 0.1
-    method:{ class:Ref, name:mullerB}
+    method:{ class:Ref, name:limitedMB}
 }
 
 main:{class:Ref, name:testGrad}

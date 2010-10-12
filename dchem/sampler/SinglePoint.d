@@ -54,8 +54,8 @@ class SinglePoint:Sampler{
     bool verify(CharSink log){
         bool res=true;
         auto s=dumper(log);
-        if (method is null || cast(Method)method.contentObj){
-            s("Error: method has to be valid and contain a method")(myFieldName)("\n");
+        if (method is null || (cast(Method)method.contentObj) is null){
+            s("Error: method has to be valid and contain a method in field ")(myFieldName)("\n");
             res=false;
         }
         return res;

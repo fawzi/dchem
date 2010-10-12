@@ -26,15 +26,19 @@ public import dchem.calculator.CalculatorModels;
 class ContextLimiter:InputElement{
     CalculationContext[char[]] contexts; // created contexts
     CalculationContext[char[]] activeContexts; // active contexts
-    size_t maxContexts;
-    size_t maxActiveContexts;
+    size_t maxContexts=1;
+    size_t maxActiveContexts=size_t.max;
     WaitCondition waitForContexts;
     mixin myFieldMixin!();
     mixin(serializeSome("dchem.ContextLimiter",`maxActiveContexts : maximum number of active contexts (non binding)
     maxContexts : maximum number of live (i.e. not yet given back) contexts`));
     
     bool lessThanMaxContexts(){
-        return contexts.length<maxContexts && activeContexts.length<maxActiveContexts;
+        bool res;
+        synchronized(this){
+            res=contexts.length<maxContexts && activeContexts.length<maxActiveContexts;
+        }
+        return res;
     }
     bool verify(CharSink sink){
         auto s=dumper(sink);
@@ -62,20 +66,30 @@ class ContextLimiter:InputElement{
         bool wait,ubyte[]history){
         while (true){
             CalculationContext ctx;
+            bool addMore=false;
             synchronized(this){
                 if (contexts.length<maxContexts) {
-                    ctx=cContext(wait,history);
-                    if(ctx!is null){
-                        contexts[ctx.contextId]=ctx;
-                        activeContexts[ctx.contextId]=ctx;
-                        ctx.nCenter.registerCallback("willActivateContext",&willActivateContextCB,Callback.Flags.ReceiveAll);
-                        ctx.nCenter.registerCallback("willDeactivateContext",&willDeactivateContextCB,Callback.Flags.ReceiveAll);
-                        ctx.nCenter.registerCallback("willGiveBackContext",&willGiveBackContextCB,Callback.Flags.ReceiveAll);
-                    }
-                    return ctx;
+                    addMore=true;
+                    --maxContexts;
                 }
             }
-            if(ctx!is null || (!wait)){
+            if (addMore){
+                ctx=cContext(wait,history);
+                synchronized(this){
+                    assert((ctx.contextId in contexts)is null,"context already present "~ctx.contextId);
+                    assert((ctx.contextId in activeContexts)is null,"context already present "~ctx.contextId);
+                    contexts[ctx.contextId]=ctx;
+                    activeContexts[ctx.contextId]=ctx;
+                    ++maxContexts;
+                }
+            }
+            if(ctx!is null){
+                ctx.nCenter.registerCallback("willActivateContext",&willActivateContextCB,Callback.Flags.ReceiveAll);
+                ctx.nCenter.registerCallback("willDeactivateContext",&willDeactivateContextCB,Callback.Flags.ReceiveAll);
+                ctx.nCenter.registerCallback("willGiveBackContext",&willGiveBackContextCB,Callback.Flags.ReceiveAll);
+                return ctx;
+            }
+            if(!wait){
                 return ctx;
             }
             waitForContexts.wait();
@@ -143,7 +157,9 @@ class ContextLimiterClient:Method{
     /// gets a calculator to perform calculations with this method, if possible reusing the given history
     CalculationContext getCalculator(bool wait, ubyte[]history){
         assert(cl!is null && cast(Method)method.contentObj() !is null);
-        return cl.createContext(&(cast(Method)method.contentObj).getCalculator,wait,history);
+        auto m=cast(Method)method.contentObj;
+        auto dlg=&m.getCalculator;
+        return cl.createContext(&m.getCalculator,wait,history);
     }
     /// drops the history with the given id
     void dropHistory(ubyte[]history){

@@ -1,14 +1,6 @@
 module dchem.pnet.MinEExplorer;
 import dchem.pnet.PNetModels;
 
-/// a structure to keep point and its energy together
-struct PointAndEnergy{
-    Point point;
-    Real energy;
-    mixin(serializeSome("PointAndEnergy","point|energy"));
-    mixin printOut!();
-}
-
 class MinEExplorerDef:InputElement{
     long nEval;
     char[] precision;
@@ -38,16 +30,24 @@ class MinEExplorerDef:InputElement{
 
 /// an object that can offer new points to explore
 /// actually should not inherit from ExplorationObserverI, but this way we avoid multiple inheritance bugs
-class MinEExplorer(T):ExplorerI(T){
+class MinEExplorer(T):ExplorerI!(T){
     /// points to explore more ordered by energy (at the moment this is replicated)
     /// this could be either distribued, or limited to a given max size + refill upon request
     MinHeapSync!(PointAndEnergy) toExploreMore;
     HashSet!(Point) removedPoints;
+    void delegate(ExplorerI!(T)) available;
+    
     // ExplorationObserverI(T)
     
     /// adds energy for a local point and bCasts addEnergyEval
     void addEnergyEvalLocal(LocalSilosI!(T) silos,Point p,Real energy){
-        toExploreMore.push(PointAndEnergy(p,energy));
+        synchronized(this){
+            toExploreMore.push(PointAndEnergy(p,energy));
+            if (available!is null){ // protect against false calls?
+                available(this);
+                available=null;
+            }
+        }
     }
     /// adds gradient value to a point that should be owned. Energy if not NAN replaces the previous value
     /// sets inProgress to false
@@ -86,23 +86,38 @@ class MinEExplorer(T):ExplorerI(T){
     // ExplorerI(T)
     
     /// returns a point to evaluate
-    Point pointToEvaluate(){
-        while {
-            auto pe=toExploreMore.pop();
-            if (!removedPoints.contains(pe.point)){
-                return pe.point;
-                /+pDir=lowestPoint.exploreNext;
-                find silos
-                pOld=silos.localPoint(pDir.point);
-                pNew=pOld.createPosInDir(pDir);
-                newP=silos.newPoint(pNew);
-                if(pOld.acceptableDir(newP)){
-                	bCast(newP);
-                	return newP to evaluate;
-                } else {
-                	drop(newP);
+    Point pointToEvaluate(SKey k,delegate void(ExplorerI!(T))available);
+        bool availableCalled=false;
+        while(true) {
+            synchronized(toExploreMore){
+            PointAndEnergy pe;
+            if (toExploreMore.popNext(pe)){
+                if (!availableCalled) {
+                    available();
+                    availableCalled=true;
                 }
-                try again +/
+                if (!removedPoints.contains(pe.point)){
+                    auto lowestPoint=silos.createLocalPoint(pe);
+                    auto pDir=lowestPoint.exploreNext();
+                    if (pDir.point.data<=1){
+                        continue;
+                    }
+                    toExploreMore.add(pe);
+                    auto pOld=silos.localPoint(pDir.point);
+                    auto posNew=pOld.createPosInDir(pDir);
+                    newP=silos.newPoint(posNew);
+                    if(pOld.acceptableDir(newP)){
+                        bCast(newP);
+                        return newP;
+                    } else {
+                        drop(newP);
+                    }
+                    //try again
+                }
+            } else {
+                assert(this.available==null || this.available is available,"invalid available value");
+                this.available=available;
+                return Point(1); // needs to wait...
             }
         }
     }
