@@ -604,20 +604,16 @@ class PNetSilos(T): LocalSilosI!(T){
             CalculationContext cInstance=evaluator.getCalculator(true,[]);
             switch(cInstance.activePrecision()){
             case Precision.Real:
-                _refPos=cInstance.pSysReal.dupT!(T)(PSDupLevel.All);
-                auto c1=cInstance.constraintsReal();
-                if (c1 !is null)
-                    _constraints=constraintT!(T)(c1.constraintGen,_refPos);
+                _refPos=cInstance.refPSysReal.dupT!(T)(PSDupLevel.All);
                 break;
             case Precision.LowP:
-                _refPos=cInstance.pSysLowP.dupT!(T)(PSDupLevel.All);
-                auto c2=cInstance.constraintsLowP();
-                if (c2 !is null)
-                    _constraints=constraintT!(T)(c2.constraintGen,_refPos);
+                _refPos=cInstance.refPSysLowP.dupT!(T)(PSDupLevel.All);
                 break;
             default:
                 assert(0,"unknown activePrecision");
             }
+            auto cGen=cInstance.constraintGen;
+            _constraints=constraintT!(T)(cGen,_refPos);
         }
         if (_constraints is null) _constraints=new NoConstraint!(T)();
         

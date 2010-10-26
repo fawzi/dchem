@@ -922,7 +922,7 @@ class MainPoint(T):MainPointI!(T){
         addNeighbors(neighAtt.data,dirDist.data,hasGrad);
     }
     /// evaluates with the given context, returns if an evaluate was really done
-    bool evalWithContext(CalculationContext c){
+    bool evalWithContext(LocalCalculationContext c){
         bool calcE=(gFlags&GFlags.EnergyEvaluated)==0;
         bool calcF=((gFlags&GFlags.GradientEvaluated)==0 && (localContext.cheapGrad()||(gFlags&GFlags.GradientInProgress)!=0));
         if (calcE||calcF){

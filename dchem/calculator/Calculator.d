@@ -347,7 +347,7 @@ class CalcContext:LocalCalculationContext{
         vendor=new DefaultVendor(this);
         assert(ProtocolHandler.defaultProtocol!is null,"defaultProtocol");
         assert(ProtocolHandler.defaultProtocol.publisher!is null,"publisher");
-        ProtocolHandler.defaultProtocol.publisher.publishObject(vendor,"CalcContext"~contextId,Publisher.Flags.Public,true);
+        ProtocolHandler.defaultProtocol.publisher.publishObject(vendor,"CalcContext"~contextId,true,Publisher.Flags.Public);
     }
 }
 

@@ -399,7 +399,7 @@ interface MainPointI(T){
     bool addNeighbors(PointAndDir[] neighs,DirDistances!(T)[] dirDists,bool hadGrad);
     
     /// evaluates with the given context, returns if an evaluation was really done
-    bool evalWithContext(CalculationContext c);
+    bool evalWithContext(LocalCalculationContext c);
     /// notifies a GFlags change from the given gFlags
     void notifyGFlagChange(uint oldGFlags);
     /// the energy of a neighbor was calculated
