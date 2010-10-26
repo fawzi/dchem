@@ -124,20 +124,24 @@ class TestGrad:Sampler{
             // calc
             foreach(ref c;pLoopIter(&iterator))
             {
-                auto dualDir=pSysT!(T)(c).dynVars.dVarStruct.emptyDualDx();
+                
+                auto dualDir=context.centralPointT!(T)().dynVars.dVarStruct.emptyDualDx();
                 dualDir[]=0;
                 T sign=1-2*(i-1);
                 dualDir[idir]=sign*0.5*context.dx;
-                pSysT!(T)(c).addFromDualTSpace!(T)(dualDir,pSysT!(T)(c).dynVars.x);
+                auto startP=context.centralPointT!(T)().dup(PSDupLevel.DynProperties|PSDupLevel.DynPNullDx|PSDupLevel.DynPNullMddx);
+                startP.addFromDualTSpace!(T)(dualDir,startP.dynVars.x);
                 dualDir.giveBack();
+                pSysWriterSetT!(T)(c,pSysWriter(startP));
                 c.updateEF(true,false);
                 {
                     diffLock.lock();
                     scope(exit) diffLock.unlock();
-                    diff.axpby(pSysT!(T)(c).dynVars.x,sign,cast(T)1);
+                    diff.axpby(startP.dynVars.x,sign,cast(T)1);
                 }
-                pSysT!(T)(c).dynVars.x.axpby(context.centralPointT!(T)().dynVars.x,-1,1);
-                dCenter[i-1]=pSysT!(T)(c).dynVars.x.norm2();
+                startP.dynVars.x.axpby(context.centralPointT!(T)().dynVars.x,-1,1);
+                dCenter[i-1]=startP.dynVars.x.norm2();
+                startP.release();
                 ens[i-1]=c.potentialEnergy;
                 c.giveBack();
             }
@@ -190,21 +194,24 @@ class TestGrad:Sampler{
         if (m is null) throw new Exception("invalid method in field "~myFieldName,__FILE__,__LINE__);
         CalculationContext c=m.getCalculator(true,null);
         size_t nDim;
-        mixin(withPSys(`nDim=pSys.dynVars.dVarStruct.dualDxGroup.dataLength;`,"c."));
-        dirs=new DirInfo[](nDim);
         c.updateEF(true,true);
-        centralPointReal=c.pSysReal();
+        centralPointReal=c.refPSysReal();
         if (centralPointReal!is null) {
+            centralPointReal=centralPointReal.dup(PSDupLevel.All);
+            nDim=centralPointReal.dynVars.dVarStruct.dualDxGroup.dataLength;
             centralPointReal=centralPointReal.dup();
             dualForcesReal=centralPointReal.dynVars.dVarStruct.emptyDualDx();
             centralPointReal.toDualTSpace(centralPointReal.dynVars.mddx,dualForcesReal);
         }
-        centralPointLowP=c.pSysLowP();
+        centralPointLowP=c.refPSysLowP();
         if (centralPointLowP!is null) {
+            centralPointLowP=centralPointLowP.dup(PSDupLevel.All);
+            nDim=centralPointLowP.dynVars.dVarStruct.dualDxGroup.dataLength;
             centralPointLowP=centralPointLowP.dup();
             dualForcesLowP=centralPointLowP.dynVars.dVarStruct.emptyDualDx();
             centralPointLowP.toDualTSpace(centralPointLowP.dynVars.mddx,dualForcesLowP);
         }
+        dirs=new DirInfo[](nDim);
         auto history=c.storeHistory();
         c.giveBack();
 

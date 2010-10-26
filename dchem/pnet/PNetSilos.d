@@ -32,6 +32,8 @@ import dchem.sys.DynVars;
 import blip.util.LocalMem;
 import blip.parallel.smp.Wait;
 import blip.io.Console;
+import blip.parallel.rpc.RpcMixins;
+import blip.parallel.mpi.Mpi;
 
 /// help structure 
 struct CachedPoint(T){
@@ -172,6 +174,7 @@ class SilosGen:Sampler{
     InputField[] monitors; // use simply SilosWorkerGen[]??
     /// list of finishers, called after the exploration is finished
     InputField[] finishers; // use simply SilosWorkerGen[]??
+    /// the operations to execute on the contexts 
 
     // topology parameters
     /// minimum residual after projecting out the linear dependend directions
@@ -499,6 +502,8 @@ class PNetSilos(T): LocalSilosI!(T){
     /// explorers
     Deque!(ExplorerI!(T)) explorers;
     Deque!(ExplorerI!(T)) activeExplorers;
+    WaitCondition waitExplorers;
+    
     /// parallel enviroment of silos
     LinearComm silosParaEnv;
     /// observers
@@ -513,80 +518,8 @@ class PNetSilos(T): LocalSilosI!(T){
     MainPoint!(T)allocPoint(PoolI!(MainPoint!(T))p){
         return new MainPoint!(T)(this,p);
     }
-    this(SilosGen sGen,char[] nameId,SKey key,ParticleSys!(T) refPos=null,ConstraintI!(T) constraints=null,
-        CharSink log=sout.call,NotificationCenter _nCenter=null,PoolI!(MainPoint!(T)) pPool=null){
-        this.input=sGen;
-        this.runLevel=RunLevel.Setup;
-        this.nextLocalId=UniqueNumber!(ulong)(1);
-        this.nextPntNr=UniqueNumber!(ulong)(3);
-        this.nameId=nameId;
-        this._key=key;
-        this.silos=new HashMap!(SKey,PNetSilosI!(T))();
-        this.silos[this._key]=this;
-        this.loads=new MinHeapSync!(LoadStats)();
-        this.localPointsKeys=new BatchedGrowableArray!(Point,batchSize)();
-        this.owner=new HashMap!(Point,SKey)();
-        this.localCache=new HashMap!(Point,CachedPoint!(T))();
-        this.localCalcInProgress=new HashMap!(Point,CalculationContext)();
-        this.calcInProgress=new Set!(Point)();
-        this.localPoints=new DenseLocalPointArray!(MainPointI!(T))(); /// local points (position,...)
-        this._rand=new RandomSync();
-        this._refPos=refPos;
-        this._constraints=constraints;
-        this.log=log;
-        this._nCenter=nCenter;
-        if (nCenter is null) this._nCenter=new NotificationCenter();
-        this.explorers=new Deque!(ExplorerI!(T))();
-        this.observers=new Deque!(ExplorationObserverI!(T))();
-        this.evaluator=cast(Method)this.input.evaluator.contentObj;
-        this.pPool=pPool;
-        if (pPool is null) this.pPool=cachedPool(&this.allocPoint);
-        foreach(e;input.explorers){
-            auto o=e.contentObj;
-            if (cast(ExplorerGen)o !is null){
-                auto expl=explorerT!(T)(cast(ExplorerGen)o,this);
-                explorers.append(expl);
-                observers.append(expl);
-            } else {
-                observers.append(observerT!(T)(cast(ExplorationObserverGen)o,this));
-            }
-        }
-        this.loaders=new Deque!(SilosWorkerI!(T))();
-        this.monitors=new Deque!(SilosWorkerI!(T))();
-        this.finishers=new Deque!(SilosWorkerI!(T))();
-        foreach(l;input.loaders){
-            auto swGen=cast(SilosWorkerGen)(l.contentObj());
-            auto sw=silosWorkerT!(T)(swGen);
-            loaders.append(sw);
-        }
-        foreach(m;input.monitors){
-            auto swGen=cast(SilosWorkerGen)(m.contentObj());
-            auto sw=silosWorkerT!(T)(swGen);
-            monitors.append(sw);
-        }
-        foreach(f;input.finishers){
-            auto swGen=cast(SilosWorkerGen)(f.contentObj());
-            auto sw=silosWorkerT!(T)(swGen);
-            finishers.append(sw);
-        }
-    }
-    /// adds the computed gradient to the point p
-    void addGradEvalLocal(SKey s,Point p,PSysWriter!(T) pSys){
-        if (s==SKeyVal.All){
-            foreach (sK,sL;silos){
-                sL.addGradEvalLocal(sK,p,pSys);
-            }
-        } else if (hasKey(s)) {
-            auto mp=localPoints[p];
-            synchronized(mp){
-                auto e=mp.pos.dynVars.potentialEnergy;
-                mp.pos[]=pSys;
-                if (isNaN(mp.pos.dynVars.potentialEnergy)) mp.pos.dynVars.potentialEnergy=e;
-            }
-            mp.didGradEval();
-        } else {
-            silosForKey(s).addGradEvalLocal(s,p,pSys);
-        }
+    bool hasActiveExpl(){
+        return activeExplorers.length>0 || explorers.length==0;
     }
     /// writes out a log message
     void logMsg(void delegate(CharSink)writer){
@@ -614,7 +547,7 @@ class PNetSilos(T): LocalSilosI!(T){
         bool res=false;
         int i=0;
         foreach(e;explorers){
-            res=res || e.speculativeGradient(s,p,energy);
+            res=res || e.speculativeGradientLocal(p,energy);
         }
         struct EAdd{
             void delegate(SKey,Point,Real) op;
@@ -724,7 +657,7 @@ class PNetSilos(T): LocalSilosI!(T){
     
     bool nextExplorer(ref ExplorerI!(T) res){
         synchronized(explorers){
-            if (explorers.popFront(res)){
+            if (activeExplorers.popFront(res)){
                 explorers.append(res);
             } else {
                 res=null;
@@ -732,24 +665,50 @@ class PNetSilos(T): LocalSilosI!(T){
         }
         return res!is null;
     }
+    
+    void addBackExplorer(ExplorerI!(T)e)
+    in{
+        foreach(expl;activeExplorers){
+            assert(expl!is e);
+        }
+        bool found=false;
+        foreach(expl;explorers){
+            if (expl is e){
+                found=true;
+            }
+        }
+        assert(found);
+    } body {
+        activeExplorers.pushBack(e);
+        waitExplorers.checkCondition();
+    }
+    
     /// returns the next point to evaluate
-    Point pointToEvaluate(SKey s,void delegate(ExplorerI!(T))avail){
+    Point pointToEvaluate(SKey s){
         if (hasKey(s)){
             ExplorerI!(T) e;
             for (int i=0;i<input.maxExplorationTries;++i){
-                if (!nextExplorer(e)){
-                    break;
+                if (activeExplorers.popFront(e)){
+                    auto res=e.pointToEvaluateLocal(&this.addBackExplorer);
+                    if (res.isValid) return res;
+                    if (res.data==0){
+                        explorers.filterInPlace(delegate bool(ExplorerI!(T) expl){ return expl !is e; });
+                    }
+                } else if (explorers.length==0){
+                    return Point(0);
                 }
-                auto res=e.pointToEvaluate(s);
-                if (res.isValid) return res;
+                waitExplorers.wait();// to do: should have a timeout
             }
-            return Point(0); // no valid next computation
+            if (explorers.length==0){
+                return Point(0);
+            }
+            return Point(1);
         } else {
             return silosForKey(s).pointToEvaluate(s);
         }
     }
     /// called when an evaluation fails, flags: attemptRetry/don't Retry
-    void evaluationFailed(SKey s,Point,uint flags){
+    void evaluationFailed(SKey s,Point p){
         assert(0,"to do");
     }
     
@@ -800,26 +759,30 @@ class PNetSilos(T): LocalSilosI!(T){
                 throw new Exception("Local copy in PNetSilos.addEnergyEvalLocal",__FILE__,__LINE__);
             }
             mp.addEnergyEvalLocal(energy);
-            foreach(obs;observers){
+            notifyLocalObservers(delegate void(ExplorationObserverI!(T)obs){
                 obs.addEnergyEvalLocal(s,p,energy);
-            }
+            });
         } else {
             silosForKey(s).addEnergyEvalLocal(s,p,energy);
         }
     }
-    /// adds gradient value to a point that should be owned. Energy if not NAN replaces the previous value
-    /// sets inProgress to false
+    /// adds gradient value to a point that should be owned. Energy if not NAN does not replace the previous value
     void addGradEvalLocal(SKey s,Point p,PSysWriter!(T) pSys){
-        if (hasKey(s)){
+        if (s==SKeyVal.All){
+            foreach (sK,sL;silos){
+                sL.addGradEvalLocal(sK,p,pSys);
+            }
+        } else if (hasKey(s)) {
             auto mp=localPoints[p];
-            if (! mp.isLocalCopy){
+            if (mp.isLocalCopy){
                 throw new Exception("Local copy in PNetSilos.addGradEvalLocal",__FILE__,__LINE__);
             }
-            mp.pos[]=pSys;
-            mp.didGradEval();
-            foreach(obs;observers){
-                obs.addGradEvalLocal(s,p,pSys);
+            synchronized(mp){
+                auto e=mp.pos.dynVars.potentialEnergy;
+                mp.pos[]=pSys;
+                if (isNaN(mp.pos.dynVars.potentialEnergy)) mp.pos.dynVars.potentialEnergy=e;
             }
+            mp.didGradEval();
         } else {
             silosForKey(s).addGradEvalLocal(s,p,pSys);
         }
@@ -856,9 +819,9 @@ class PNetSilos(T): LocalSilosI!(T){
                 }
                 newPos.giveBack();
             }
-            foreach(obs;observers){
+            notifyLocalObservers(delegate void(ExplorationObserverI!(T)obs){
                 obs.publishPoint(s,owner,newPoint,pos,pSize,flags);
-            }
+            });
         } else {
             silosForKey(s).publishPoint(s,owner,newPoint,pos,pSize,flags);
         }
@@ -872,9 +835,9 @@ class PNetSilos(T): LocalSilosI!(T){
                 auto mp=localPoints[nP];
                 mp.addEnergyEvalOther(p,energy);
             }
-            foreach(obs;observers){
+            notifyLocalObservers(delegate void(ExplorationObserverI!(T)obs){
                 obs.neighborHasEnergy(s,p,neighbors,energy);
-            }
+            });
         } else {
             silosForKey(s).neighborHasEnergy(s,p,neighbors,energy);
         }
@@ -887,9 +850,9 @@ class PNetSilos(T): LocalSilosI!(T){
                 auto mp=localPoints[nP];
                 mp.addGradEvalOther(p,energy);
             }
-            foreach(obs;observers){
+            notifyLocalObservers(delegate void(ExplorationObserverI!(T)obs){
                 obs.neighborHasGradient(s,p,neighbors,energy);
-            }
+            });
         } else {
             silosForKey(s).neighborHasGradient(s,p,neighbors,energy);
         }
@@ -902,9 +865,9 @@ class PNetSilos(T): LocalSilosI!(T){
                 sL.finishedExploringPoint(sK,point,owner);
             }
         } else if (hasKey(s)){
-            foreach(obs;observers){
+            notifyLocalObservers(delegate void(ExplorationObserverI!(T)obs){
                 obs.finishedExploringPoint(s,point,owner);
-            }
+            });
         } else {
             silosForKey(s).finishedExploringPoint(s,point,owner);
         }
@@ -931,9 +894,9 @@ class PNetSilos(T): LocalSilosI!(T){
                 pp.communicateCollision();
                 mp.drop(); // redundant...
             }
-            foreach(obs;observers){
+            notifyLocalObservers(delegate void(ExplorationObserverI!(T)obs){
                 obs.publishCollision(s,point);
-            }
+            });
         } else {
             silosForKey(s).publishCollision(s,point);
         }
@@ -950,9 +913,9 @@ class PNetSilos(T): LocalSilosI!(T){
                 pp=publishingPoints[p0];
             }
             pp.communicatePublish(source);
-            foreach (obs;observers){
+            notifyLocalObservers(delegate void(ExplorationObserverI!(T)obs){
                 obs.didLocalPublish(s,p0,source);
-            }
+            });
         } else {
             silosForKey(s).didLocalPublish(s,p0,source);
         }
@@ -972,9 +935,9 @@ class PNetSilos(T): LocalSilosI!(T){
                 }
             }
             if (shouldStop){ // square b-cast, change??
-                foreach (obs;observers){
+                notifyLocalObservers(delegate void(ExplorationObserverI!(T)obs){
                     obs.shutdown(s);
-                }
+                });
             }
         } else {
             silosForKey(s).shutdown(s);
@@ -1127,6 +1090,11 @@ class PNetSilos(T): LocalSilosI!(T){
     void rmExplorer(ExplorerI!(T)o){
         explorers.filterInPlace(delegate bool(ExplorerI!(T) i){ return i!is o; });
     }
+    void notifyLocalObservers(void delegate(ExplorationObserverI!(T))op){
+        foreach(obs;observers){
+            op(obs);
+        }
+    }
     SKey pointOwner(SKey s,Point p){
         if (hasKey(s)){
             synchronized(owner){
@@ -1196,9 +1164,72 @@ class PNetSilos(T): LocalSilosI!(T){
             localCache.removeKey(p.point);
         }
     }
-    
+    mixin(rpcMixin("dchem.PNetSilos!("~T.stringof~")", "PNetSilosI!("~T.stringof~")",silosMethodsStr));
+    DefaultVendor mainVendor;
     char[] silosCoreUrl(){
-        assert(0,"to do");
+        return mainVendor.proxyObjUrl();
+    }
+    this(SilosGen sGen,char[] nameId,SKey key,ParticleSys!(T) refPos=null,ConstraintI!(T) constraints=null,
+        CharSink log=sout.call,NotificationCenter _nCenter=null,PoolI!(MainPoint!(T)) pPool=null){
+        this.input=sGen;
+        this.runLevel=RunLevel.Setup;
+        this.nextLocalId=UniqueNumber!(ulong)(1);
+        this.nextPntNr=UniqueNumber!(ulong)(3);
+        this.nameId=nameId;
+        this._key=key;
+        this.silos=new HashMap!(SKey,PNetSilosI!(T))();
+        this.silos[this._key]=this;
+        this.silosParaEnv=mpiWorld;
+        this.loads=new MinHeapSync!(LoadStats)();
+        this.localPointsKeys=new BatchedGrowableArray!(Point,batchSize)();
+        this.owner=new HashMap!(Point,SKey)();
+        this.localCache=new HashMap!(Point,CachedPoint!(T))();
+        this.localCalcInProgress=new HashMap!(Point,CalculationContext)();
+        this.calcInProgress=new Set!(Point)();
+        this.localPoints=new DenseLocalPointArray!(MainPointI!(T))(); /// local points (position,...)
+        this._rand=new RandomSync();
+        this._refPos=refPos;
+        this._constraints=constraints;
+        this.log=log;
+        this._nCenter=nCenter;
+        if (nCenter is null) this._nCenter=new NotificationCenter();
+        this.explorers=new Deque!(ExplorerI!(T))();
+        this.observers=new Deque!(ExplorationObserverI!(T))();
+        this.evaluator=cast(Method)this.input.evaluator.contentObj;
+        this.pPool=pPool;
+        if (pPool is null) this.pPool=cachedPool(&this.allocPoint);
+        foreach(e;input.explorers){
+            auto o=e.contentObj;
+            if (cast(ExplorerGen)o !is null){
+                auto expl=explorerT!(T)(cast(ExplorerGen)o,this);
+                explorers.append(expl);
+                observers.append(expl);
+            } else {
+                observers.append(observerT!(T)(cast(ExplorationObserverGen)o,this));
+            }
+        }
+        this.activeExplorers=activeExplorers.dup();
+        this.waitExplorers=new WaitCondition(&this.hasActiveExpl);
+        this.loaders=new Deque!(SilosWorkerI!(T))();
+        this.monitors=new Deque!(SilosWorkerI!(T))();
+        this.finishers=new Deque!(SilosWorkerI!(T))();
+        mainVendor=new DefaultVendor(this);
+        ProtocolHandler.defaultProtocol.publisher.publishObject(mainVendor,"silos",true);
+        foreach(l;input.loaders){
+            auto swGen=cast(SilosWorkerGen)(l.contentObj());
+            auto sw=silosWorkerT!(T)(swGen);
+            loaders.append(sw);
+        }
+        foreach(m;input.monitors){
+            auto swGen=cast(SilosWorkerGen)(m.contentObj());
+            auto sw=silosWorkerT!(T)(swGen);
+            monitors.append(sw);
+        }
+        foreach(f;input.finishers){
+            auto swGen=cast(SilosWorkerGen)(f.contentObj());
+            auto sw=silosWorkerT!(T)(swGen);
+            finishers.append(sw);
+        }
     }
 }
 

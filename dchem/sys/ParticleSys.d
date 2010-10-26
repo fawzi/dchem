@@ -891,6 +891,7 @@ class ParticleSys(T): CopiableObjectI,Serializable
     /// copy op
     void opSliceAssign(V)(V p){
         static if(is(V U:ParticleSys!(U))){
+            if (p is this) return;
             iteration=p.iteration;
             sysStruct=p.sysStruct;
             dynVars[]=p.dynVars;

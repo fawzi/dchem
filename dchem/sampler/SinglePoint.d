@@ -9,6 +9,8 @@ import WriteOut=dchem.input.WriteOut;
 import dchem.calculator.FileCalculator;
 import dchem.calculator.Calculator;
 import dchem.input.WriteOut;
+import dchem.sys.SegmentedArray;
+import dchem.sys.PIndexes;
 
 class SinglePoint:Sampler{
     bool calcE;
@@ -34,15 +36,33 @@ class SinglePoint:Sampler{
         if (calcE){
             sout("potentialEnergy:")(c.potentialEnergy())("\n");
         }
+        auto sysStruct=c.sysStruct;
+        auto segArrStruct=new SegmentedArrayStruct("forces",sysStruct.fullSystem,KindRange.all);
         if (calcF){
-            mixin(withPSys(`
-            if (pSys.dynVars.x.dof.length>0 || pSys.dynVars.x.orient.length>0){
-                auto w=pSysWriter(pSys);
-                sout(w);
-            } else {
-                auto f=c.mddpos;
-                WriteOut.writeXyz!(Real)(sout.call,c.sysStruct,f,"forces "~c.sysStruct.name);
-            }`,"c."));
+            auto wR0=c.pSysWriterReal();
+            auto d=&wR0.mddx.pos.toSegArr!(Real);
+            switch(c.activePrecision){
+            case Precision.Real:
+                auto wR=c.pSysWriterReal();
+                if (wR.mddx.dof.data.length>0 || wR.mddx.orient.data.length>0){
+                    sout(wR);
+                } else {
+                    auto fR=wR.mddx.pos.toSegArr!(Vector!(Real,3))(new SegArrMemMap!(Vector!(Real,3))(segArrStruct),true);
+                    WriteOut.writeXyz!(Real)(sout.call,sysStruct,fR,"forces "~sysStruct.name);
+                }
+                break;
+            case Precision.LowP:
+                auto wL=c.pSysWriterLowP();
+                if (wL.mddx.dof.data.length>0 || wL.mddx.orient.data.length>0){
+                    sout(wL);
+                } else {
+                    auto fL=wL.mddx.pos.toSegArr!(Vector!(LowP,3))(new SegArrMemMap!(Vector!(LowP,3))(segArrStruct),true);
+                    WriteOut.writeXyz!(LowP)(sout.call,sysStruct,fL,"forces "~c.sysStruct.name);
+                }
+                break;
+            default:
+                assert(0);
+            }
         }
         sout("End calculation\n");
     }

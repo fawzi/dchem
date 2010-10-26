@@ -398,8 +398,8 @@ interface MainPointI(T){
     /// returns true if the points were really added
     bool addNeighbors(PointAndDir[] neighs,DirDistances!(T)[] dirDists,bool hadGrad);
     
-    /// evaluates with the given context, returns if an evaluate was really done
-    bool evalWithContext(CalculationContext c,ExplorerI!(T) expl);
+    /// evaluates with the given context, returns if an evaluation was really done
+    bool evalWithContext(CalculationContext c);
     /// notifies a GFlags change from the given gFlags
     void notifyGFlagChange(uint oldGFlags);
     /// the energy of a neighbor was calculated
@@ -579,14 +579,14 @@ interface ExplorationObserverI(T){
 
 /// an object that can offer new points to explore
 /// actually should not inherit from ExplorationObserverI, but this way we avoid multiple inheritance bugs
-/// these method are not public/remote
+/// these method are *not* public/remote
 interface ExplorerI(T):ExplorationObserverI!(T){
     /// returns a point to evaluate, calls available when a new point might be available, returns 1 if one should wait, 0 if the explorer has finished exploring
-    Point pointToEvaluate(SKey,delegate void(ExplorerI!(T))available);
-    /// called when an evaluation fails, flags: attemptRetry/don't Retry
-    void evaluationFailed(SKey s,Point,uint flags);
+    Point pointToEvaluateLocal(void delegate(ExplorerI!(T)) availableAgain);
+    /// called when an evaluation fails, returns 1, retry, 0 no choice, -1 do not retry
+    int evaluationFailedLocal(Point);
     /// should speculatively calculate the gradient? PNetSilos version calls addEnergyEvalLocal
-    bool speculativeGradient(SKey s,Point p,Real energy);
+    bool speculativeGradientLocal(Point p,Real energy);
 }
 
 /// a task that can be transferred to a silos and performed there
@@ -598,7 +598,15 @@ interface RemoteSilosOpI(T):Serializable{ // could be Serializable and SilosWork
 /// interface of a silos (storage) of the point network
 ///
 /// just like ExplorationObserverI all methods have SKey as first argument (see there for the rationale)
-interface PNetSilosI(T):ExplorerI!(T){
+interface PNetSilosI(T):ExplorationObserverI!(T){
+    /// returns a point to evaluate, returns 0 if there are no further points, 1 if there are no points now
+    /// but there should be in the future
+    Point pointToEvaluate(SKey);
+    /// called when an evaluation fails
+    void evaluationFailed(SKey s,Point);
+    /// should speculatively calculate the gradient? PNetSilos version calls addEnergyEvalLocal
+    bool speculativeGradient(SKey s,Point p,Real energy);
+
     /// load (usage) of the silos s in some arbitrary units
     Real load(SKey s);
     
@@ -627,6 +635,8 @@ interface PNetSilosI(T):ExplorerI!(T){
     // expose creation & bcast of points and update from dried points? merging should be done carefully to avoid problems... so for now you should do them via executeLocal...
 }
 
+const char[] silosMethodsStr=`shutdown|addEnergyEvalLocal|addGradEvalLocal|publishPoint|neighborHasEnergy|neighborHasGradient|finishedExploringPoint|didLocalPublish|publishCollision|pointToEvaluate|evaluationFailed|speculativeGradient|load|energyForPointsLocal|energyForPoints|mainPoint|mainPointLocal|pointOwner|nextFreeSilos|addPointToLocalNeighs|addNeighDirsToLocalPoint|executeLocally|propertiesDict`;
+
 /// local interface, to a silos (basically a silos client)
 interface LocalSilosI(T): PNetSilosI!(T) {
     /// if this silos is owner of the key k (note that using this rather than having a single key per silos
@@ -649,6 +659,8 @@ interface LocalSilosI(T): PNetSilosI!(T) {
     void addExplorer(ExplorerI!(T)o);
     /// removes the given explorer
     void rmExplorer(ExplorerI!(T)o);
+    /// notify observers, the operation should not raise (or the whole program stops)
+    void notifyLocalObservers(void delegate(ExplorationObserverI!(T))n);
     
     /// reference position, this should be used just to create other ParticleSystem, never directly
     ParticleSys!(T) refPos();

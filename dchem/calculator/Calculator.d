@@ -21,6 +21,8 @@ import blip.io.IOArray;
 import blip.io.NullStream;
 import tango.io.vfs.model.Vfs;
 public import dchem.calculator.CalculatorModels;
+import blip.parallel.rpc.Rpc;
+import dchem.input.WriteOut;
 
 /// Limits the number of contexts that can be created/active
 class ContextLimiter:InputElement{
@@ -65,7 +67,7 @@ class ContextLimiter:InputElement{
     CalculationContext createContext(CalculationContext delegate(bool,ubyte[]history)cContext,
         bool wait,ubyte[]history){
         while (true){
-            CalculationContext ctx;
+            LocalCalculationContext ctx;
             bool addMore=false;
             synchronized(this){
                 if (contexts.length<maxContexts) {
@@ -74,7 +76,10 @@ class ContextLimiter:InputElement{
                 }
             }
             if (addMore){
-                ctx=cContext(wait,history);
+                auto ctx0=cContext(wait,history);
+                if (ctx0 is null) return null;
+                ctx=cast(LocalCalculationContext)cast(Object)ctx0;
+                if (ctx is null) throw new Exception("limiter works only with local contexts",__FILE__,__LINE__);
                 synchronized(this){
                     assert((ctx.contextId in contexts)is null,"context already present "~ctx.contextId);
                     assert((ctx.contextId in activeContexts)is null,"context already present "~ctx.contextId);
@@ -169,12 +174,6 @@ class ContextLimiterClient:Method{
     void clearHistory(){
         (cast(Method)method.contentObj).clearHistory();
     }
-    /// url to access this from other processes
-    char[] exportedUrl(){
-        assert(0,"to do");
-        return "";
-    }
-    
 }
 
 char[] withPSys(char[]op,char[]from=""){
@@ -190,9 +189,12 @@ char[] withPSys(char[]op,char[]from=""){
     }
     `;
 }
+const char[] calcCtxMethodsStr=
+`activePrecision|contextId|pSysWriterReal|pSysWriterLowP|pSysWriterRealSet|pSysWriterLowPSet|refPSysReal|refPSysLowP|constraintGen|sysStruct|changeLevel|changeLevelSet|changedDynVars|potentialEnergy|posSet|pos|dposSet|dpos|mddposSet|mddpos|updateEF|activate|deactivate|giveBack|stop|method|storeHistory|exportedUrl|executeLocally`;
+
 /// represent a calculation that might have been aready partially setup, in particular the
 /// number of elements,... cannot change
-class CalcContext:CalculationContext{
+class CalcContext:LocalCalculationContext{
     char[] _contextId;
     ParticleSys!(Real) _pSysReal;
     ParticleSys!(LowP) _pSysLowP;
@@ -207,25 +209,38 @@ class CalcContext:CalculationContext{
         r.workOn(this);
     }
 
-    this(char[] contextId){
-        this._contextId=contextId;
-        _nCenter=new NotificationCenter();
-        // register to the world...
-    }
     ConstraintI!(Real) constraintsReal(){ return null; }
     ConstraintI!(LowP) constraintsLowP(){ return null; }
     char[] contextId(){ return _contextId; }
     Precision activePrecision() { return Precision.Real; }
+    ParticleSys!(Real) refPSysReal() { return _pSysReal; }
+    ParticleSys!(LowP) refPSysLowP() { return _pSysLowP; }
     ParticleSys!(Real) pSysReal() { return _pSysReal; }
     ParticleSys!(LowP) pSysLowP() { return _pSysLowP; }
+    PSysWriter!(Real) pSysWriterReal(){ return pSysWriter(_pSysReal); }
+    PSysWriter!(LowP) pSysWriterLowP() { return pSysWriter(_pSysLowP); }
+    void pSysWriterRealSet(PSysWriter!(Real)p) { assert(_pSysReal!is null); _pSysReal[]=p; }
+    void pSysWriterLowPSet(PSysWriter!(LowP)p) { assert(_pSysLowP!is null); _pSysLowP[]=p; }
+    ConstraintGen constraintGen(){
+        auto cReal=constraintsReal();
+        if (cReal!is null){
+            return cReal.constraintGen();
+        }
+        auto cLowP=constraintsLowP();
+        if (cLowP !is null){
+            return cLowP.constraintGen();
+        }
+        return null;
+    }
+    
     NotificationCenter nCenter()  { return _nCenter; }
     HistoryManager!(LowP) posHistory() { return _posHistory; }
     ChangeLevel changeLevel() { return _changeLevel; }
-    void changeLevel(ChangeLevel c) { _changeLevel=c; }
+    void changeLevelSet(ChangeLevel c) { _changeLevel=c; }
     Real potentialEnergy(){
         mixin(withPSys("return pSys.dynVars.potentialEnergy;"));
     }
-    void pos(SegmentedArray!(Vector!(Real,3)) newPos){
+    void posSet(SegmentedArray!(Vector!(Real,3)) newPos){
         mixin(withPSys("pSys.dynVars.x.pos[]=newPos;"));
     }
     SegmentedArray!(Vector!(Real,3)) pos(){
@@ -242,7 +257,7 @@ class CalcContext:CalculationContext{
             throw new Exception("missing particle sys in context "~contextId,__FILE__,__LINE__);
         }
     }
-    void dpos(SegmentedArray!(Vector!(Real,3)) newDpos){
+    void dposSet(SegmentedArray!(Vector!(Real,3)) newDpos){
         mixin(withPSys("pSys.dynVars.dx.pos[]=newDpos;"));
     }
     SegmentedArray!(Vector!(Real,3)) dpos(){
@@ -259,7 +274,7 @@ class CalcContext:CalculationContext{
             throw new Exception("missing particle sys in context "~contextId,__FILE__,__LINE__);
         }
     }
-    void mddpos(SegmentedArray!(Vector!(Real,3)) newMddpos){
+    void mddposSet(SegmentedArray!(Vector!(Real,3)) newMddpos){
         mixin(withPSys("pSys.dynVars.mddx.pos[]=newMddpos;"));
     }
     SegmentedArray!(Vector!(Real,3)) mddpos(){
@@ -319,9 +334,20 @@ class CalcContext:CalculationContext{
     /// exposes (publish/vends) this object to the world
     void publish(){
     }
-    /// url to access this from other processes
+    mixin(rpcMixin("dchem.CalcContext", "CalculationContext",calcCtxMethodsStr));
+    DefaultVendor vendor;
+    /// url to access this from other processes (only as CalculationContext)
     char[] exportedUrl(){
-        assert(0,"to do");
+        return vendor.proxyObjUrl();
+    }
+    this(char[] contextId){
+        this._contextId=contextId;
+        _nCenter=new NotificationCenter();
+        // register to the world...
+        vendor=new DefaultVendor(this);
+        assert(ProtocolHandler.defaultProtocol!is null,"defaultProtocol");
+        assert(ProtocolHandler.defaultProtocol.publisher!is null,"publisher");
+        ProtocolHandler.defaultProtocol.publisher.publishObject(vendor,"CalcContext"~contextId,Publisher.Flags.Public,true);
     }
 }
 

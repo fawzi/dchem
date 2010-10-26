@@ -65,11 +65,6 @@ class MullerBrownPot: Method {
     void dropHistory(ubyte[]history) { }
     /// clears all history
     void clearHistory() { }
-    /// url to access this from other processes
-    char[] exportedUrl(){
-        assert(0,"to do");
-    }
-    
     // serialization stuff
     mixin(serializeSome("dchem.MullerBrownPot",
     `a|b|c|x0|y0|preFactor|startX|startY`));

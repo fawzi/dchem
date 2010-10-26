@@ -180,20 +180,10 @@ struct SegArrWriter(T){
         static assert((V.sizeof % T.sizeof)==0,"type of the array ("~V.stringof~") is not commensurate with "~T.stringof);
         uint dimMult=V.sizeof/T.sizeof;
         if (kindStarts.length==0) return null;
-        auto pKStarts=sysStruct.particles.kindStarts;
-        foreach (i,p;kindStarts[1..$]){
-            auto rFactor=(pKStarts[i+1]-pKStarts[i])*dimMult;
-            if(((p-kindStarts[i])%rFactor)!=0)
-                throw new Exception("number of elements non commensurate",__FILE__,__LINE__);
-            if(aStruct.kindDim(kRange.kStart+i)!=(p-kindStarts[i])/rFactor)
-                throw new Exception("different sizes",__FILE__,__LINE__);
-            if (kDims[i]==0 && (aStruct.flags&SegmentedArrayStruct.Flags.Min1)!=0)
-                throw new Exception("Min1 flags when not expected",__FILE__,__LINE__);
-        }
         auto dData=BulkArray!(V)((cast(V*)data.ptr)[0..data.length/dimMult],data.guard);
         // compatible layout:
         if (!(kRange in aMap.kRange))
-            throw new Exception("incompatible kind ranges",__FILE__,__FILE__);
+            throw new Exception("incompatible kind ranges",__FILE__,__LINE__);
         if (steal && data.guard!is null){
             auto baseOffset=data.ptr-data.guard.dataPtr;
             bool compatible=true;
@@ -205,7 +195,7 @@ struct SegArrWriter(T){
                 }
             }
             // can be stolen:
-            if (compatible && atomicCAS(ownsData,false,true)){
+            if (compatible && atomicCASB(ownsData,false,true)){
                 return aMap.newArray(dData);
             }
         }

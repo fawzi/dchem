@@ -277,6 +277,9 @@ class MainPoint(T):MainPointI!(T){
     size_t refCount;
     PoolI!(MainPoint) pool;
     
+    SKey owner(){
+        return localContext.ownerOfPoint(point);
+    }
     /// if this point is a local copy, and not the "main" point
     bool isLocalCopy(){
         return (gFlags&GFlags.LocalCopy)!=0;
@@ -919,9 +922,9 @@ class MainPoint(T):MainPointI!(T){
         addNeighbors(neighAtt.data,dirDist.data,hasGrad);
     }
     /// evaluates with the given context, returns if an evaluate was really done
-    bool evalWithContext(CalculationContext c,ExplorerI!(T)expl){
+    bool evalWithContext(CalculationContext c){
         bool calcE=(gFlags&GFlags.EnergyEvaluated)==0;
-        bool calcF=((gFlags&GFlags.GradientEvaluated)==0 && (localContext.cheapGrad()||gFlags&GFlags.GradientInProgress));
+        bool calcF=((gFlags&GFlags.GradientEvaluated)==0 && (localContext.cheapGrad()||(gFlags&GFlags.GradientInProgress)!=0));
         if (calcE||calcF){
             Real e=pos.dynVars.potentialEnergy;
             mixin(withPSys(`pSys[]=pos;`,"c."));
@@ -943,8 +946,8 @@ class MainPoint(T):MainPointI!(T){
                 localContext.addEnergyEvalLocal(target,point,e);
             }
             bool calcMore=false;
-            if (!calcF && expl!is null){
-                calcMore=expl.speculativeGradient(target,point,e);
+            if (!calcF){
+                calcMore=localContext.speculativeGradient(target,point,e);
             } else {
                 addEnergyEvalLocal(e);
             }
@@ -1246,6 +1249,10 @@ class MainPoint(T):MainPointI!(T){
             }
         }
         notifyGFlagChange(oldGFlags);
+        auto ownr=owner;
+        localContext.notifyLocalObservers(delegate void(ExplorationObserverI!(T)obs){
+            obs.addGradEvalLocal(ownr,point,pSysWriter(pos));
+        });
     }
     /// builds the direction toward the minimum
     void buildMinDir(){

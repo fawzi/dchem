@@ -123,7 +123,7 @@ class PNetJournal(T):ExplorationObserverI!(T){
             res.kind=Kind.NeighborHasGradient;
             res.point=p.point;
             auto mp=p.mainPoint(localSilos);
-            res.sys=pSysWriter(mp.pos);
+            res.pos=pSysWriter(mp.pos);
             res.energy=energy;
             res.neighs=neighbors;
             return res;
@@ -149,7 +149,7 @@ class PNetJournal(T):ExplorationObserverI!(T){
             if (!skip || pos.isNonNull()) s.field(metaI[2],pos);
             if (!skip || kind==Kind.EvalE || kind==Kind.NeighborHasGradient || kind==Kind.NeighborHasEnergy) s.field(metaI[3],energy);
             if (!skip || kind==Kind.StartPoint) s.field(metaI[4],flags);
-            if (!skip || kind==Kind.NeighborHasEnergy|| kind=Kind.NeighborHasEnergy) s.field(metaI[5],neighs);
+            if (!skip || kind==Kind.NeighborHasEnergy|| kind==Kind.NeighborHasEnergy) s.field(metaI[5],neighs);
         }
         void serialize(Serializer s){
             serial(s);
@@ -247,7 +247,7 @@ class PNetJournal(T):ExplorationObserverI!(T){
     /// a neighbor point has calculated its energy (and not the gradient)
     /// neighbors should be restricted to s
     void neighborHasEnergy(SKey s,Point p,Point[] neighbors,Real energy){
-        if (logNeighInfo){
+        if (context.logNeighInfo){
             this.serialLock.lock();
             scope(exit){ this.serialLock.unlock(); }
             jSerial(JournalEntry.NeighborHasEnergy(s,p,neighbors,energy));
@@ -256,7 +256,7 @@ class PNetJournal(T):ExplorationObserverI!(T){
     /// the neighbor point p has calculated its gradient (and energy)
     /// neighbors should be restricted to silos
     void neighborHasGradient(SKey s,LazyMPLoader!(T)p, Point[] neighbors, Real energy){
-        if (logNeighInfo){
+        if (context.logNeighInfo){
             this.serialLock.lock();
             scope(exit){ this.serialLock.unlock(); }
             jSerial(JournalEntry.NeighborHasGradient(s,p,neighbors,energy,silos));

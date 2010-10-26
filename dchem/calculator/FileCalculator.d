@@ -171,11 +171,6 @@ class TemplateExecuter: Method {
     void dropHistory(ubyte[]history){}
     /// clears all history
     void clearHistory(){}
-    /// url to access this from other processes
-    char[] exportedUrl(){
-        assert(0,"to do");
-    }
-    
 }
 
 class ExecuterContext:CalcContext{
@@ -252,7 +247,7 @@ class ExecuterContext:CalcContext{
         execCmd(input.commandFor(updateE,updateF,changeLevel));
         collectEF(updateE,updateF);
         maxChange=0;
-        changeLevel=ChangeLevel.SmoothPosChange;
+        changeLevelSet=ChangeLevel.SmoothPosChange;
     }
     
     override void stop(){

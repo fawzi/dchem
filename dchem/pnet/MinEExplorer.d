@@ -1,11 +1,16 @@
 module dchem.pnet.MinEExplorer;
 import dchem.pnet.PNetModels;
+import dchem.input.RootInput;
+import blip.serialization.Serialization;
+import blip.io.BasicIO;
+import blip.io.Console;
+import blip.container.GrowableArray;
 
 class MinEExplorerDef:InputElement{
     long nEval;
     char[] precision;
     mixin myFieldMixin!();
-    mixin(SerializeSome("dchem.MinEExplorer",`
+    mixin(serializeSome("dchem.MinEExplorer",`
     nEval : number of evaluations to perform`));
     
     bool verify(CharSink s){
@@ -86,10 +91,9 @@ class MinEExplorer(T):ExplorerI!(T){
     // ExplorerI(T)
     
     /// returns a point to evaluate
-    Point pointToEvaluate(SKey k,delegate void(ExplorerI!(T))available);
+    Point pointToEvaluateLocal(SKey k,void delegate(ExplorerI!(T))available){
         bool availableCalled=false;
         while(true) {
-            synchronized(toExploreMore){
             PointAndEnergy pe;
             if (toExploreMore.popNext(pe)){
                 if (!availableCalled) {

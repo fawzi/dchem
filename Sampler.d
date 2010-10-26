@@ -12,8 +12,11 @@ import dchem.input.RootInput;
 import dchem.sampler.SinglePoint;
 import dchem.calculator.AllCalculators;
 import dchem.sampler.AllSamplers;
+import blip.io.EventWatcher;
+import blip.parallel.rpc.Rpc;
 
 int main(char[][]args){
+    ProtocolHandler.defaultProtocol.startServer(false); // starting the rpc server...
     if (args.length!=2){
         sout("Expected a single argument (inputfile)\n");
         return 1;
@@ -35,5 +38,6 @@ int main(char[][]args){
             samp.run();
         }
     }
+    noToutWatcher.stopLoop();
     return 0;
 }

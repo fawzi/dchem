@@ -1,47 +1,49 @@
 /// a silos client
 module dchem.pnet.PNetSilosClient;
 import dchem.pnet.PNetModels;
-import dchem.pnet.PNetSilos;
+import blip.parallel.rpc.RpcBase;
+import dchem.Common;
+import dchem.sys.ParticleSys;
+import blip.io.BasicIO;
+import blip.serialization.Serialization;
+import dchem.input.RootInput;
+import dchem.calculator.Calculator;
+import dchem.calculator.CalculatorModels;
+import dchem.pnet.MainPoint;
+import blip.math.random.Random;
+import dchem.sys.Constraints;
+import blip.util.NotificationCenter;
+import dchem.input.WriteOut;
+import blip.math.IEEE;
+import dchem.sys.DynVars;
+import blip.parallel.smp.Wait;
+import blip.io.Console;
+import blip.parallel.smp.WorkManager;
+import blip.container.Deque;
+import blip.container.Cache;
+import blip.container.Pool;
 
-/// generator of a silos client
-class PNetSilosClientGen:Sampler {
+/// parameters for PNetSilosClient
+class PNetSilosClientGen:InputElement {
     char[] connectionUrl;
-    double maxDuration=525600.0;
-    long maxEval=long.max;
     long ownerCacheSize=10;
-    char[] precision="LowP";
-    InputField evaluator;
-    mixin(serializeSome("dchem.PNetSilosClient!("~T.stringof~")",`
+    mixin(serializeSome("dchem.PNetSilosClient",`
     connectionUrl: the url to use to get the connection to the silos
-    maxDuration: maximum duration in minutes to add to maxTime (one year: 525600)
-    maxEval: maximum number of evaluations
-    ownerCacheSize: amout of points whose owner is cached (10)
-    precision: precision of the silos, either LowP or Real (LowP)
-    evaluator: the mehod used to evaluate energy and forces`);
+    ownerCacheSize: amount of points whose owner is cached (10)`));
     mixin printOut!();
     mixin myFieldMixin!();
     
-    this(){
-        maxDuration=Clock.now;
+    this(char[] connectionUrl,long ownerCacheSize=10){
+        this.connectionUrl=connectionUrl;
+        this.ownerCacheSize=ownerCacheSize;
     }
     bool verify(CharSink s){
         bool res=true;
-        if (precision!="LowP" && precision!="Real"){
-            log("precision should be either LowP or Real, not '")(precision)("' in field ")(myField)("\n");
-            res=false;
-        }
-        if (maxDuration<=0){
-            dumper(s)("maxDuration should be larger than 0 in field ")(myFieldName)("\n");
-            res=false;
-        }
-        if (maxEval<=0){
-            dumper(s)("maxEval should be larger than 0 in field ")(myFieldName)("\n");
+        if (ownerCacheSize<0){
+            dumper(s)("ownerCacheSize in field ")(myFieldName)(" should be non negative\n");
             res=false;
         }
         return res;
-    }
-    void run(){
-        
     }
 }
 
@@ -81,18 +83,40 @@ class PNetSilosClient(T){
         this.input=input;
         this.ctx=ctx;
         if (ctx is null){
-            //input.evaluator.
+            assert(0,"CalculationContext should not be null");
+            //input.evaluator.contentT!(Method)().getCalculator(true,[]);
         }
+        if (_refPos is null){
+            CalculationContext cInstance=ctx;
+            switch(cInstance.activePrecision()){
+            case Precision.Real:
+                _refPos=cInstance.pSysReal.dupT!(T)(PSDupLevel.All);
+                auto c1=cInstance.constraintsReal();
+                if (c1 !is null)
+                    _constraints=constraintT!(T)(c1.constraintGen,_refPos);
+                break;
+            case Precision.LowP:
+                _refPos=cInstance.pSysLowP.dupT!(T)(PSDupLevel.All);
+                auto c2=cInstance.constraintsLowP();
+                if (c2 !is null)
+                    _constraints=constraintT!(T)(c2.constraintGen,_refPos);
+                break;
+            default:
+                assert(0,"unknown activePrecision");
+            }
+        }
+        if (_constraints is null) _constraints=new NoConstraint!(T)();
+        
         this.connection=connection;
         if (connection is null){
-            this.connection=ProtocolHandler.proxyForUrl(input.connectionUrl);
+            this.connection=ProtocolHandler.proxyForUrlT!(PNetSilosI!(T))(input.connectionUrl);
         }
         this._nCenter=nCenter;
         if (nCenter is null){
             this._nCenter=new NotificationCenter();
         }
         _rand=new RandomSync();
-        log=log
+        this.log=sout;
         properties=this.propertiesDict(SKeyVal.Any);
     }
     // ExplorationObserverI
@@ -154,8 +178,8 @@ class PNetSilosClient(T){
         return connection.pointToEvaluate(s);
     }
     /// called when an evaluation fails, flags: attemptRetry/don't Retry
-    void evaluationFailed(SKey s,Point p,uint flags){
-        connection.evaluationFailed(s,p,flags);
+    void evaluationFailed(SKey s,Point p){
+        connection.evaluationFailed(s,p);
     }
     /// should speculatively calculate the gradient? PNetSilos version calls addEnergyEvalLocal
     bool speculativeGradient(SKey s,Point p,Real energy){

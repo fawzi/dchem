@@ -73,6 +73,13 @@ class InputField:InputElement{
     Object contentObj(){
         return cast(Object)content;
     }
+    T contentT(T)(bool raiseOnNull=true){
+        auto obj=cast(T)cast(Object)content;
+        if (obj is null && raiseOnNull){
+            throw new Exception("content of "~myFieldName~" cannot be casted to "~T.stringof,__FILE__,__LINE__);
+        }
+        return obj;
+    }
 
     static char[]typeStr(TypeId t){
         switch (t){

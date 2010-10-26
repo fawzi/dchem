@@ -19,11 +19,12 @@ import dchem.sys.PIndexes;
 import blip.BasicModels;
 import dchem.sys.Constraints;
 import tango.io.vfs.model.Vfs;
+import dchem.input.WriteOut;
 
 /// a task that can be excuted locally on the calculation context
 interface RemoteCCTask: Serializable{
-    /// starts the task with the given CalculationContext
-    void workOn(CalculationContext);
+    /// starts the task with the given LocalCalculationContext
+    void workOn(LocalCalculationContext);
     /// might stop the task, or not, might return immediatly (even if the task is still running)
     void stop();
 }
@@ -37,8 +38,6 @@ interface Method:InputElement{
     void dropHistory(ubyte[]history);
     /// clears all history
     void clearHistory();
-    /// url to access this from other processes
-    char[] exportedUrl();
 }
 
 /// amount of change since the last calculation in the context
@@ -54,8 +53,10 @@ enum Precision{
     Real,
     LowP
 }
-/// represent a calculation that might have been aready partially setup, in particular the
+/// calculation that might have been aready partially setup, in particular the
 /// number of elements,... cannot change
+/// these method can be called from a remote computer, so no overload, and thus
+/// the non D like *Set methods
 interface CalculationContext{
     /// the active precision, this says which one of pSysReal/pSysLowP and constraintsReal/constraintsLowP
     /// is active. The other will most likely be null.
@@ -63,38 +64,40 @@ interface CalculationContext{
     /// unique identifier for this context
     char[] contextId();
     /// the particle system based on real numbers (if activePrecision is Real)
-    ParticleSys!(Real) pSysReal();
+    PSysWriter!(Real) pSysWriterReal();
     /// the particle system based on low precision numbers (if activePrecision is LowP)
-    ParticleSys!(LowP) pSysLowP();
-    /// the constraints of this context (if activePrecision is Real)
-    ConstraintI!(Real) constraintsReal();
-    /// the constraints of this context (if activePrecision is LowP)
-    ConstraintI!(LowP) constraintsLowP();
+    PSysWriter!(LowP) pSysWriterLowP();
+    /// the particle system based on real numbers (if activePrecision is Real)
+    void pSysWriterRealSet(PSysWriter!(Real));
+    /// the particle system based on low precision numbers (if activePrecision is LowP)
+    void pSysWriterLowPSet(PSysWriter!(LowP));
+    /// a sample particle system based on real numbers (if activePrecision is Real)
+    /// creation of this might be expensive, and changing it might change the internal values or not
+    ParticleSys!(Real) refPSysReal();
+    /// the particle system based on low precision numbers (if activePrecision is LowP)
+    ParticleSys!(LowP) refPSysLowP();
+    /// the generator for the constraints of this context
+    ConstraintGen constraintGen();
     /// the system struct
     SysStruct sysStruct();
-    /// notification central of the current particle system & context.
-    /// will receive activation, deactivation & destruction notifications
-    NotificationCenter nCenter();
-    /// history of the previous positions
-    HistoryManager!(LowP) posHistory();
     /// change level since the last calculation
     ChangeLevel changeLevel();
     /// sets the change level
-    void changeLevel(ChangeLevel);
+    void changeLevelSet(ChangeLevel);
     /// decreases the change level to at least changeLevel
     void changedDynVars(ChangeLevel changeLevel,Real diff);
     /// the total potential energy
     Real potentialEnergy();
     /// changes the position (utility method)
-    void pos(SegmentedArray!(Vector!(Real,3)) newPos);
+    void posSet(SegmentedArray!(Vector!(Real,3)) newPos);
     /// gets the positions (utility method)
     SegmentedArray!(Vector!(Real,3)) pos();
     /// changes the velocities (utility method)
-    void dpos(SegmentedArray!(Vector!(Real,3)) newDpos);
+    void dposSet(SegmentedArray!(Vector!(Real,3)) newDpos);
     /// gets the velocities (utility method)
     SegmentedArray!(Vector!(Real,3)) dpos();
     /// changes the forces (utility method)
-    void mddpos(SegmentedArray!(Vector!(Real,3)) newDdpos);
+    void mddposSet(SegmentedArray!(Vector!(Real,3)) newDdpos);
     /// gets the forces (utility method)
     SegmentedArray!(Vector!(Real,3)) mddpos();
     /// updates energy and/or forces
@@ -120,14 +123,54 @@ interface CalculationContext{
     void executeLocally(RemoteCCTask t);
 }
 
-/// templatized way to extract the pSys from a CalculationContext
-ParticleSys!(T) pSysT(T)(CalculationContext c){
+/// represent the local view to a calculation that might have been aready partially setup, in particular the
+/// number of elements,... cannot change, gives direct access to modifiable ParticleSys, and more
+interface LocalCalculationContext: CalculationContext{
+    /// the particle system based on real numbers (if activePrecision is Real)
+    ParticleSys!(Real) pSysReal();
+    /// the particle system based on low precision numbers (if activePrecision is LowP)
+    ParticleSys!(LowP) pSysLowP();
+    /// the constraints of this context (if activePrecision is Real)
+    ConstraintI!(Real) constraintsReal();
+    /// the constraints of this context (if activePrecision is LowP)
+    ConstraintI!(LowP) constraintsLowP();
+    /// notification central of the current particle system & context.
+    /// will receive activation, deactivation & destruction notifications
+    NotificationCenter nCenter();
+    /// history of the previous positions
+    HistoryManager!(LowP) posHistory();
+}
+
+/// templatized way to extract the pSys from a LocalCalculationContext
+ParticleSys!(T) pSysT(T)(LocalCalculationContext c){
     static if (is(Real==T)){
         return c.pSysReal;
     } else static if(is(LowP==T)){
         return c.pSysLowP;
     } else {
         static assert("requested a pSys "~T.stringof~" which is neither Real ("~
+            Real.stringof~") nor LowP ("~LowP.stringof~")");
+    }
+}
+/// templatized way to extract the pSysWriter from a CalculationContext
+PSysWriter!(T) pSysWriterT(T)(CalculationContext c){
+    static if (is(Real==T)){
+        return c.pSysWriterReal;
+    } else static if(is(LowP==T)){
+        return c.pSysWriterLowP;
+    } else {
+        static assert("requested a pSysWriterLowP "~T.stringof~" which is neither Real ("~
+            Real.stringof~") nor LowP ("~LowP.stringof~")");
+    }
+}
+/// templatized way to extract the pSys from a LocalCalculationContext
+void pSysWriterSetT(T)(CalculationContext c,PSysWriter!(T) sys){
+    static if (is(Real==T)){
+        return c.pSysWriterRealSet(sys);
+    } else static if(is(LowP==T)){
+        return c.pSysWriterLowPSet(sys);
+    } else {
+        static assert("requested to set pSysWriter "~T.stringof~" which is neither Real ("~
             Real.stringof~") nor LowP ("~LowP.stringof~")");
     }
 }
