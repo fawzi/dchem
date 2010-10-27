@@ -143,38 +143,53 @@ struct SegArrWriter(T){
                 data.guard.release();
         }
     }
-    /+
     /// returns a segmented array with this data as contents, if steal is true then the data will remain valid 
     /// also after the destruction of this. Memory is reinterpreted (no cast/conversion)
-    SegmentedArray!(V) toSegArr(V=T)(SysStruct sysStruct,bool steal=false){
+    SegmentedArray!(V) toSegArrFromSysStruct(V=T)(SysStruct sysStruct,bool steal=false,char[] name="struct"){
         static assert((V.sizeof % T.sizeof)==0,"type of the array ("~V.stringof~") is not commensurate with "~T.stringof);
         uint dimMult=V.sizeof/T.sizeof;
         if (kindStarts.length==0) return null;
-        kDims=new index_type[](kindStarts.length-1);
-        auto pKStarts=sysStruct.particles.kindStarts;
+        auto kDims=new index_type[](kindStarts.length-1);
+        auto pArray=sysStruct.particles;
+        assert(kRange in pArray.kRange);
+        auto pAStruct=pArray.arrayMap.arrayStruct;
+        auto kOffset=kRange.kStart-pAStruct.kRange.kStart;
+        auto pKStarts=pAStruct.kindStarts[kOffset..kOffset+kRange.kEnd+1];
         auto flags=SegmentedArrayStruct.Flags.Min1;
         foreach (i,p;kindStarts[1..$]){
             auto rFactor=(pKStarts[i+1]-pKStarts[i])*dimMult;
             assert(((p-kindStarts[i])%rFactor)==0,"number of elements non commensurate");
             kDims[i]=(p-kindStarts[i])/rFactor;
-            if (kDims[i]==0) flags=0;
+            if (kDims[i]==0) flags=SegmentedArrayStruct.Flags.None;
         }
-        if (arrayMap is null){
-            auto aStruct=new SegmentedArrayStruct(name,sysStruct.fullSystem,kRange,kDims,flags);
-            arrayMap=new SegArrMemMap!(V)(aStruct);
-        } else {
-            // ignore and realloc???
-            assert(sysStruct.fullSystem == arrayMap.arrayStruct.submapping,"different submapping...");
+        auto aStruct=new SegmentedArrayStruct(name,sysStruct.fullSystem,kRange,kDims,flags);
+        auto aMap=new SegArrMemMap!(V)(aStruct);
+        auto dData=BulkArray!(V)((cast(V*)data.ptr)[0..data.length/dimMult],data.guard);
+        if (steal && data.guard!is null){
+            auto baseOffset=data.ptr-data.guard.dataPtr;
+            bool compatible=true;
+            auto kShift=kRange.kStart-aMap.kRange.kStart;
+            foreach(i,o;kindOffsets){
+                if (o*T.sizeof+baseOffset!=aMap.kindOffsets[i+kShift]) {
+                    compatible=false;
+                    break;
+                }
+            }
+            // can be stolen:
+            if (compatible && atomicCASB(ownsData,false,true)){
+                return aMap.newArray(dData);
+            }
         }
-        auto dData=BulkArray!(V)((cast(V*)data.ptr)[0..data.length/dimMult];
-        if (steal && atomicCAS(ownsData,false,true)) {
-            return aMap.newArray(dData);
-        } else {
-            auto res=aMap.newArray();
-            res.support()[]=dData;
-            return res;
+        auto res=aMap.newArray();
+        foreach (k;kRange){
+            auto ik=k-kRange.kStart;
+            assert(kindOffsets[ik]%dimMult==0);
+            assert((kindOffsets[ik]+kindStarts[ik+1]-kindStarts[ik])%dimMult==0);
+            res[k][]=dData[kindOffsets[ik]/dimMult..
+                (kindOffsets[ik]+kindStarts[ik+1]-kindStarts[ik])/dimMult];
         }
-    }+/
+        return res;
+    }
     /// ditto
     SegmentedArray!(V) toSegArr(V=T)(SegArrMemMap!(V) aMap,bool steal=false){
         static assert((V.sizeof % T.sizeof)==0,"type of the array ("~V.stringof~") is not commensurate with "~T.stringof);
@@ -202,8 +217,10 @@ struct SegArrWriter(T){
         auto res=aMap.newArray(kRange);
         foreach (k;kRange){
             auto ik=k-kRange.kStart;
-            res[k][]=dData[kindOffsets[ik]*dimMult..
-                (kindOffsets[ik]+kindStarts[ik+1]-kindStarts[ik])*dimMult];
+            assert(kindOffsets[ik]%dimMult==0);
+            assert((kindOffsets[ik]+kindStarts[ik+1]-kindStarts[ik])%dimMult==0);
+            res[k][]=dData[kindOffsets[ik]/dimMult..
+                (kindOffsets[ik]+kindStarts[ik+1]-kindStarts[ik])/dimMult];
         }
         return res;
     }

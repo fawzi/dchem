@@ -37,7 +37,6 @@ class SinglePoint:Sampler{
             sout("potentialEnergy:")(c.potentialEnergy())("\n");
         }
         auto sysStruct=c.sysStruct;
-        auto segArrStruct=new SegmentedArrayStruct("forces",sysStruct.fullSystem,KindRange.all);
         if (calcF){
             auto wR0=c.pSysWriterReal();
             auto d=&wR0.mddx.pos.toSegArr!(Real);
@@ -47,7 +46,7 @@ class SinglePoint:Sampler{
                 if (wR.mddx.dof.data.length>0 || wR.mddx.orient.data.length>0){
                     sout(wR);
                 } else {
-                    auto fR=wR.mddx.pos.toSegArr!(Vector!(Real,3))(new SegArrMemMap!(Vector!(Real,3))(segArrStruct),true);
+                    auto fR=wR.mddx.pos.toSegArrFromSysStruct!(Vector!(Real,3))(sysStruct,true);
                     WriteOut.writeXyz!(Real)(sout.call,sysStruct,fR,"forces "~sysStruct.name);
                 }
                 break;
@@ -56,7 +55,7 @@ class SinglePoint:Sampler{
                 if (wL.mddx.dof.data.length>0 || wL.mddx.orient.data.length>0){
                     sout(wL);
                 } else {
-                    auto fL=wL.mddx.pos.toSegArr!(Vector!(LowP,3))(new SegArrMemMap!(Vector!(LowP,3))(segArrStruct),true);
+                    auto fL=wL.mddx.pos.toSegArrFromSysStruct!(Vector!(LowP,3))(sysStruct,true);
                     WriteOut.writeXyz!(LowP)(sout.call,sysStruct,fL,"forces "~c.sysStruct.name);
                 }
                 break;

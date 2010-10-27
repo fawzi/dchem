@@ -21,8 +21,8 @@ class TemplateExecuter: Method {
     InputField superTemplate;
     InputField startConfig;
     char[] templateDir;
-    char[] setupCmd, executeInitialE, executeStructChangeE, executePosChangeE, executeSmallPosChangeE, executeSmoothPosChangeE, executeDefaultE;
-    char[] stopCmd, executeInitialEF, executeStructChangeEF, executePosChangeEF, executeSmallPosChangeEF, executeSmoothPosChangeEF, executeDefaultEF;
+    char[] setupCmd;
+    char[] stopCmd;
     char[][char[]] subs;
     bool writeReplacementsDict;
     bool overwriteUnchangedPaths;
@@ -67,6 +67,54 @@ class TemplateExecuter: Method {
             }
         }
         return stopCmd;
+    }
+    char[] commandFor(bool energy,bool force,int changeLevel){
+        return "";
+    }
+    void addFullSubs(char[][char[]] sub){
+        assert(sub!is subs,"cannot add directly to own subs");
+        if (superTemplate!is null){
+            auto te=cast(TemplateExecuter)superTemplate;
+            if (te!is null){
+                te.addFullSubs(sub);
+            }
+        }
+        foreach (k,v;subs){
+            sub[k]=v;
+        }
+    }
+    // serialization stuff
+    mixin(serializeSome("dchem.TemplateExecuter",
+    `superTemplate: a template where to take default values
+    startConfig: the initial configuration
+    templateDir: where to find the definition of the template (tipically a directory)
+    subs: keyword and their substitutions to apply to the templates (as dictionary string -> string)
+    setupCmd: a command that should be executed to set up the context
+    stopCmd: a command that should be executed to stop the context
+    writeReplacementsDict: if a dictionary with the replacements performed should be written (default is false)
+    overwriteUnchangedPaths: if paths that are already there should be overwitten (default is false)
+    maxContexts: maximum number of contexts per calculation instance (default is 1)
+    `));
+    mixin printOut!();
+    mixin myFieldMixin!();
+    
+    /// drops the history associated with the given key
+    void dropHistory(ubyte[]history){}
+    /// clears all history
+    void clearHistory(){}
+}
+
+class CmdTemplateExecuter:TemplateExecuter {
+    char[] executeInitialE, executeStructChangeE, executePosChangeE, executeSmallPosChangeE, executeSmoothPosChangeE, executeDefaultE;
+    char[] executeInitialEF, executeStructChangeEF, executePosChangeEF, executeSmallPosChangeEF, executeSmoothPosChangeEF, executeDefaultEF;
+    
+    bool verify(CharSink sink){
+        bool res=super.verify(sink);
+        return res;
+    }
+    
+    CalculationContext getCalculator(bool wait,ubyte[]history){
+        assert(0,"to be implemented by subclasses");
     }
     char[] commandFor(bool energy,bool force,int changeLevel){
         char[] res;
@@ -141,13 +189,7 @@ class TemplateExecuter: Method {
         }
     }
     // serialization stuff
-    mixin(serializeSome("dchem.TemplateExecuter",
-    `superTemplate: a template where to take default values
-    startConfig: the initial configuration
-    templateDir: where to find the definition of the template (tipically a directory)
-    subs: keyword and their substitutions to apply to the templates (as dictionary string -> string)
-    setupCmd: a command that should be executed to set up the context
-    stopCmd: a command that should be executed to stop the context
+    mixin(serializeSome("dchem.CmdTemplateExecuter",`
     executeInitialE: command executed to calculate the first energy, set to NONE to deactivate
     executeStructChangeE: command executed to calculate the energy when the structure is changed, set to NONE to deactivate
     executePosChangeE: command executed to calculate the energy when only positions changed, set to NONE to deactivate
@@ -160,17 +202,7 @@ class TemplateExecuter: Method {
     executeSmallPosChangeEF: command executed to calculate the energy and forces when positions changed by a small amount, set to NONE to deactivate
     executeSmoothPosChangeEF: command executed to calculate the energy and forces when positions changed smoothly, set to NONE to deactivate
     executeDefaultEF: default command for all execute*EF commands (if they are empty)
-    writeReplacementsDict: if a dictionary with the replacements performed should be written (default is false)
-    overwriteUnchangedPaths: if paths that are already there should be overwitten (default is false)
-    maxContexts: maximum number of contexts per calculation instance (default is 1)
     `));
-    mixin printOut!();
-    mixin myFieldMixin!();
-    
-    /// drops the history associated with the given key
-    void dropHistory(ubyte[]history){}
-    /// clears all history
-    void clearHistory(){}
 }
 
 class ExecuterContext:CalcContext{

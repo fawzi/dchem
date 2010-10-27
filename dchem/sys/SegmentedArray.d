@@ -55,6 +55,7 @@ final class SegmentedArrayStruct{
         this.name=name;
         this.submapping = submapping;
         this.kRange     = kRange    ;
+        assert(kRange!=KindRange.all,"the range should be explicitly set (to avoid missing empty kinds)");
         assert(submapping.mappingKind&MappingKind.KindPreserving,"submapping must be KindPreserving");
         this.flags=(f& ~(Flags.Direct|Flags.Frozen))|(((submapping.mappingKind & MappingKind.Direct)!=0)?
                 Flags.Direct:Flags.None);

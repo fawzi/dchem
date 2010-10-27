@@ -1,0 +1,33 @@
+{
+startConfig:{
+    class:"dchem.FileConfig",
+    fileName:"test.xyz",
+    format:"xyz",
+    cell:[[8.45,0,0],
+        [0,24.0,0],
+        [0,0,8.45]]
+}
+
+singleP:{
+    class:dchem.SinglePoint,
+    calcE:1,
+    calcF:1,
+    method:{ class:Ref, name:poorM}
+}
+
+poorM:{
+    class:"dchem.PoorManExecuter",
+    templateDir:"templates/cp2k1",
+    subs:{
+        cutoff:"800",
+        projName:"test1",
+    },
+    maxContexts:1,
+    executeDefaultE:"sh calcE.sh",
+    executeDefaultEF:"sh calcE.sh"
+    startConfig:{ class:Ref name:startConfig}
+}
+
+main:{class:Ref, name:singleP}
+
+}

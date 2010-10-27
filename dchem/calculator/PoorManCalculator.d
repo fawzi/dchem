@@ -22,7 +22,7 @@ void clearEF(T)(ParticleSys!(T)pSys){
     // clear also other forces??? for now assume no
 }
 
-class PoorManExecuter:TemplateExecuter{
+class PoorManExecuter:CmdTemplateExecuter{
     override CalculationContext getCalculator(bool wait,ubyte[]history){
         auto ctx=new PoorManContext(this,collectAppender(delegate void(CharSink s){
             dumper(s)("PMCtx")(ProcContext.instance.id)("-")(ProcContext.instance.localId.next());
