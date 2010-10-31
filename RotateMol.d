@@ -37,8 +37,8 @@ int main(char[][]args){
     auto n2=norm2(axis);
     if (n2==0) throw new Exception("axis is 0",__FILE__,__LINE__);
     axis/=n2;
-    w1.axpby(axis,-dot(w1,axis));
-    w2.axpby(axis,-dot(w2,axis));
+    w1.opBypax(axis,-dot(w1,axis));
+    w2.opBypax(axis,-dot(w2,axis));
     auto nw1=norm2(w1);
     auto nw2=norm2(w2);
     if (nw1==0) throw new Exception("v1 is along axis",__FILE__,__LINE__);

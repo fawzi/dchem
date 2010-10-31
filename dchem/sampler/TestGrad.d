@@ -137,9 +137,9 @@ class TestGrad:Sampler{
                 {
                     diffLock.lock();
                     scope(exit) diffLock.unlock();
-                    diff.axpby(startP.dynVars.x,sign,cast(T)1);
+                    diff.opBypax(startP.dynVars.x,sign,cast(T)1);
                 }
-                startP.dynVars.x.axpby(context.centralPointT!(T)().dynVars.x,-1,1);
+                startP.dynVars.x.opBypax(context.centralPointT!(T)().dynVars.x,-1,1);
                 dCenter[i-1]=startP.dynVars.x.norm2();
                 startP.release();
                 ens[i-1]=c.potentialEnergy;

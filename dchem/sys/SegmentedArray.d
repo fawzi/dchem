@@ -876,12 +876,12 @@ final class SegmentedArray(T){
         return res;
     }
 
-    /// axpby
-    void axpby(V)(SegmentedArray!(V) x,basicDtype a=1,basicDtype b=1){
+    /// opBypax
+    void opBypax(V)(SegmentedArray!(V) x,basicDtype a=1,basicDtype b=1){
         if (x.arrayStruct is arrayStruct && x.arrayMap.contiguous && arrayMap.contiguous){
             scope a1=a2NA(support.basicData);
             scope a2=a2NA(x.support.basicData);
-            a1.axpby(a2,a,b);
+            a1.opBypax(a2,a,b);
             return;
         }
         auto optimalBlockSize=defaultOptimalBlockSize;
@@ -891,7 +891,7 @@ final class SegmentedArray(T){
                 mixin(segArrayMonoLoop(ParaFlags.FullPara/+|ParaFlags.DataLoop+/,"iterContext",["y","x"],"","",
                 "",`
                 visitKind=visitKind&&(!outOfRange);
-                assert((newK.xMKindDims<=1&&newK.yMKindDims<=1)||newK.xMKindDims==newK.yMKindDims,"variable combination of MKindDims not implemented in axpby");`,"",
+                assert((newK.xMKindDims<=1&&newK.yMKindDims<=1)||newK.xMKindDims==newK.yMKindDims,"variable combination of MKindDims not implemented in opBypax");`,"",
                 ["","*yPtr += convertTo!(T)(*xPtr);","",
                 
                 "",`
@@ -904,7 +904,7 @@ final class SegmentedArray(T){
                 "basicDtype a;","_1",
                 "mainContext_1.a=a;",`
                 visitKind_1=visitKind_1&&(!outOfRange_1);
-                assert((newK_1.xMKindDims<=1&&newK_1.yMKindDims<=1)||newK_1.xMKindDims==newK_1.yMKindDims,"variable combination of MKindDims not implemented in axpby");`,"",
+                assert((newK_1.xMKindDims<=1&&newK_1.yMKindDims<=1)||newK_1.xMKindDims==newK_1.yMKindDims,"variable combination of MKindDims not implemented in opBypax");`,"",
                 ["","*yPtr += convertTo!(T)((*xPtr)*this.a);","",
                 
                 "",`
@@ -918,7 +918,7 @@ final class SegmentedArray(T){
             "basicDtype a;","_2",
             "mainContext_2.a=a;",`
             visitKind_2=visitKind_2&&(!outOfRange_2);
-            assert((newK_2.xMKindDims<=1&&newK_2.yMKindDims<=1)||newK_2.xMKindDims==newK_2.yMKindDims,"variable combination of MKindDims not implemented in axpby");`,"",
+            assert((newK_2.xMKindDims<=1&&newK_2.yMKindDims<=1)||newK_2.xMKindDims==newK_2.yMKindDims,"variable combination of MKindDims not implemented in opBypax");`,"",
             ["","*yPtr = convertTo!(T)((*xPtr)*a);","",
             
             "",`
@@ -931,7 +931,7 @@ final class SegmentedArray(T){
             "basicDtype a;basicDtype b;","_3",
             "mainContext_3.a=a;mainContext_3.b=b;",`
             visitKind_3=visitKind_3&&(!outOfRange_3);
-            assert((newK_3.xMKindDims<=1&&newK_3.yMKindDims<=1)||newK_3.xMKindDims==newK_3.yMKindDims,"variable combination of MKindDims not implemented in axpby");`,"",
+            assert((newK_3.xMKindDims<=1&&newK_3.yMKindDims<=1)||newK_3.xMKindDims==newK_3.yMKindDims,"variable combination of MKindDims not implemented in opBypax");`,"",
             ["","*yPtr = convertTo!(T)((*yPtr)*b+(*xPtr)*a);","",
             
             "",`

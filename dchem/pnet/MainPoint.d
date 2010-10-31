@@ -568,7 +568,7 @@ class MainPoint(T):MainPointI!(T){
         
         if (findFirstPred(neighAtt.data,delegate bool(PointAndDir p){ return p.dir==dir; })==neighAtt.length){
             auto diff=newPos.dup();
-            diff.axpby(pos.dynVars.x,-1,1);
+            diff.opBypax(pos.dynVars.x,-1,1);
             auto deriv1=pos.dynVars.dVarStruct.emptyDx();
             deriv1[]=0;
             pos.addToTSpace!(T)(diff,deriv1);
@@ -750,7 +750,7 @@ class MainPoint(T):MainPointI!(T){
         bool added=false;
         
         auto diff=newPos.dup();
-        diff.axpby(pos.dynVars.x,-1,1);
+        diff.opBypax(pos.dynVars.x,-1,1);
         DirDistances!(T) dDist;
         
         auto internalDiff=sqrt(diff.norm2()); // diff norm in internal coordinates

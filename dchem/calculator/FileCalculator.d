@@ -26,6 +26,7 @@ class TemplateExecuter: Method {
     char[][char[]] subs;
     bool writeReplacementsDict;
     bool overwriteUnchangedPaths;
+    bool makeReplacementsInCommands=true;
     int maxContexts=1;
     VfsFolder _templateDirectory;
     
@@ -94,6 +95,7 @@ class TemplateExecuter: Method {
     writeReplacementsDict: if a dictionary with the replacements performed should be written (default is false)
     overwriteUnchangedPaths: if paths that are already there should be overwitten (default is false)
     maxContexts: maximum number of contexts per calculation instance (default is 1)
+    makeReplacementsInCommands: if replacements should be performed on the commands to be executed (default is true)
     `));
     mixin printOut!();
     mixin myFieldMixin!();
@@ -209,7 +211,7 @@ class ExecuterContext:CalcContext{
     TemplateExecuter input;
     TemplateHandler templateH;
     Process opInProgress;
-
+    
     VfsFolder baseDir(){
         return templateH.targetDir;
     }
@@ -220,33 +222,64 @@ class ExecuterContext:CalcContext{
         if (cmd.length>0 && cmd!="NONE"){
             char[256] buf;
             auto arr=lGrowableArray(buf,0);
-            dumper(&arr)("executing ")(cmd)("\n");
+            dumper(&arr)("will execute ")(cmd)("\n");
             log(arr.data);
             arr.clearData();
-            opInProgress=new Process(cmd);
+            auto cmdP=cmd;
+            if (cmd.length!=0 && makeReplacementsInCommands){
+                templateH.makeSubs(delegate bool(CharReader r){
+                    bool res=false;
+                    while(cmdP.length!=0){
+                        bool iterate=false;
+                        auto l=r(cmdP,SliceExtent.ToEnd,iterate);
+                        if (l!=0){
+                            if (l>cmdP.length) throw new Exception("requested more than available",__FILE__,__LINE__);
+                            cmdP=cmdP[l..$];
+                            res=true;
+                        }
+                        if (!iterate) {
+                            return res;
+                        }
+                    }
+                    return res;
+                },&arr.c);
+                opInProgress=new Process(arr.data);
+                arr(" after substitutions\n");
+                log(arr.data);
+            } else {
+                opInProgress=new Process(cmdP);
+            }
             auto bDir=baseDir.toString();
             if (bDir.length>0){
                 opInProgress.workDir=bDir;
             }
             int status;
             log(getOutput(opInProgress,status));
+            arr.clearData();
             if (status!=0){
+                arr.clearData();
                 arr("command failed with status ");
                 writeOut(&arr.appendArr,status);
-                throw new Exception(arr.data.dup,__FILE__,__LINE__);
+                throw new Exception(arr.takeData,__FILE__,__LINE__);
             }
         }
     }
-
-    this(TemplateExecuter input,char[] contextId){
-        super(contextId);
-        this.input=input;
-        templateH=new TemplateHandler(input.templateDirectory(),new FileFolder(ProcContext.instance.baseDirectory.toString()~"/"~contextId,true)); // to fix
+    
+    static TemplateHandler initialTH(TemplateExecuter input,char[] contextId){
+        auto templateH=new TemplateHandler(input.templateDirectory(),new FileFolder(ProcContext.instance.baseDirectory.toString()~"/"~contextId,true)); // to fix
         input.addFullSubs(templateH.subs);
-        
         templateH.subs["templateDirectory"]=input.templateDirectory.toString;
         templateH.subs["workingDirectory"]=templateH.targetDir.toString;
-        
+        return templateH;
+    }
+
+    this(TemplateExecuter input,char[] contextId,TemplateHandler th=null){
+        super(contextId);
+        this.input=input;
+        templateH=th;
+        if (th is null){
+            templateH=initialTH(input,contextId);
+        }
         templateH.evalTemplates(0,true);
         execCmd(input.setupCommand());
         if (input.startConfig is null || cast(Config)input.startConfig.contentObj is null){

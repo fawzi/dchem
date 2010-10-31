@@ -288,14 +288,14 @@ struct DynPVector(T,int group){
         orient=null;
         dof=null;
     }
-    void axpby(V)(V x,T a=1,T b=1){
-        static assert(is(V==DynPVector!(V.dtype,group)),"axpby only between DynPVectors of the same group, not "~V.stringof);
+    void opBypax(V)(V x,T a=1,T b=1){
+        static assert(is(V==DynPVector!(V.dtype,group)),"opBypax only between DynPVectors of the same group, not "~V.stringof);
         enum{ weak=true }
         if ((cell is x.cell) && cell !is null){
-            throw new Exception("identical cells in axpby",__FILE__,__LINE__);
+            throw new Exception("identical cells in opBypax",__FILE__,__LINE__);
         }
         auto y=this;
-        mixin(dynPVectorOp(["x","y"],"y.axpby(x,a,b);",true,false));
+        mixin(dynPVectorOp(["x","y"],"y.opBypax(x,a,b);",true,false));
     }
     void opMulAssign()(T scale){
         enum{ weak=false }
@@ -310,9 +310,9 @@ struct DynPVector(T,int group){
     /// outer product supported only if t or u are scalars
     static V outerOp(T,U,V,R,M)(T t,U u,V v,R scaleA,M scaleRes){
         static if(is(T.dtype)){
-            v.axpby(t,u*scaleA,scaleRes);
+            v.opBypax(t,u*scaleA,scaleRes);
         } else {
-            v.axpby(u,t*scaleA,scaleRes);
+            v.opBypax(u,t*scaleA,scaleRes);
         }
         return v;
     }
@@ -1144,10 +1144,10 @@ struct DynamicsVars(T){
             static assert(0,"cannot assign from "~V.stringof~" to DynamicsVars!("~T.stringof~")");
         }
     }
-    void axpby(V)(DynamicsVars!(V) v,V a,T b){
-        x.axpby(v.x,a,b);
-        dx.axpby(v.dx,a,b);
-        mddx.axpby(v.mddx,a,b);
+    void opBypax(V)(DynamicsVars!(V) v,V a,T b){
+        x.opBypax(v.x,a,b);
+        dx.opBypax(v.dx,a,b);
+        mddx.opBypax(v.mddx,a,b);
     }
     void opMulAssign(V)(DynamicsVars!(V) v){
         x*=v.x;

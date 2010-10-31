@@ -139,11 +139,11 @@ class Cell(T)
         this.x0=x0;
     }
     
-    /// y.axpby(x,a,b): y = ax+by
-    void axpby(V)(Cell!(V) x,T a=cscalar!(T,1),T b=cscalar!(T,1)){
+    /// y.opBypax(x,a,b): y = ax+by
+    void opBypax(V)(Cell!(V) x,T a=cscalar!(T,1),T b=cscalar!(T,1)){
         auto y=this;
-        h.axpby(h,a,b);
-        mixin(cellLoopMixin(["y","x"],"y.axpby(x,a,b);"));
+        h.opBypax(h,a,b);
+        mixin(cellLoopMixin(["y","x"],"y.opBypax(x,a,b);"));
     }
     
     void opMulAssign()(T scale){

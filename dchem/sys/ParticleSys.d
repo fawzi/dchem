@@ -524,7 +524,7 @@ class ParticleKind: Serializable,CopiableObjectI,DerivTransfer{
     /// a direct transfer res+=derivAtPos2 is always allowed (and is what is done by default)
     void addFromForeignDualTangentialSpaceT(T)(ParticleSys!(T)pos1,ParticleSys!(T)pos2,
         DynPVector!(T,DualDxType)derivAtPos2,DynPVector!(T,DualDxType)res){
-        res.axpby(derivAtPos2,1,1);
+        res.opBypax(derivAtPos2,1,1);
         foreach(obj;transferHandlers){
             obj.addFromForeignDualTangentialSpace(pos1,pos2,derivAtPos2,res);
         }
@@ -968,7 +968,7 @@ class ParticleSys(T): CopiableObjectI,Serializable
         if (overlapInv!is null){
             overlapInv.matVectMult(deriv,dualDeriv,scaleRes,scaleDualDeriv);
         } else { // assumes two groups ar actually equal
-            dualDeriv.axpby(deriv.toGroup!(2)(),scaleRes,scaleDualDeriv);
+            dualDeriv.opBypax(deriv.toGroup!(2)(),scaleRes,scaleDualDeriv);
         }
     }
     /// comes back from the dual tangential space (multiplication with S)
@@ -977,7 +977,7 @@ class ParticleSys(T): CopiableObjectI,Serializable
         if (overlap!is null){
             overlap.matVectMult(dualDeriv,deriv,scaleRes,scaleDeriv);
         } else {
-            deriv.axpby(dualDeriv.toGroup!(1)(),scaleRes,scaleDeriv);
+            deriv.opBypax(dualDeriv.toGroup!(1)(),scaleRes,scaleDeriv);
         }
     }
     /// projects into the correct movement space (back & forth from the direct space).

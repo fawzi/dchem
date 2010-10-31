@@ -19,13 +19,13 @@ body{
     scope v2Ortho=v2.dup;
     v2Ortho-=c*v1;
     scope v2OrthoM=dot(v2Ortho,m);
-    outer(v2-v1,v1m,m,cast(S)1,cast(S)1);
+    m=outer(v2-v1,v1m,m,cast(S)1,cast(S)1);
     if (c<0){ // avoid bad numerics for almost anti collinear vectors
         S vOrtC=-1/(-c+1);
-        outer(vOrtC*v2Ortho+v1,v2OrthoM,m,cast(S)1,cast(S)1);
+        m=outer(vOrtC*v2Ortho+v1,v2OrthoM,m,cast(S)1,cast(S)1);
     } else {
         S vOrtC=-1/(c+1);
-        outer(vOrtC*v2Ortho-v1,v2OrthoM,m,cast(S)1,cast(S)1);
+        m=outer(vOrtC*v2Ortho-v1,v2OrthoM,m,cast(S)1,cast(S)1);
     }
     return m;
 }
@@ -49,17 +49,17 @@ body{
     v2Ortho[i]=cast(S)0;
     scope v2OrthoM=dot(v2Ortho,m);
     v2Ortho[i]=v2Val-cast(S)1;
-    outer(v2Ortho,v1m,m,cast(S)1,cast(S)1);
+    m=outer(v2Ortho,v1m,m,cast(S)1,cast(S)1);
     if (c<0){
         S vOrtC=-1/(-c+cast(S)1);
         v2Ortho*=vOrtC;
         v2Ortho[i]=cast(S)1;
-        outer(v2Ortho,v2OrthoM,m,cast(S)1,cast(S)1);
+        m=outer(v2Ortho,v2OrthoM,m,cast(S)1,cast(S)1);
     } else {
         S vOrtC=-1/(c+cast(S)1);
         v2Ortho*=vOrtC;
         v2Ortho[i]=cast(S)(-1);
-        outer(v2Ortho,v2OrthoM,m,cast(S)1,cast(S)1);
+        m=outer(v2Ortho,v2OrthoM,m,cast(S)1,cast(S)1);
     }
     return m;
 }
@@ -92,14 +92,14 @@ body{
         S vOrtC=-1/(-c+cast(S)1);
         v2M*=vOrtC;
         v2Ortho[i]=cast(S)0;
-        axpby(v2M,v1m,vOrtC*(-v2Val+1)+1);
-        outer(v2Ortho,v2M,m,cast(S)1,cast(S)1);
+        bypax(v2M,v1m,vOrtC*(-v2Val+1)+1);
+        m=outer(v2Ortho,v2M,m,cast(S)1,cast(S)1);
     } else {
         S vOrtC=-1/(c+cast(S)1);
         v2M*=vOrtC;
         v2Ortho[i]=cast(S)0;
-        axpby(v2M,v1m,vOrtC*(-v2Val+1)-1);
-        outer(v2Ortho,v2M,m,cast(S)1,cast(S)1);
+        bypax(v2M,v1m,vOrtC*(-v2Val+1)-1);
+        m=outer(v2Ortho,v2M,m,cast(S)1,cast(S)1);
     }
     return m;
 }
