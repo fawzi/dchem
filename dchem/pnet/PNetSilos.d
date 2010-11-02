@@ -299,7 +299,7 @@ class SilosGen:Sampler{
         return res;
     }
 
-    void run(){
+    void run(LinearComm pWorld,CharSink log){
         ulong n;
         rand(n); // hopefully unique
         char[] name=collectAppender(delegate void(CharSink s){

@@ -14,6 +14,7 @@ import dchem.calculator.AllCalculators;
 import dchem.sampler.AllSamplers;
 import blip.io.EventWatcher;
 import blip.parallel.rpc.Rpc;
+import blip.parallel.mpi.Mpi;
 
 int main(char[][]args){
     ProtocolHandler.defaultProtocol.startServer(false); // starting the rpc server...
@@ -35,7 +36,7 @@ int main(char[][]args){
         if (samp is null){
             sout("Error: 'main' should be a sampler, stopping\n");
         } else {
-            samp.run();
+            samp.run(mpiWorld,sout.call);
         }
     }
     noToutWatcher.stopLoop();

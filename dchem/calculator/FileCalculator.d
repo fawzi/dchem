@@ -16,13 +16,15 @@ import blip.io.Console;
 import dchem.util.ExecCmd;
 import dchem.calculator.ProcContext;
 import dchem.input.ReadCoordFile;
+import blip.parallel.mpi.MpiModels;
 
 class TemplateExecuter: Method {
     InputField superTemplate;
     InputField startConfig;
     char[] templateDir;
     char[] setupCmd;
-    char[] stopCmd;
+    char[] setupCtxCmd;
+    char[] stopCtxCmd;
     char[][char[]] subs;
     bool writeReplacementsDict;
     bool overwriteUnchangedPaths;
@@ -60,14 +62,23 @@ class TemplateExecuter: Method {
         }
         return setupCmd;
     }
-    char[] stopCommand(){
-        if (stopCmd.length==0 && superTemplate!is null){
+    char[] setupCtxCommand(){
+        if (setupCtxCmd.length==0 && superTemplate!is null){
             auto te=cast(TemplateExecuter)superTemplate;
             if (te!is null){
-                return te.stopCommand();
+                return te.setupCtxCommand();
             }
         }
-        return stopCmd;
+        return setupCtxCmd;
+    }
+    char[] stopCtxCommand(){
+        if (stopCtxCmd.length==0 && superTemplate!is null){
+            auto te=cast(TemplateExecuter)superTemplate;
+            if (te!is null){
+                return te.stopCtxCommand();
+            }
+        }
+        return stopCtxCmd;
     }
     char[] commandFor(bool energy,bool force,int changeLevel){
         return "";
@@ -84,14 +95,25 @@ class TemplateExecuter: Method {
             sub[k]=v;
         }
     }
+    void setup(LinearComm pEnv,CharSink log){
+        if (setupCommand.length>0 && setupCommand!="NONE"){
+            auto templateH=new TemplateHandler(templateDirectory(),new FileFolder(ProcContext.instance.baseDirectory.toString(),true)); // to fix
+            addFullSubs(templateH.subs);
+            templateH.subs["templateDirectory"]=templateDirectory.toString;
+            templateH.subs["workingDirectory"]=templateH.targetDir.toString;
+            auto opInProgress=templateH.processForCmd(setupCommand,log);
+            templateH.exec(opInProgress,log);
+        }
+    }
     // serialization stuff
     mixin(serializeSome("dchem.TemplateExecuter",
     `superTemplate: a template where to take default values
     startConfig: the initial configuration
     templateDir: where to find the definition of the template (tipically a directory)
     subs: keyword and their substitutions to apply to the templates (as dictionary string -> string)
-    setupCmd: a command that should be executed to set up the context
-    stopCmd: a command that should be executed to stop the context
+    setupCmd: a command that should be executed when the method is setup
+    setupCtxCmd: a command that should be executed to set up the context
+    stopCtxCmd: a command that should be executed to stop the context
     writeReplacementsDict: if a dictionary with the replacements performed should be written (default is false)
     overwriteUnchangedPaths: if paths that are already there should be overwitten (default is false)
     maxContexts: maximum number of contexts per calculation instance (default is 1)
@@ -114,7 +136,6 @@ class CmdTemplateExecuter:TemplateExecuter {
         bool res=super.verify(sink);
         return res;
     }
-    
     CalculationContext getCalculator(bool wait,ubyte[]history){
         assert(0,"to be implemented by subclasses");
     }
@@ -220,48 +241,9 @@ class ExecuterContext:CalcContext{
     }
     void execCmd(char[] cmd,CharSink log=sout.call){
         if (cmd.length>0 && cmd!="NONE"){
-            char[256] buf;
-            auto arr=lGrowableArray(buf,0);
-            dumper(&arr)("will execute ")(cmd)("\n");
-            log(arr.data);
-            arr.clearData();
-            auto cmdP=cmd;
-            if (cmd.length!=0 && makeReplacementsInCommands){
-                templateH.makeSubs(delegate bool(CharReader r){
-                    bool res=false;
-                    while(cmdP.length!=0){
-                        bool iterate=false;
-                        auto l=r(cmdP,SliceExtent.ToEnd,iterate);
-                        if (l!=0){
-                            if (l>cmdP.length) throw new Exception("requested more than available",__FILE__,__LINE__);
-                            cmdP=cmdP[l..$];
-                            res=true;
-                        }
-                        if (!iterate) {
-                            return res;
-                        }
-                    }
-                    return res;
-                },&arr.c);
-                opInProgress=new Process(arr.data);
-                arr(" after substitutions\n");
-                log(arr.data);
-            } else {
-                opInProgress=new Process(cmdP);
-            }
-            auto bDir=baseDir.toString();
-            if (bDir.length>0){
-                opInProgress.workDir=bDir;
-            }
-            int status;
-            log(getOutput(opInProgress,status));
-            arr.clearData();
-            if (status!=0){
-                arr.clearData();
-                arr("command failed with status ");
-                writeOut(&arr.appendArr,status);
-                throw new Exception(arr.takeData,__FILE__,__LINE__);
-            }
+            opInProgress=templateH.processForCmd(cmd,log);
+            if (opInProgress is null) throw new Exception("could not create process for command "~cmd,__FILE__,__LINE__);
+            templateH.exec(opInProgress,log);
         }
     }
     
@@ -281,7 +263,7 @@ class ExecuterContext:CalcContext{
             templateH=initialTH(input,contextId);
         }
         templateH.evalTemplates(0,true);
-        execCmd(input.setupCommand());
+        execCmd(input.setupCtxCommand());
         if (input.startConfig is null || cast(Config)input.startConfig.contentObj is null){
             throw new Exception("Error: startConfiguration in field "~input.myFieldName~" should be set to a valid configuration",__FILE__,__LINE__);
         }
@@ -341,6 +323,58 @@ class TemplateHandler{
         this.sourceDir=sourceDir;
         this.targetDir=targetDir;
         this.subs=subs;
+    }
+    /// returns a Process that executes the given command
+    Process processForCmd(char[] cmd,CharSink log=sout.call,bool makeReplacementsInCommands=true){
+        Process opInProgress;
+        if (cmd.length>0 && cmd!="NONE"){
+            char[256] buf;
+            auto arr=lGrowableArray(buf,0);
+            dumper(&arr)("will execute `")(cmd)("`\n");
+            log(arr.data);
+            arr.clearData();
+            auto cmdP=cmd;
+            if (cmd.length!=0 && makeReplacementsInCommands){
+                makeSubs(delegate bool(CharReader r){
+                    bool res=false;
+                    while(cmdP.length!=0){
+                        bool iterate=false;
+                        auto l=r(cmdP,SliceExtent.ToEnd,iterate);
+                        if (l!=0){
+                            if (l>cmdP.length) throw new Exception("requested more than available",__FILE__,__LINE__);
+                            cmdP=cmdP[l..$];
+                            res=true;
+                        }
+                        if (!iterate) {
+                            return res;
+                        }
+                    }
+                    return res;
+                },&arr.appendArr);
+                opInProgress=new Process(arr.data.dup);
+                arr(" after substitutions\n");
+                log(arr.data);
+            } else {
+                opInProgress=new Process(cmdP);
+            }
+            auto bDir=targetDir.toString();
+            if (bDir.length>0){
+                opInProgress.workDir=bDir;
+            }
+        }
+        return opInProgress;
+    }
+    /// executes the given Process
+    void exec(Process opInProgress,CharSink log=sout.call){
+        int status;
+        log(getOutput(opInProgress,status));
+        if (status!=0){
+            char[256] buf;
+            auto arr=lGrowableArray(buf,0);
+            arr("command failed with status ");
+            writeOut(&arr.appendArr,status);
+            throw new Exception(arr.takeData,__FILE__,__LINE__);
+        }
     }
     /// writes the current replacements dictionary to the given sink
     void writeReplacementsDict(CharSink outF){
@@ -485,11 +519,10 @@ class TemplateHandler{
                 break;
             case SliceExtent.ToEnd:
                 iterate=false;
+                outF(data);
                 return data.length;
             default: assert(0);
             }
-            outF(data);
-            return data.length;
         });
     }
 }

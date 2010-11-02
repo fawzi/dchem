@@ -11,6 +11,7 @@ import dchem.calculator.Calculator;
 import dchem.input.WriteOut;
 import dchem.sys.SegmentedArray;
 import dchem.sys.PIndexes;
+import blip.parallel.mpi.MpiModels;
 
 class SinglePoint:Sampler{
     bool calcE;
@@ -25,9 +26,11 @@ class SinglePoint:Sampler{
     mixin printOut!();
     
     /// does the single point calculation
-    void run(){
+    void run(LinearComm pWorld,CharSink log){
         auto m=cast(Method)method.contentObj;
         if (m is null) throw new Exception("invalid method in field "~myFieldName,__FILE__,__LINE__);
+        sout("method setup");
+        m.setup(pWorld,log);
         sout("preparing to calculate\n");
         CalculationContext c=m.getCalculator(true,null);
         sout("will calculate\n");

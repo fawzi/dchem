@@ -12,6 +12,7 @@ import dchem.calculator.ProcContext;
 import blip.serialization.Serialization;
 import dchem.input.ReadIn2PSys: artificialPSys;
 import blip.math.Math;
+import blip.parallel.mpi.MpiModels;
 
 const Real[4] MBPreFactor = [-200.0,-100.0,-170.0,15.0];
 const Real[4] MBa = [-1.0,-1.0,-6.5,0.7];
@@ -25,7 +26,7 @@ class MullerBrownPot: Method {
     Real startX=0,startY=0;
     
     this(){}
-    
+    void setup(LinearComm pEnv,CharSink log){ }
     bool verify(CharSink sink){
         bool res=true;
         auto s=dumper(sink);

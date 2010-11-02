@@ -23,6 +23,7 @@ import tango.io.vfs.model.Vfs;
 public import dchem.calculator.CalculatorModels;
 import blip.parallel.rpc.Rpc;
 import dchem.input.WriteOut;
+import blip.parallel.mpi.MpiModels;
 
 /// Limits the number of contexts that can be created/active
 class ContextLimiter:InputElement{
@@ -159,6 +160,9 @@ class ContextLimiterClient:Method{
         }
         return res;
     }
+    
+    void setup(LinearComm pEnv,CharSink log){ }
+    
     /// gets a calculator to perform calculations with this method, if possible reusing the given history
     CalculationContext getCalculator(bool wait, ubyte[]history){
         assert(cl!is null && cast(Method)method.contentObj() !is null);
@@ -305,6 +309,8 @@ class CalcContext:LocalCalculationContext{
         throw new Exception("to implement in subclasses",__FILE__,__LINE__);
         // maxChange=0.0; changeLevel=ChangeLevel.SmoothPosChange;
     }
+    
+    void setup(LinearComm pEnv,CharSink log){ }
     
     /// called automatically after creation, but before any energy evaluation
     /// should be called before working again with a deactivated calculator

@@ -15,7 +15,7 @@ import dchem.sys.DynVars;
 import blip.container.GrowableArray;
 import blip.parallel.smp.Wait;
 import blip.math.Math;
-
+import blip.parallel.mpi.MpiModels;
 
 class TestGrad:Sampler{
     Real dx=0.05;
@@ -189,9 +189,10 @@ class TestGrad:Sampler{
     }
     
     /// does the checks
-    void run(){
+    void run(LinearComm pWorld,CharSink log){
         auto m=cast(Method)method.contentObj(); // method.method;
         if (m is null) throw new Exception("invalid method in field "~myFieldName,__FILE__,__LINE__);
+        m.setup(pWorld,log);
         CalculationContext c=m.getCalculator(true,null);
         size_t nDim;
         c.updateEF(true,true);

@@ -20,6 +20,7 @@ import blip.BasicModels;
 import dchem.sys.Constraints;
 import tango.io.vfs.model.Vfs;
 import dchem.input.WriteOut;
+import blip.parallel.mpi.MpiModels;
 
 /// a task that can be excuted locally on the calculation context
 interface RemoteCCTask: Serializable{
@@ -31,6 +32,10 @@ interface RemoteCCTask: Serializable{
 
 /// calculator setup (chooses the method to perform each calculation)
 interface Method:InputElement{
+    /// activates the method in the context of the given parallel environment
+    /// this can be used to do setups shared by all contexts of this method
+    /// it might be called several times, but should always have the same arguments
+    void setup(LinearComm pEnv, CharSink log);
     /// gets a calculator to perform calculations with this method, if possible reusing the given history
     /// if wait is true waits until a context is available
     CalculationContext getCalculator(bool wait,ubyte[]history);

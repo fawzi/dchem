@@ -8,6 +8,7 @@ import dchem.Common;
 import blip.util.TangoLog;
 import blip.core.Variant;
 import blip.BasicModels;
+import blip.parallel.mpi.MpiModels;
 
 /// represents a task that can be sent over to another computer
 interface RemoteTask:Serializable{
@@ -27,7 +28,7 @@ interface InputElement:Serializable{
 
 /// a calculation method
 interface Sampler:InputElement{
-    void run();
+    void run(LinearComm pWorld,CharSink log);
     void stop();
 }
 
