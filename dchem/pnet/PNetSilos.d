@@ -34,6 +34,8 @@ import blip.parallel.smp.Wait;
 import blip.io.Console;
 import blip.parallel.rpc.RpcMixins;
 import blip.parallel.mpi.Mpi;
+import blip.io.EventWatcher;
+//import dchem.pnet.WorkAsker;
 
 /// help structure 
 struct CachedPoint(T){
@@ -101,55 +103,6 @@ class RemotePointEval(T):RemoteCCTask{
     }
     
 }
-/+class MasterCalculator:Sampler{
-    InputField method;
-    mixin myFieldMixin!();
-
-    ParticleSys!(Real) refPointReal;
-    ParticleSys!(LowP) refPointLowP;
-
-    Set!(PointAndDir) inExploration; /// point directions that are in exploration
-    Set!(Point) inEvaluation; /// points that are in evaluation
-    Set!(Point) toEvaluate; /// points that should be avaluated
-    size_t overPrepare=0; /// number of extra calculation to prepare
-    ExplorerI!(T)[] explorers; /// explorers that can create new work
-    
-    /// adds a context that can calculate something
-    void addContext(CalculationContext c){
-        synchronized(this){
-            waitingContexts.append(c);
-        }
-        update();
-    }
-    /// adds a point to evaluate coming from PointAndDir
-    void addPointForPointDir(Point p,PointAndDir origin){
-        synchronized(this){
-            if (p.isValid){
-                toEvaluate.add(p);
-            }
-            inExploration.remove(origin);
-        }
-        update();
-    }
-    /// updates the calculator: tries to give work to waitingContexts and request more work if needed
-    void update(){
-        Point p;
-        CalculationContext ctx;
-        while(1){
-            ctx=null;
-            synchronized(this){
-                if (!toEvaluate.take(p)) break;
-                if (!waitingContexts.popFront(ctx)) break;
-            }
-            // ctx.remoteExe...
-        }
-        if (p.isValid && ctx is null) {
-            synchronized(this){
-                toEvaluate.add(p);
-            }
-        }
-    }
-}+/
 
 class SilosGen:Sampler{
     PNetSilos!(Real)[] silosReal;
@@ -161,6 +114,8 @@ class SilosGen:Sampler{
     long maxExplorationTries=10;
     /// the current method for energy evaluation
     InputField evaluator;
+    /// the task to execute on the evaluator (normally work asker)
+    InputField evaluatorTask;
 
     /// base name of the silos
     char[] baseName="Silos";
@@ -237,6 +192,7 @@ class SilosGen:Sampler{
     mixin myFieldMixin!();
     mixin(serializeSome("dchem.Silos",`
         evaluator: the method to perform energy evaluations
+        evaluatorTask: the task to execute on the evaluator (with no task you should start them manually)
         precision: the precision with which the points are stored
         explorers: the observers and explorers active on the point network
         loaders: SilosWorkers that load already evaluated points (called after the explorer are set up, before exploring)
@@ -264,6 +220,14 @@ class SilosGen:Sampler{
     bool verify(CharSink s){
         auto log=dumper(s);
         bool res=true;
+        if (evaluator is null || cast(Method)evaluator.contentObj is null){
+            log("evaluator should be valid and be a Method in field ")(myField)("\n");
+            res=false;
+        }
+        if (evaluatorTask !is null && cast(RemoteCCTask)evaluator.contentObj is null){
+            log("evaluatorTask if given should be a RemoteCCTask in field ")(myField)("\n");
+            res=false;
+        }
         if (precision!="LowP" && precision!="Real"){
             log("precision should be either LowP or Real, not '")(precision)("' in field ")(myField)("\n");
             res=false;
@@ -311,13 +275,13 @@ class SilosGen:Sampler{
             synchronized(this){
                 silosLowP~=silos;
             }
-            silos.run();
+            silos.run(pWorld,log);
         } else if (precision=="Real"){
             auto silos=new PNetSilos!(Real)(this,name,newKey);
             synchronized(this){
                 silosReal~=silos;
             }
-            silos.run();
+            silos.run(pWorld,log);
         } else {
             assert(0,"invalid precision value");
         }
@@ -462,11 +426,28 @@ class PointBcastProgress(T){
     }
 }
 
+struct PointInProgress{
+    Point point;
+    ev_tstamp start;
+    ev_tstamp last;
+    char[] url;
+    int count;
+    
+    equals_t opEquals(ref PointInProgress p){
+        return point==p.point;
+    }
+    int opCmp(ref PointInProgress p){
+        return point.opCmp(p.point);
+    }
+}
+
 class PNetSilos(T): LocalSilosI!(T){
     enum RunLevel:int{
         Setup,
         Running,
-        Stop
+        WaitPending,
+        Stopping,
+        Stopped
     }
     RunLevel runLevel;
     SilosGen input;
@@ -480,9 +461,8 @@ class PNetSilos(T): LocalSilosI!(T){
     BatchedGrowableArray!(Point,batchSize) localPointsKeys; // indexes for local owned points
     HashMap!(Point,SKey) owner;
     HashMap!(Point,CachedPoint!(T)) localCache;
-    HashMap!(Point,CalculationContext) localCalcInProgress;
     HashMap!(Point,PointBcastProgress!(T)) publishingPoints;
-    Set!(Point) calcInProgress;
+    HashMap!(Point,PointInProgress) pointsInProgress;
     DenseLocalPointArray!(MainPointI!(T)) localPoints; /// local points (position,...)
     /// random number generator
     RandomSync rand(){ return _rand; }
@@ -503,6 +483,7 @@ class PNetSilos(T): LocalSilosI!(T){
     Deque!(ExplorerI!(T)) explorers;
     Deque!(ExplorerI!(T)) activeExplorers;
     WaitCondition waitExplorers;
+    WaitCondition waitPendingPoint;
     
     /// parallel enviroment of silos
     LinearComm silosParaEnv;
@@ -510,16 +491,21 @@ class PNetSilos(T): LocalSilosI!(T){
     Deque!(ExplorationObserverI!(T)) observers;
     /// evaluator
     Method evaluator;
+    RemoteCCTask evaluatorTask;
     PoolI!(MainPoint!(T)) pPool;
     Deque!(SilosWorkerI!(T)) loaders;
     Deque!(SilosWorkerI!(T)) monitors;
     Deque!(SilosWorkerI!(T)) finishers;
+    long nEvals;
     
     MainPoint!(T)allocPoint(PoolI!(MainPoint!(T))p){
         return new MainPoint!(T)(this,p);
     }
     bool hasActiveExpl(){
         return activeExplorers.length>0 || explorers.length==0;
+    }
+    bool isStopping(){
+        return runLevel>RunLevel.WaitPending;
     }
     /// writes out a log message
     void logMsg(void delegate(CharSink)writer){
@@ -589,16 +575,50 @@ class PNetSilos(T): LocalSilosI!(T){
     /// returns true if the evaluation of the given point is in progress. Works only master/owner...?
     bool isInProgress(Point p){
         bool res=false;
-        synchronized(this){
-            res=calcInProgress.contains(p);
+        synchronized(pointsInProgress){
+            res=(p in pointsInProgress)!is null;
         }
         return res;
     }
-    
+    bool hasNoPointInProgress(){
+        bool res=false,checkPending=false;
+        synchronized(pointsInProgress){
+            if ((pointsInProgress.size==0 && runLevel>RunLevel.Running) || runLevel>RunLevel.WaitPending){
+                if (runLevel==RunLevel.WaitPending) {
+                    checkPending=true;
+                    runLevel=RunLevel.Stopping;
+                }
+                res=true;
+            }
+        }
+        if (checkPending){
+            waitPendingPoint.checkCondition();
+        }
+        return res;
+    }
     mixin(serializeSome("dchem.MinEExplorer_"~T.stringof,``));
     mixin printOut!();
     
-    void run(){
+    void startAskers(){
+        if (evaluatorTask is null) return;
+        try{
+            /// start the askers
+            while(true){
+                CalculationContext cInstance=evaluator.getCalculator(true,[]);
+                if (cInstance is null) break;
+                cInstance.executeLocally(evaluatorTask);
+            }
+        } catch (Exception e){
+            sinkTogether(log,delegate void(CharSink s){
+                dumper(s)("error while starting askers:")(e)("\n");
+            });
+        }
+    }
+    
+    void start(LinearComm pEnv, CharSink log){
+        pEnv.barrier();
+        silosParaEnv=pEnv;
+        evaluator.setup(pEnv,log);
         // setup refPos
         if (_refPos is null){
             CalculationContext cInstance=evaluator.getCalculator(true,[]);
@@ -621,34 +641,26 @@ class PNetSilos(T): LocalSilosI!(T){
         foreach(sw;loaders){
             sw.workOn(this);
         }
+        runLevel=RunLevel.Running;
+        pEnv.barrier();
         
-        for(long iExpl=0;iExpl<input.explorationSteps;++iExpl){
-            CalculationContext cInstance=evaluator.getCalculator(true,[]);
-            /+
-            start work asker
-            Point np=pointToEvaluate(SKeyVal.Any,delegate void(ExplorerI!(T)e){});+/
-            //RemoteEval(np);
-            //if (! np.isValid()) break;
-            
+        /// start the askers
+        Task("startAskers",&startAskers).autorelease.submitYield();
+    }
+    void run(LinearComm pEnv, CharSink log){
+        start(pEnv,log);
+        waitPendingPoint.wait();
+        pEnv.barrier();
+        synchronized(pointsInProgress){
+            if (runLevel>RunLevel.Stopping) return;
+            runLevel=RunLevel.Stopping;
         }
-        //loaders
-        // if empty & no explorator, add point at actual evaluator point
-        /+
-        while(1)
-            get context
-            choose eval host
-            remote task on it
-            monitors
-
-        remote task:
-            start independent task that executes it
-            while 1
-                getNext point from master if invalid, brek
-                decide if eval
-                if eval
-                    eval, return res,break
-
-        +/
+        // run the finishers
+        foreach(sw;finishers){
+            sw.workOn(this);
+        }
+        pEnv.barrier();
+        runLevel=RunLevel.Stopped;
     }
     
     bool nextExplorer(ref ExplorerI!(T) res){
@@ -679,14 +691,62 @@ class PNetSilos(T): LocalSilosI!(T){
         waitExplorers.checkCondition();
     }
     
+    void addPointInProgress(Point p){
+        PointInProgress pp;
+        pp.point=p;
+        pp.start=noToutWatcher.now();
+        pp.last=pp.start;
+        pp.count=1;
+        synchronized(pointsInProgress){
+            auto oldP=p in pointsInProgress;
+            if (oldP!is null){
+                oldP.count=oldP.count+1;
+                oldP.last=noToutWatcher.now();
+            } else {
+                pointsInProgress[p]=pp;
+            }
+        }
+    }
+    
+    void rmPointInProgress(Point p){
+        synchronized(pointsInProgress){
+            auto oldP=p in pointsInProgress;
+            if (oldP!is null){
+                if (oldP.count==1) {
+                    pointsInProgress.removeKey(p);
+                } else {
+                    assert(oldP.count>0);
+                    --oldP.count;
+                }
+            }
+        }
+        waitPendingPoint.checkCondition();
+    }
+    
     /// returns the next point to evaluate
     Point pointToEvaluate(SKey s){
-        if (hasKey(s)){
+        if (s==SKeyVal.All){
+            foreach(sK,sL;silos){
+                sL.pointToEvaluate(sK);
+            }
+        } else if (hasKey(s)){
+            synchronized(this){
+                if (runLevel>=RunLevel.Running) return Point(0);
+                if (nEvals>=input.explorationSteps) {
+                    runLevel=RunLevel.WaitPending;
+                    waitPendingPoint.checkCondition();
+                    return Point(0);
+                }
+                ++nEvals;
+            }
             ExplorerI!(T) e;
             for (int i=0;i<input.maxExplorationTries;++i){
                 if (activeExplorers.popFront(e)){
                     auto res=e.pointToEvaluateLocal(&this.addBackExplorer);
-                    if (res.isValid) return res;
+                    if (res.isValid) {
+                        addPointInProgress(res);
+                        return res;
+                    }
                     if (res.data==0){
                         explorers.filterInPlace(delegate bool(ExplorerI!(T) expl){ return expl !is e; });
                     }
@@ -696,6 +756,12 @@ class PNetSilos(T): LocalSilosI!(T){
                 waitExplorers.wait();// to do: should have a timeout
             }
             if (explorers.length==0){
+                synchronized(pointsInProgress){
+                    if (runLevel==RunLevel.Running) {
+                        runLevel=RunLevel.WaitPending;
+                    }
+                }
+                waitPendingPoint.checkCondition();
                 return Point(0);
             }
             return Point(1);
@@ -917,26 +983,33 @@ class PNetSilos(T): LocalSilosI!(T){
         }
     }
     /// stops all silos (at the moment there is no support for dynamic adding/removal of silos, worth adding???)
-    void shutdown(SKey s){
+    void shutdown(SKey s,int speed){
         if (s==SKeyVal.All){
             foreach(sK,sL;silos){
-                sL.shutdown(sK);
+                sL.shutdown(sK,speed);
             }
         } else if (hasKey(s)){
             bool shouldStop=false;
             synchronized(this){
-                if (runLevel<RunLevel.Stop){
-                    runLevel=RunLevel.Stop;
+                if (runLevel<RunLevel.Stopped){
+                    if (speed<0){
+                        return; // don't stop
+                    } else if (speed==0){
+                        runLevel=RunLevel.WaitPending;
+                    } else {
+                        runLevel=RunLevel.Stopped;
+                    }
                     shouldStop=true;
                 }
             }
             if (shouldStop){ // square b-cast, change??
+                waitPendingPoint.checkCondition();
                 notifyLocalObservers(delegate void(ExplorationObserverI!(T)obs){
-                    obs.shutdown(s);
+                    obs.shutdown(s,speed);
                 });
             }
         } else {
-            silosForKey(s).shutdown(s);
+            silosForKey(s).shutdown(s,speed);
         }
     }
 
@@ -1180,8 +1253,7 @@ class PNetSilos(T): LocalSilosI!(T){
         this.localPointsKeys=new BatchedGrowableArray!(Point,batchSize)();
         this.owner=new HashMap!(Point,SKey)();
         this.localCache=new HashMap!(Point,CachedPoint!(T))();
-        this.localCalcInProgress=new HashMap!(Point,CalculationContext)();
-        this.calcInProgress=new Set!(Point)();
+        this.pointsInProgress=new HashMap!(Point,PointInProgress)();
         this.localPoints=new DenseLocalPointArray!(MainPointI!(T))(); /// local points (position,...)
         this._rand=new RandomSync();
         this._refPos=refPos;
@@ -1192,6 +1264,14 @@ class PNetSilos(T): LocalSilosI!(T){
         this.explorers=new Deque!(ExplorerI!(T))();
         this.observers=new Deque!(ExplorationObserverI!(T))();
         this.evaluator=cast(Method)this.input.evaluator.contentObj;
+        if (this.input.evaluatorTask!is null) {
+            this.evaluatorTask=cast(RemoteCCTask)this.input.evaluatorTask.contentObj;
+        }
+        if (this.evaluatorTask is null){
+            // add this dependency??
+            // this.evaluatorTask=new WorkAsker();
+            // this.evaluatorTask.precision=this.input.precision;
+        }
         this.pPool=pPool;
         if (pPool is null) this.pPool=cachedPool(&this.allocPoint);
         foreach(e;input.explorers){
@@ -1206,10 +1286,11 @@ class PNetSilos(T): LocalSilosI!(T){
         }
         this.activeExplorers=activeExplorers.dup();
         this.waitExplorers=new WaitCondition(&this.hasActiveExpl);
+        this.waitPendingPoint=new WaitCondition(&this.hasNoPointInProgress);
         this.loaders=new Deque!(SilosWorkerI!(T))();
         this.monitors=new Deque!(SilosWorkerI!(T))();
         this.finishers=new Deque!(SilosWorkerI!(T))();
-        mainVendor=new DefaultVendor(this);
+        this.mainVendor=new DefaultVendor(this);
         ProtocolHandler.defaultProtocol.publisher.publishObject(mainVendor,"silos",true);
         foreach(l;input.loaders){
             auto swGen=cast(SilosWorkerGen)(l.contentObj());

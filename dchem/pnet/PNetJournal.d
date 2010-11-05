@@ -190,8 +190,9 @@ class PNetJournal(T):ExplorationObserverI!(T){
     }
     
     // ExplorationObserverI(T)
-    /// informs that a silos did shutdown
-    void shutdown(SKey s){}
+    /// informs that a silos did a shutdown with the given speed (0, waits for pending points and calls finishers
+    /// less than 0: does not stop, larger than 0 stops immediately (no finishers))
+    void shutdown(SKey s,int speed){}
     /// adds energy for a local point and bCasts addEnergyEval
     void addEnergyEvalLocal(SKey s,Point p,Real energy){
         this.serialLock.lock();

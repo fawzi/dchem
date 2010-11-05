@@ -550,7 +550,7 @@ interface ExplorationObserverI(T){
     /// stops a silos
     /// at the moment there is no support for dynamic adding/removal of silos, (worth adding???)
     /// so s should be only SKeyVal.All
-    void shutdown(SKey s);
+    void shutdown(SKey s,int speed);
     /// adds energy for a point local to s and bCasts addEnergyEval
     void addEnergyEvalLocal(SKey s,Point p,Real energy);
     /// adds gradient value to a point that should be owned by s. Energy if not NAN replaces the previous value

@@ -181,6 +181,8 @@ class Cp2kServer:InputElement{
                 start=true;
             } else {
                 if (pEnv !is this.pEnv) throw new Exception("different pEnv",__FILE__,__LINE__);
+                if (status>Status.Running) throw new Exception("setup called on stopped Cp2kServer",__FILE__,__LINE__);
+                return;
             }
         }
         if (pEnv.myRank!=0) assert(0,"unimplemented");

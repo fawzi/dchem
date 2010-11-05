@@ -124,8 +124,8 @@ class PNetSilosClient(T){
     /// stops a silos
     /// at the moment there is no support for dynamic adding/removal of silos, (worth adding???)
     /// so s should be only SKeyVal.All
-    void shutdown(SKey s){
-        connection.shutdown(s);
+    void shutdown(SKey s,int speed){
+        connection.shutdown(s,speed);
     }
     /// adds energy for a point local to s and bCasts addEnergyEval
     void addEnergyEvalLocal(SKey s,Point p,Real energy){

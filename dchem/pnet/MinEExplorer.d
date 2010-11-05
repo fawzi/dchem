@@ -6,7 +6,7 @@ import blip.io.BasicIO;
 import blip.io.Console;
 import blip.container.GrowableArray;
 
-class MinEExplorerDef:InputElement{
+class MinEExplorerDef:SilosWorkerGen{
     long nEval;
     char[] precision;
     mixin myFieldMixin!();
@@ -17,6 +17,8 @@ class MinEExplorerDef:InputElement{
         return true;
     }
     
+    SilosWorkerI!(Real) silosWorkerReal();
+    SilosWorkerI!(LowP) silosWorkerLowP();
 }
 
 // exploration:
