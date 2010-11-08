@@ -31,6 +31,7 @@ class TemplateExecuter: Method {
     bool makeReplacementsInCommands=true;
     int maxContexts=1;
     VfsFolder _templateDirectory;
+    CharSink logger;
     
     VfsFolder templateDirectory(){
         if (_templateDirectory is null){
@@ -96,6 +97,7 @@ class TemplateExecuter: Method {
         }
     }
     void setup(LinearComm pEnv,CharSink log){
+        logger=log;
         if (setupCommand.length>0 && setupCommand!="NONE"){
             auto templateH=new TemplateHandler(templateDirectory(),new FileFolder(ProcContext.instance.baseDirectory.toString(),true)); // to fix
             addFullSubs(templateH.subs);
@@ -239,7 +241,8 @@ class ExecuterContext:CalcContext{
     Method method(){
         return input;
     }
-    void execCmd(char[] cmd,CharSink log=sout.call){
+    void execCmd(char[] cmd,CharSink log=null){
+        if (log is null) log=logger;
         if (cmd.length>0 && cmd!="NONE"){
             opInProgress=templateH.processForCmd(cmd,log);
             if (opInProgress is null) throw new Exception("could not create process for command "~cmd,__FILE__,__LINE__);
@@ -256,7 +259,7 @@ class ExecuterContext:CalcContext{
     }
 
     this(TemplateExecuter input,char[] contextId,TemplateHandler th=null){
-        super(contextId);
+        super(contextId,input.logger);
         this.input=input;
         templateH=th;
         if (th is null){

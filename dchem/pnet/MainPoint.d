@@ -30,6 +30,7 @@ import blip.time.Time;
 import blip.narray.NArray;
 import blip.math.IEEE;
 import blip.util.LocalMem;
+import blip.io.EventWatcher;
 
 /// structure that collects togheter all points of the same owner (useful to bcast chuncks)
 class PointToOwner{
@@ -518,7 +519,7 @@ class MainPoint(T):MainPointI!(T){
         }
         uint rDir; bool neg;
         fromDir(dir,rDir,neg);
-        auto localPoint=localContext.createLocalPoint(newPoint,Clock.now);
+        auto localPoint=localContext.createLocalPoint(newPoint,ev_time());
         scope(exit) { localPoint.release(); }
         auto newPos=localPoint.pos.dynVars.x;
         
@@ -692,7 +693,7 @@ class MainPoint(T):MainPointI!(T){
                 neighAtt.deallocData();
                 dirDist1.deallocData();
             }
-            auto localPoint=localContext.createLocalPoint(newPoint,Clock.now);
+            auto localPoint=localContext.createLocalPoint(newPoint,ev_time());
             scope(exit){ localPoint.release(); }
             auto newPos=localPoint.pos.dynVars.x;
             auto dDir=addDirsOf(newPos,newPoint,localPoint.explorationSize,neighAtt,dirDist1);
@@ -901,7 +902,7 @@ class MainPoint(T):MainPointI!(T){
                 return;
             }
         }
-        auto tNow=Clock.now;
+        auto tNow=ev_time();
         auto mPoint=localContext.createLocalPoint(p,tNow);
         scope(exit){ mPoint.release(); }
         DynPVector!(T,XType) newPos=mPoint.pos.dynVars.x;
@@ -1226,7 +1227,7 @@ class MainPoint(T):MainPointI!(T){
             lData.length);
         Real[] energies;
         uint newGFlags=0;
-        Time tNow=Clock.now;
+        auto tNow=ev_time();
         auto thisP=LazyMPLoader!(T)(point,true,tNow);
         foreach (i;nPts.pLoop){
             auto silo=i.owner;

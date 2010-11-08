@@ -126,6 +126,8 @@ interface CalculationContext{
     char[] exportedUrl();
     /// execute the operation t locally on the context
     void executeLocally(RemoteCCTask t);
+    /// log for the calculator context
+    void logMsg(char[]);
 }
 
 /// represent the local view to a calculation that might have been aready partially setup, in particular the
@@ -144,6 +146,8 @@ interface LocalCalculationContext: CalculationContext{
     NotificationCenter nCenter();
     /// history of the previous positions
     HistoryManager!(LowP) posHistory();
+    /// the logger of this context
+    CharSink logger();
 }
 
 /// templatized way to extract the pSys from a LocalCalculationContext

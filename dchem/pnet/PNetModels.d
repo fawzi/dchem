@@ -20,6 +20,7 @@ import blip.math.IEEE;
 import blip.math.random.Random;
 import blip.container.Cache;
 import blip.container.Pool;
+import blip.io.EventWatcher: ev_tstamp,ev_time;
 
 /// unique key for a point, dimensions might change
 /// key might have some special values,
@@ -436,7 +437,7 @@ class LazyMPLoader(T):Serializable{
     Point point;
     MainPointI!(T) _mainPoint;
     WaitCondition waitPoint;
-    Time maxTime;
+    ev_tstamp maxTime;
     bool weakUpdate;
     Exception exception;
     mixin RefCountMixin!();
@@ -498,7 +499,7 @@ class LazyMPLoader(T):Serializable{
     /// if weakUpdate is true tries to get the newest version that is locally available
     /// the time is used to decide if the cached version is new enough, or a new version has to be
     /// fetched from the owning silos
-    this(Point point,bool weakUpdate,Time time,PoolI!(LazyMPLoader) pool=null){
+    this(Point point,bool weakUpdate,ev_tstamp time,PoolI!(LazyMPLoader) pool=null){
         this.point=point;
         this.weakUpdate=weakUpdate;
         this.maxTime=time;
@@ -506,11 +507,11 @@ class LazyMPLoader(T):Serializable{
     }
     /// ditto
     this(Point point,bool weakUpdate=true){
-        this(point,weakUpdate,Clock.now);
+        this(point,weakUpdate,ev_time());
     }
     this(){}
     typeof(this) postUnserialize(Unserializer s){
-        maxTime=Clock.now; // reset time as it cannot be assumed to be synchronized between different computers
+        maxTime=ev_time(); // reset time as it cannot be assumed to be synchronized between different computers
         return this;
     }
     mixin(serializeSome("dchem.LazyMPLoader!("~T.stringof~")",`point|weakUpdate|maxTime`));
@@ -519,10 +520,10 @@ class LazyMPLoader(T):Serializable{
     static PoolI!(LazyMPLoader) gPool;
     static this(){
         gPool=cachedPool(function LazyMPLoader(PoolI!(LazyMPLoader)p){
-            return new LazyMPLoader(Point(0),true,Time(0),p);
+            return new LazyMPLoader(Point(0),true,ev_tstamp.min,p);
         });
     }
-    static LazyMPLoader opCall(Point point,bool weakUpdate,Time time,PoolI!(LazyMPLoader) pool=null){
+    static LazyMPLoader opCall(Point point,bool weakUpdate,ev_tstamp time,PoolI!(LazyMPLoader) pool=null){
         auto res=gPool.getObj();
         res.maxTime=time;
         res.weakUpdate=weakUpdate;
@@ -530,7 +531,7 @@ class LazyMPLoader(T):Serializable{
         return res;
     }
     static LazyMPLoader opCall(Point point,bool weakUpdate=true){
-        return LazyMPLoader.opCall(point,weakUpdate,Clock.now);
+        return LazyMPLoader.opCall(point,weakUpdate,ev_time());
     }
 }
 
@@ -733,7 +734,7 @@ interface LocalSilosI(T): PNetSilosI!(T) {
     MainPointI!(T) bcastPoint(MainPointI!(T));
     /// a local point (possibly a copy), is retained, and needs to be released (thus the create in the name)
     /// the time t is used to decide if a cached version can be used
-    MainPointI!(T)createLocalPoint(Point p,Time t);
+    MainPointI!(T)createLocalPoint(Point p,ev_tstamp t);
     /// drops a cached point (the point is not in use anymore)
     void dropCachedPoint(MainPointI!(T)p);
 

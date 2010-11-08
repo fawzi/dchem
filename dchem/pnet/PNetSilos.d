@@ -40,7 +40,7 @@ import blip.io.EventWatcher;
 /// help structure 
 struct CachedPoint(T){
     MainPoint!(T) mainPoint;
-    Time lastSync;
+    ev_tstamp lastSync;
 }
 
 struct LoadStats{
@@ -1190,7 +1190,7 @@ class PNetSilos(T): LocalSilosI!(T){
     }
     /// a local point (possibly a copy), is retained, and needs to be released (thus the create in the name)
     /// the time t is used to decide if a cached version can be used
-    MainPointI!(T)createLocalPoint(Point p,Time t){
+    MainPointI!(T)createLocalPoint(Point p,ev_tstamp t){
         if (hasKey(ownerOfPoint(p))){
             auto mp=localPoints[p];
             mp.retain;
@@ -1213,7 +1213,7 @@ class PNetSilos(T): LocalSilosI!(T){
             cachedP.mainPoint.retain;
             return cachedP.mainPoint;
         }
-        cachedP.lastSync=Clock.now;
+        cachedP.lastSync=ev_time();
         cachedP.mainPoint[]=mainPoint(ownerOfPoint(p),p);
         synchronized(localCache){
             localCache[p]=cachedP;

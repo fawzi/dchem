@@ -5,7 +5,6 @@ import dchem.sys.PIndexes;
 import dchem.sys.SegmentedArray;
 import dchem.Common;
 import dchem.input.RootInput;
-import blip.io.Console;
 import blip.container.GrowableArray;
 import blip.io.BasicIO;
 import dchem.calculator.ProcContext;
@@ -24,9 +23,12 @@ const Real[4] MBy0 = [0.0,0.5,1.5,1.0];
 class MullerBrownPot: Method {
     Real[] a=MBa,b=MBb,c=MBc,x0=MBx0,y0=MBy0,preFactor=MBPreFactor;
     Real startX=0,startY=0;
+    CharSink logger;
     
     this(){}
-    void setup(LinearComm pEnv,CharSink log){ }
+    void setup(LinearComm pEnv,CharSink log){
+        logger=log;
+    }
     bool verify(CharSink sink){
         bool res=true;
         auto s=dumper(sink);
@@ -77,7 +79,7 @@ class MullerBrownPotContext:CalcContext{
     MullerBrownPot pot;
     
     this(MullerBrownPot pot,char[] contextId){
-        super(contextId);
+        super(contextId,pot.logger);
         this.pot=pot;
         _pSysReal=artificialPSys!(Real)(0,0,2);
         auto sys=LocalPIndex(0,0);

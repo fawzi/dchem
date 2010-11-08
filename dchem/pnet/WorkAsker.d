@@ -8,6 +8,9 @@ import blip.io.BasicIO;
 import blip.container.GrowableArray;
 import blip.parallel.smp.Smp;
 import blip.serialization.Serialization;
+import dchem.pnet.PNetSilosClient;
+import blip.io.EventWatcher: ev_tstamp,ev_time;
+import blip.io.Console;
 
 class WorkAskerGen:RemoteCCTask,Sampler {
     char[] connectionUrl;
@@ -27,7 +30,7 @@ class WorkAskerGen:RemoteCCTask,Sampler {
     maxWait: maximum number of retries waiting for a point to evaluate
     ownerCacheSize: amout of points whose owner is cached (10)
     precision: precision of the silos, either LowP or Real (LowP)
-    evaluator: the mehod used to evaluate energy and forces`));
+    evaluator: the mehod used to evaluate energy and forces (used only if you run this standalone)`));
     mixin printOut!();
     mixin myFieldMixin!();
     WorkAsker!(LowP)[] wAskersLowP;
@@ -35,6 +38,7 @@ class WorkAskerGen:RemoteCCTask,Sampler {
     
     bool verify(CharSink s){
         bool res=true;
+        auto log=dumper(s);
         if (precision!="LowP" && precision!="Real"){
             log("precision should be either LowP or Real, not '")(precision)("' in field ")(myField)("\n");
             res=false;
@@ -63,19 +67,19 @@ class WorkAskerGen:RemoteCCTask,Sampler {
         auto m=cast(Method)evaluator.contentObj;
         assert(m!is null);
         m.setup(pEnv,log);
-        auto maxTotTime=noToutWatcher.now()+maxDurationTot*60;
+        auto maxTotTime=ev_time()+maxDurationTot*60;
         while(true){
             auto cc=m.getCalculator(true,[]);
             if (cc is null) break;
-            workOn(cc,maxTotTime);
+            cc.executeLocally(this);
         }
     }
     
-    void workOn(CalculationContext cc){
-        workOn(cc,noToutWatcher.now()+maxDurationTot*60);
+    void workOn(LocalCalculationContext cc){
+        workOn(cc,ev_time()+maxDurationTot*60);
     }
     /// starts the task with the given CalculationContext
-    void workOn(CalculationContext cc,ev_tstamp maxTotTime){
+    void workOn(LocalCalculationContext cc,ev_tstamp maxTotTime){
         switch(precision){
         case "LowP":
             auto lp=new WorkAsker!(LowP)(this,cc);
@@ -99,8 +103,9 @@ class WorkAskerGen:RemoteCCTask,Sampler {
     }
     /// might stop the task, or not, might return immediatly (even if the task is still running)
     void stop(){
+        size_t i;
         synchronized(this){
-            size_t i=wAskersLowP.length;
+            i=wAskersLowP.length;
         }
         while(i!=0){
             WorkAsker!(LowP) w;
@@ -127,7 +132,7 @@ class WorkAskerGen:RemoteCCTask,Sampler {
     void rmWorkAsker(T)(WorkAsker!(T) w){
         static if (is(T==LowP)){
             synchronized(this){
-                auto pos=find(w,wAskersLowP);
+                auto pos=find(wAskersLowP,w);
                 if (pos!=wAskersLowP.length){
                     wAskersLowP[pos]=wAskersLowP[wAskersLowP.length-1];
                     wAskersLowP[wAskersLowP.length-1]=null;
@@ -137,7 +142,7 @@ class WorkAskerGen:RemoteCCTask,Sampler {
         }
         static if (is(T==Real)){
             synchronized(this){
-                auto pos=find(w,wAskersReal);
+                auto pos=find(wAskersReal,w);
                 if (pos!=wAskersReal.length){
                     wAskersReal[pos]=wAskersReal[wAskersReal.length-1];
                     wAskersReal[wAskersReal.length-1]=null;
@@ -151,7 +156,7 @@ class WorkAskerGen:RemoteCCTask,Sampler {
 class WorkAsker(T){
     WorkAskerGen input;
     PNetSilosClient!(T) silos;
-    CalculationContext ctx;
+    LocalCalculationContext ctx;
     double timeEnd;
     long leftEvals;
     long maxWait;
@@ -160,17 +165,17 @@ class WorkAsker(T){
     }
     Status status;
     
-    this(WorkAskerGen input,CalculationContext ctx){
+    this(WorkAskerGen input,LocalCalculationContext ctx){
         this.input=input;
-        auto silosGen=new PNetSilosClientGen(connectionUrl,ownerCacheSize);
-        this.silos=new PNetSilosClient(silosGen,ctx);
+        auto silosGen=new PNetSilosClientGen(input.connectionUrl,input.ownerCacheSize);
+        this.silos=new PNetSilosClient!(T)(silosGen,ctx);
         this.ctx=ctx;
         timeEnd=input.maxDuration*60+ev_time();
         leftEvals=input.maxEval;
         maxWait=input.maxWait;
-        stop=Status.Configure;
+        status=Status.Configure;
     }
-    void run(){
+    void start(){
         try{
             synchronized(this){
                 if (status!=Status.Configure){
@@ -217,7 +222,7 @@ class WorkAsker(T){
                                 dumper(s)(this)(" did eval point ")(p)("\n");
                             });
                         }
-                        --maxEval;
+                        --leftEvals;
                     } else {
                         version(TrackWorkAsker) {
                             sinkTogether(sout,delegate void(CharSink s){

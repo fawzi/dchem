@@ -134,9 +134,13 @@ class ContextLimiter:InputElement{
 class ContextLimiterClient:Method{
     InputField contextLimiter;
     InputField method;
+    CharSink _log;
+    CharSink logger(){
+        return _log;
+    }
     
     this(){
-        // should expose it to the world...
+        _log=sout.call;
     }
     
     mixin myFieldMixin!();
@@ -161,7 +165,9 @@ class ContextLimiterClient:Method{
         return res;
     }
     
-    void setup(LinearComm pEnv,CharSink log){ }
+    void setup(LinearComm pEnv,CharSink log){
+        _log=log;
+    }
     
     /// gets a calculator to perform calculations with this method, if possible reusing the given history
     CalculationContext getCalculator(bool wait, ubyte[]history){
@@ -194,7 +200,7 @@ char[] withPSys(char[]op,char[]from=""){
     `;
 }
 const char[] calcCtxMethodsStr=
-`activePrecision|contextId|pSysWriterReal|pSysWriterLowP|pSysWriterRealSet|pSysWriterLowPSet|refPSysReal|refPSysLowP|constraintGen|sysStruct|changeLevel|changeLevelSet|changedDynVars|potentialEnergy|posSet|pos|dposSet|dpos|mddposSet|mddpos|updateEF|activate|deactivate|giveBack|stop|method|storeHistory|exportedUrl|executeLocally`;
+`activePrecision|contextId|pSysWriterReal|pSysWriterLowP|pSysWriterRealSet|pSysWriterLowPSet|refPSysReal|refPSysLowP|constraintGen|sysStruct|changeLevel|changeLevelSet|changedDynVars|potentialEnergy|posSet|pos|dposSet|dpos|mddposSet|mddpos|updateEF|activate|deactivate|giveBack|stop|method|storeHistory|exportedUrl|executeLocally|logMsg`;
 
 /// represent a calculation that might have been aready partially setup, in particular the
 /// number of elements,... cannot change
@@ -208,6 +214,14 @@ class CalcContext:LocalCalculationContext{
     ChangeLevel _changeLevel; /// 0: first time, 1: all changed, 2: only pos changed, 3: small pos change, 4: extrapolable pos change
     Method _method;
     Real maxChange;
+    CharSink _logger;
+    
+    void logMsg(char[]m){
+        _logger(m);
+    }
+    CharSink logger(){
+        return _logger;
+    }
     
     void executeLocally(RemoteCCTask r){
         r.workOn(this);
@@ -346,8 +360,9 @@ class CalcContext:LocalCalculationContext{
     char[] exportedUrl(){
         return vendor.proxyObjUrl();
     }
-    this(char[] contextId){
+    this(char[] contextId,CharSink log){
         this._contextId=contextId;
+        this._logger=log;
         _nCenter=new NotificationCenter();
         // register to the world...
         vendor=new DefaultVendor(this);

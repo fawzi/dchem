@@ -17,8 +17,12 @@ class MinEExplorerDef:SilosWorkerGen{
         return true;
     }
     
-    SilosWorkerI!(Real) silosWorkerReal();
-    SilosWorkerI!(LowP) silosWorkerLowP();
+    SilosWorkerI!(Real) silosWorkerReal(){
+        auto res=new MinEExplorer!(Real)(this);
+    }
+    SilosWorkerI!(LowP) silosWorkerLowP(){
+        auto res=new MinEExplorer!(LowP)(this);
+    }
 }
 
 // exploration:
@@ -37,14 +41,18 @@ class MinEExplorerDef:SilosWorkerGen{
 
 /// an object that can offer new points to explore
 /// actually should not inherit from ExplorationObserverI, but this way we avoid multiple inheritance bugs
-class MinEExplorer(T):ExplorerI!(T){
+class MinEExplorer(T):ExplorerI!(T),SilosWorkerI!(T){
     /// points to explore more ordered by energy (at the moment this is replicated)
     /// this could be either distribued, or limited to a given max size + refill upon request
     MinHeapSync!(PointAndEnergy) toExploreMore;
     HashSet!(Point) removedPoints;
     void delegate(ExplorerI!(T)) available;
-    
-    // ExplorationObserverI(T)
+    MinEExplorerDef input;
+    this(MinEExplorerDef input){
+        this.input=input;
+        this.toExploreMore=new MinHeapSync!(PointAndEnergy)();
+        this.removedPoints=new HashSet!(Point);
+    }
     
     /// adds energy for a local point and bCasts addEnergyEval
     void addEnergyEvalLocal(LocalSilosI!(T) silos,Point p,Real energy){
@@ -144,4 +152,9 @@ class MinEExplorer(T):ExplorerI!(T){
     void rmPoint(Point p){
         removedPoints.add(p);
     }
+    
+    void workOn(LocalSilosI!(T) silos){
+        silos.addExplorer(this);
+    }
+    
 }

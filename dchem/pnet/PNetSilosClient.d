@@ -22,6 +22,16 @@ import blip.parallel.smp.WorkManager;
 import blip.container.Deque;
 import blip.container.Cache;
 import blip.container.Pool;
+import dchem.pnet.MainPoint;
+import blip.io.EventWatcher;
+import blip.container.HashMap;
+import blip.container.GrowableArray;
+
+/// help structure 
+struct CachedPoint(T){
+    MainPoint!(T) mainPoint;
+    ev_tstamp lastSync;
+}
 
 /// parameters for PNetSilosClient
 class PNetSilosClientGen:InputElement {
@@ -66,9 +76,9 @@ char[] extractFromProperties(char[]props){
     return res;
 }
 
-class PNetSilosClient(T){
+class PNetSilosClient(T): LocalSilosI!(T){
     PNetSilosClientGen input;
-    PNetSilos!(T) connection;
+    PNetSilosI!(T) connection;
     Real[char[]] properties;
     RandomSync _rand;
     CharSink log;
@@ -78,32 +88,36 @@ class PNetSilosClient(T){
     HashMap!(Point,CachedPoint!(T)) localCache;
     NotificationCenter _nCenter;
     CalculationContext ctx;
+    PoolI!(MainPoint!(T)) pPool;
     
-    this(PNetSilosClientGen input, CalculationContext ctx, PNetSilosI!(T) connection=null,NotificationCenter nCenter=null){
+    MainPoint!(T)allocPoint(PoolI!(MainPoint!(T))p){
+        return new MainPoint!(T)(this,p);
+    }
+    
+    this(PNetSilosClientGen input, CalculationContext ctx, PNetSilosI!(T) connection=null,NotificationCenter nCenter=null,PoolI!(MainPoint!(T))pPool=null){
         this.input=input;
         this.ctx=ctx;
+        this.pPool=pPool;
+        if (pPool is null) this.pPool=cachedPool(&this.allocPoint);
         if (ctx is null){
             assert(0,"CalculationContext should not be null");
             //input.evaluator.contentT!(Method)().getCalculator(true,[]);
         }
         if (_refPos is null){
-            CalculationContext cInstance=ctx;
-            switch(cInstance.activePrecision()){
+            switch(ctx.activePrecision()){
             case Precision.Real:
-                _refPos=cInstance.pSysReal.dupT!(T)(PSDupLevel.All);
-                auto c1=cInstance.constraintsReal();
-                if (c1 !is null)
-                    _constraints=constraintT!(T)(c1.constraintGen,_refPos);
+                _refPos=ctx.refPSysReal.dupT!(T)(PSDupLevel.All);
                 break;
             case Precision.LowP:
-                _refPos=cInstance.pSysLowP.dupT!(T)(PSDupLevel.All);
-                auto c2=cInstance.constraintsLowP();
-                if (c2 !is null)
-                    _constraints=constraintT!(T)(c2.constraintGen,_refPos);
+                _refPos=ctx.refPSysLowP.dupT!(T)(PSDupLevel.All);
                 break;
             default:
                 assert(0,"unknown activePrecision");
             }
+        }
+        ConstraintGen constraintGen=ctx.constraintGen;
+        if (constraintGen is null){
+            _constraints=constraintT!(T)(constraintGen,_refPos);
         }
         if (_constraints is null) _constraints=new NoConstraint!(T)();
         
@@ -116,7 +130,7 @@ class PNetSilosClient(T){
             this._nCenter=new NotificationCenter();
         }
         _rand=new RandomSync();
-        this.log=sout;
+        this.log=sout.call;
         properties=this.propertiesDict(SKeyVal.Any);
     }
     // ExplorationObserverI
@@ -287,7 +301,10 @@ class PNetSilosClient(T){
                     return true;
                 });
                 ownerCache.pushFront(res);
-                if (ownerCache.length>input.ownerCacheSize) ownerCache.popEnd;
+                if (ownerCache.length>input.ownerCacheSize) {
+                    PointAndOwner dropped;
+                    ownerCache.popBack(dropped);
+                }
             }
         }
         return res.owner;
@@ -295,19 +312,23 @@ class PNetSilosClient(T){
     
     /// adds an extra observer that will be notified about the network changes
     void addObserver(ExplorationObserverI!(T) o){
-        throw new Exploration("addition of observers not supported",__FILE__,__LINE__);
+        throw new Exception("addition of observers not supported",__FILE__,__LINE__);
     }
     /// removes the given observer if present
     void rmObserver(ExplorationObserverI!(T) o){
-        throw new Exploration("removal of observers not supported",__FILE__,__LINE__);
+        throw new Exception("removal of observers not supported",__FILE__,__LINE__);
     }
     /// adds an extra explorer that can generate new points
     void addExplorer(ExplorerI!(T)o){
-        throw new Exploration("addition of explorers not supported",__FILE__,__LINE__);
+        throw new Exception("addition of explorers not supported",__FILE__,__LINE__);
     }
     /// removes the given explorer
     void rmExplorer(ExplorerI!(T)o){
-        throw new Exploration("removal of explorers not supported",__FILE__,__LINE__);
+        throw new Exception("removal of explorers not supported",__FILE__,__LINE__);
+    }
+    /// notify observers, the operation should not raise (or the whole program stops)
+    void notifyLocalObservers(void delegate(ExplorationObserverI!(T))n){
+        // no local observers
     }
     
     /// reference position, this should be used just to create other ParticleSystem, never directly
@@ -347,12 +368,7 @@ class PNetSilosClient(T){
     }
     /// a local point (possibly a copy), is retained, and needs to be released (thus the create in the name)
     /// the time t is used to decide if a cached version can be used
-    MainPointI!(T)createLocalPoint(Point p,Time t){
-        if (hasKey(ownerOfPoint(p))){
-            auto mp=localPoints[p];
-            mp.retain;
-            return mp;
-        }
+    MainPointI!(T)createLocalPoint(Point p,ev_tstamp t){
         CachedPoint!(T) cachedP;
         CachedPoint!(T) * pC;
         synchronized(localCache){
@@ -370,7 +386,7 @@ class PNetSilosClient(T){
             cachedP.mainPoint.retain;
             return cachedP.mainPoint;
         }
-        cachedP.lastSync=Clock.now;
+        cachedP.lastSync=ev_time();
         cachedP.mainPoint[]=mainPoint(ownerOfPoint(p),p);
         synchronized(localCache){
             localCache[p]=cachedP;

@@ -3,7 +3,6 @@ import dchem.Common;
 import blip.rtest.RTest;
 import blip.io.BasicIO;
 import blip.container.GrowableArray;
-import dchem.sampler.MinEExplorer;
 import blip.math.Math: max;
 import dchem.pnet.DirArray;
 
