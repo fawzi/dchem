@@ -57,6 +57,9 @@ class PNetJournal(T):ExplorationObserverI!(T){
     Serializer jSerial;
     const char[] jVersion="PNetJournal v1.0";
     RLock serialLock;
+    string name(){
+        return "PNetJournal_"~context.myFieldName;
+    }
     /// points to explore more ordered by energy (at the moment this is replicated)
     /// this could be either distribued, or limited to a given max size + refill upon request
     MinHeapSync!(PointAndEnergy) toExploreMore;
@@ -192,7 +195,7 @@ class PNetJournal(T):ExplorationObserverI!(T){
     // ExplorationObserverI(T)
     /// informs that a silos did a shutdown with the given speed (0, waits for pending points and calls finishers
     /// less than 0: does not stop, larger than 0 stops immediately (no finishers))
-    void shutdown(SKey s,int speed){}
+    void increaseRunLevel(SKey s,RunLevel rLevel){}
     /// adds energy for a local point and bCasts addEnergyEval
     void addEnergyEvalLocal(SKey s,Point p,Real energy){
         this.serialLock.lock();

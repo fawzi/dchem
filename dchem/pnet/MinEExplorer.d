@@ -5,23 +5,35 @@ import blip.serialization.Serialization;
 import blip.io.BasicIO;
 import blip.io.Console;
 import blip.container.GrowableArray;
+import dchem.Common;
+import blip.container.MinHeap;
+import blip.container.HashSet;
+import dchem.input.WriteOut;
+import blip.math.IEEE;
+import blip.sync.Atomic;
+import blip.util.LocalMem;
+import blip.parallel.mpi.MpiModels;
+import dchem.pnet.EmptyExplorer;
+import dchem.pnet.PointEvalOp;
 
 class MinEExplorerDef:SilosWorkerGen{
-    long nEval;
-    char[] precision;
+    long nEval=long.max;
+    this(){
+    }
     mixin myFieldMixin!();
     mixin(serializeSome("dchem.MinEExplorer",`
-    nEval : number of evaluations to perform`));
-    
+    nEval : number of evaluations to perform (long.max)`));
     bool verify(CharSink s){
         return true;
     }
     
     SilosWorkerI!(Real) silosWorkerReal(){
         auto res=new MinEExplorer!(Real)(this);
+        return res;
     }
     SilosWorkerI!(LowP) silosWorkerLowP(){
         auto res=new MinEExplorer!(LowP)(this);
+        return res;
     }
 }
 
@@ -41,109 +53,177 @@ class MinEExplorerDef:SilosWorkerGen{
 
 /// an object that can offer new points to explore
 /// actually should not inherit from ExplorationObserverI, but this way we avoid multiple inheritance bugs
-class MinEExplorer(T):ExplorerI!(T),SilosWorkerI!(T){
+class MinEExplorer(T):EmptyExplorer!(T){
     /// points to explore more ordered by energy (at the moment this is replicated)
     /// this could be either distribued, or limited to a given max size + refill upon request
     MinHeapSync!(PointAndEnergy) toExploreMore;
     HashSet!(Point) removedPoints;
     void delegate(ExplorerI!(T)) available;
+    LocalSilosI!(T) silos;
+    long leftEval;
+    long availEval;
+    
     MinEExplorerDef input;
     this(MinEExplorerDef input){
         this.input=input;
         this.toExploreMore=new MinHeapSync!(PointAndEnergy)();
         this.removedPoints=new HashSet!(Point);
     }
-    
+
     /// adds energy for a local point and bCasts addEnergyEval
-    void addEnergyEvalLocal(LocalSilosI!(T) silos,Point p,Real energy){
+    override void addEnergyEvalLocal(SKey key,Point p,Real energy){
+        void delegate(ExplorerI!(T)) availableAtt;
         synchronized(this){
             toExploreMore.push(PointAndEnergy(p,energy));
-            if (available!is null){ // protect against false calls?
-                available(this);
-                available=null;
-            }
+            availableAtt=available;
+            available=null;
         }
-    }
-    /// adds gradient value to a point that should be owned. Energy if not NAN replaces the previous value
-    /// sets inProgress to false
-    void addGradEvalLocal(LocalSilosI!(T) silos,Point p,PSysWriter!(T) pSys){
+        if (availableAtt!is null && availEval<leftEval+10){
+            availableAtt(this);
+        }
     }
     /// communicates that the given point is being expored
     /// flags: communicate doubleEval?
-    void publishPoint(SKey owner,Point point,PSysWriter!(T) pos,T pSize,uint flags){
-        if (!isNAN(pos.potentialEnergy)){
-            assert((flags&MainPoint!(T).GFlags.EnergyInfo)=MainPoint!(T).GFlags.EnergyKnown,"non NAN energy, but not EnergyKnown");
-            if ((flags&(MainPoint!(T).GFlags.DoNotExplore|MainPoint!(T).GFlags.FullyExplored))==0){
-                toExploreMore.add(p);
+    override void publishPoint(SKey s,SKey owner,Point point,PSysWriter!(T) pos,T pSize,uint flags){
+        if (silos.hasKey(owner) && !isNaN(pos.potentialEnergy)){
+            assert((flags&GFlags.EnergyInfo)==GFlags.EnergyKnown,"non NAN energy, but not EnergyKnown");
+            if ((flags&(GFlags.DoNotExplore|GFlags.FullyExplored))==0){
+                PointAndEnergy p;
+                p.point=point;
+                p.energy=pos.potentialEnergy;
+                toExploreMore.push(p);
             }
         }
     }
     
-    /// a neighbor point has calculated its energy (and not the gradient)
-    void neighborHasEnergy(Point p,Point[] neighbors,Real energy){ }
-    /// a neighbor point has calculated its gradient (and energy)
-    void neighborHasGradient(Point p,Point[] neighbors, PSysWriter!(T)pSys){ }
-    
-    /// finished exploring the given local point (remove it from the active points), bcasts finishedExploringPoint
-    void finishedExploringPointLocal(LocalSilosI!(T) silos,Point p){
-        rmPoint(p);
-    }
     /// finished exploring the given point (remove it from the active points)
-    void finishedExploringPoint(Point p){
-        rmPoint(p);
+    override void finishedExploringPoint(SKey k,Point p,SKey owner){
+        if (silos.hasKey(owner))
+            rmPoint(p);
     }
     /// drops all calculation/storage connected with the given point, the point will be added with another key
     /// (called upon collisions)
-    void publishCollision(SKey e,Point p){
+    override void publishCollision(SKey e,Point p){
         rmPoint(p);
     }
     
     // ExplorerI(T)
     
-    /// returns a point to evaluate
-    Point pointToEvaluateLocal(SKey k,void delegate(ExplorerI!(T))available){
+    /// if it had an operation to evaluate, is called on all core silos in parallel
+    ReturnFlag nextOp(void delegate(ExplorerI!(T)) available,int req){
         bool availableCalled=false;
+        auto nSilos=silos.nextSilosRank(req);
+        auto leftEvalNow=atomicAdd(leftEval,-1UL);
+        if (leftEvalNow<=0){
+            return ReturnFlag.NoOp; // end this explorer
+        }
+        Point res;
         while(true) {
+            ubyte[512] buf;
+            auto lMem=LocalMem(buf);
             PointAndEnergy pe;
-            if (toExploreMore.popNext(pe)){
-                if (!availableCalled) {
-                    available();
+            auto paraEnv=silos.paraEnv();
+            PointAndEnergy[] lowestPoints=lMem.allocArr!(PointAndEnergy)(paraEnv.dim);
+            int iMin;
+            for (int iter=0;iter<10;++iter){
+                while (toExploreMore.popNext(pe)){
+                    synchronized(this){
+                        if (!removedPoints.contains(pe.point)) break;
+                    }
+                }
+                if (pe.point.isValid){
+                    synchronized(this){
+                        toExploreMore.push(pe);
+                        this.available=null;
+                    }
+                }
+                if (!availableCalled && pe.point.isValid){
+                    if (paraEnv.myRank==0){
+                        available(this); // speculatively give back explorer
+                    }
+                }
+                auto dim=paraEnv.dim();
+                mpiAllGatherT(paraEnv,pe,lowestPoints);
+                if (lowestPoints[0].point.isValid){
                     availableCalled=true;
                 }
-                if (!removedPoints.contains(pe.point)){
-                    auto lowestPoint=silos.createLocalPoint(pe);
-                    auto pDir=lowestPoint.exploreNext();
-                    if (pDir.point.data<=1){
-                        continue;
+                double minE=double.min;
+                iMin=0;
+                foreach(i,pEn;lowestPoints){
+                    if (minE>=pEn.energy && pEn.point.isValid){
+                        minE=pEn.energy;
+                        iMin=i;
                     }
-                    toExploreMore.add(pe);
-                    auto pOld=silos.localPoint(pDir.point);
-                    auto posNew=pOld.createPosInDir(pDir);
-                    newP=silos.newPoint(posNew);
-                    if(pOld.acceptableDir(newP)){
-                        bCast(newP);
-                        return newP;
-                    } else {
-                        drop(newP);
-                    }
-                    //try again
                 }
-            } else {
-                assert(this.available==null || this.available is available,"invalid available value");
-                this.available=available;
-                return Point(1); // needs to wait...
+                if (lowestPoints[iMin].point.isValid) break;
+            }
+            if (!lowestPoints[iMin].point.isValid) {
+                synchronized(this){
+                    if (!availableCalled){
+                        assert(this.available==null || this.available is available,"invalid available value");
+                        this.available=available;
+                        this.availEval=leftEvalNow;
+                    }
+                    lMem.deallocArr(lowestPoints);
+                    return ReturnFlag.SkipOp; // needs to wait...
+                }
+            }
+            pe=lowestPoints[iMin];
+            lMem.deallocArr(lowestPoints);
+            if (!availableCalled) {
+                availableCalled=true;
+                if (paraEnv.myRank==0) available(this); // speculatively call available
+            }
+            PointAndDir pDir;
+            if (iMin==paraEnv.myRank){
+                auto lowestPoint=silos.mainPointL(pe.point);
+                pDir=lowestPoint.exploreNext();
+                if (iMin!=nSilos) {
+                    paraEnv[nSilos].send((cast(ubyte*)&pDir)[0..typeof(pDir).sizeof],req);
+                }
+            }
+            EvalOp!(T) newOp;
+            if (nSilos==paraEnv.myRank){
+                if (iMin!=nSilos) {
+                    auto resT=(cast(ubyte*)&pDir)[0..typeof(pDir).sizeof];
+                    paraEnv[iMin].recv(resT,req);
+                }
+                auto lowestPoint=silos.createLocalPoint(pe.point,ev_time());
+                scope(exit) { lowestPoint.release(); }
+                if (! pDir.point.isValid){ // pe is already fully explored
+                    res=Point(1);
+                } else {
+                    auto pSysNew=lowestPoint.createPosInDir(pDir.dir);
+                    auto newP=silos.newPointAt(pSysNew.dynVars.x);
+                    if(lowestPoint.acceptNewDirection(newP.point,pDir.dir)){
+                        newP=silos.bcastPoint(newP);
+                        res=newP.point;
+                        newOp=new PointEvalOp!(T)(newP.point);
+                        silos.addEvalOp(SKeyVal.Master,newOp);
+                    } else {
+                        newP.drop();
+                        res=Point(1);
+                    }
+                    pSysNew.release();
+                }
+            }
+            mpiBcastT(paraEnv,res,nSilos);
+            if (res.isValid){
+                return ReturnFlag.LocalOp;
+            } else if (iMin==paraEnv.myRank){
+                removedPoints.add(pe.point);
             }
         }
     }
-    /// called when an evaluation fails, flags: attemptRetry/don't Retry
-    void evaluationFailed(Point,uint flags){
+    /// called when an evaluation fails
+    override void evaluationFailed(SKey k,Point p){
         rmPoint(p);
     }
     /// should speculatively calculate the gradient? PNetSilos version calls addEnergyEvalLocal
-    bool speculativeGradient(SKey s,Point p,Real energy){
+    override bool speculativeGradientLocal(Point p,Real energy){
         synchronized(toExploreMore){
             auto l=toExploreMore.length;
-            if (l>0 && heap.data[0].energy>=energy){
+            if (l>0 && toExploreMore.peek.energy>=energy){
                 return true;
             }
         }
@@ -152,9 +232,9 @@ class MinEExplorer(T):ExplorerI!(T),SilosWorkerI!(T){
     void rmPoint(Point p){
         removedPoints.add(p);
     }
-    
-    void workOn(LocalSilosI!(T) silos){
-        silos.addExplorer(this);
+    void workOn(LocalSilosI!(T) s){
+        s.addExplorer(this);
+        this.silos=s;
     }
     
 }

@@ -13,6 +13,7 @@ import dchem.pnet.MainPoint;
 import blip.core.Variant;
 import blip.container.HashMap;
 import blip.sync.UniqueNumber;
+import blip.sync.Atomic;
 import blip.container.MinHeap;
 import blip.container.GrowableArray;
 import blip.container.Set;
@@ -221,42 +222,42 @@ class SilosGen:Sampler{
         auto log=dumper(s);
         bool res=true;
         if (evaluator is null || cast(Method)evaluator.contentObj is null){
-            log("evaluator should be valid and be a Method in field ")(myField)("\n");
+            log("evaluator should be valid and be a Method in field ")(myFieldName)("\n");
             res=false;
         }
-        if (evaluatorTask !is null && cast(RemoteCCTask)evaluator.contentObj is null){
-            log("evaluatorTask if given should be a RemoteCCTask in field ")(myField)("\n");
+        if (evaluatorTask !is null && cast(RemoteCCTask)evaluatorTask.contentObj is null){
+            log("evaluatorTask if given should be a RemoteCCTask in field ")(myFieldName)("\n");
             res=false;
         }
         if (precision!="LowP" && precision!="Real"){
-            log("precision should be either LowP or Real, not '")(precision)("' in field ")(myField)("\n");
+            log("precision should be either LowP or Real, not '")(precision)("' in field ")(myFieldName)("\n");
             res=false;
         }
         foreach(e;explorers){
             auto o=cast(Object)e.content;
             if (cast(ExplorationObserverGen)o is null){
-                log("explorers should be of either explorers or observer, not '")(o.classinfo.toString())("' in field ")(myField)("\n");
+                log("explorers should be of either explorers or observer, not '")(o.classinfo.toString())("' in field ")(myFieldName)("\n");
                 res=false;
             }
         }
         foreach(l;loaders){
             auto o=cast(Object)l.content;
             if (cast(SilosWorkerGen)o is null){
-                log("loaders should be a SilosWorker not '")(o.classinfo.toString())("' in field ")(myField)("\n");
+                log("loaders should be a SilosWorker not '")(o.classinfo.toString())("' in field ")(myFieldName)("\n");
                 res=false;
             }
         }
         foreach(m;monitors){
             auto o=cast(Object)m.content;
             if (cast(SilosWorkerGen)o is null){
-                log("monitors should be a SilosWorker not '")(o.classinfo.toString())("' in field ")(myField)("\n");
+                log("monitors should be a SilosWorker not '")(o.classinfo.toString())("' in field ")(myFieldName)("\n");
                 res=false;
             }
         }
         foreach(f;finishers){
             auto o=cast(Object)f.content;
             if (cast(SilosWorkerGen)o is null){
-                log("finishers should be a SilosWorker not '")(o.classinfo.toString())("' in field ")(myField)("\n");
+                log("finishers should be a SilosWorker not '")(o.classinfo.toString())("' in field ")(myFieldName)("\n");
                 res=false;
             }
         }
@@ -265,7 +266,7 @@ class SilosGen:Sampler{
 
     void run(LinearComm pWorld,CharSink log){
         ulong n;
-        rand(n); // hopefully unique
+        n=rand.uniformR2(cast(ulong)SKeyVal.FirstValid,ulong.max); // hopefully unique
         char[] name=collectAppender(delegate void(CharSink s){
             dumper(s)(baseName)(n);
         });
@@ -426,44 +427,99 @@ class PointBcastProgress(T){
     }
 }
 
-struct PointInProgress{
-    Point point;
-    ev_tstamp start;
-    ev_tstamp last;
-    char[] url;
-    int count;
+class PendingEvals(T) {
+    PNetSilos!(T) silos;
+    HashMap!(char[],EvalOp!(T)) pendingOps;
+    long nPending;
+    WaitCondition waitPending;
+    UniqueNumber!(ulong) nextLocalId;
     
-    equals_t opEquals(ref PointInProgress p){
-        return point==p.point;
+    this(PNetSilos!(T) silos){
+        this.silos=silos;
+        this.pendingOps=new HashMap!(char[],EvalOp!(T))();
+        this.waitPending=new WaitCondition(&this.hasNoPendingOps);
+        this.nextLocalId=UniqueNumber!(ulong)(1);
     }
-    int opCmp(ref PointInProgress p){
-        return point.opCmp(p.point);
+    bool hasNoPendingOps(){
+        return nPending==0;
+    }
+    
+    void addPendingOp(EvalOp!(T) op){
+        auto id=collectAppender(delegate void(CharSink s){
+            dumper(s)(silos._key)("-")(nextLocalId.next());
+        });
+        op.initMaster(id,silos,silos._key);
+        atomicAdd(nPending,1);
+        synchronized(this){
+            pendingOps[op.id]=op;
+        }
+    }
+    
+    void updateEvalStatus(char[] opId,ModifyEvalOp!(T) op,EvalOp!(T).Status newStat){
+        EvalOp!(T) opAtt;
+        synchronized(pendingOps){
+            auto pOp=opId in pendingOps;
+            if (pOp!is null) {
+                opAtt=*pOp;
+            }
+        }
+        bool resubmitted=false;
+        if (opAtt!is null){
+            if (op !is null){
+                op.modifyEvalOp(opAtt);
+            }
+            if (opAtt.updateStatus(newStat) && newStat==EvalOp!(T).Status.Failure){
+                silos.addEvalOp(SKeyVal.Master,opAtt);
+                resubmitted=true;
+            }
+        }
+        switch (newStat){
+            case EvalOp!(T).Status.ToDo:
+                assert(0);
+            case EvalOp!(T).Status.InProgress:
+                break;
+            case EvalOp!(T).Status.Failure:
+            case EvalOp!(T).Status.Success:
+                if (opAtt && !resubmitted){
+                    synchronized(pendingOps){
+                        pendingOps.removeKey(opId);
+                    }
+                    atomicAdd(nPending,-1);
+                    if (silos.paraEnv.myRank!=0){
+                        silos.updateEvalStatus(SKeyVal.Master,opId,null,newStat);
+                    }
+                    silos.waitPendingEnd.checkCondition();
+                } else if (silos.paraEnv.myRank==0){
+                    atomicAdd(nPending,-1);
+                    silos.waitPendingEnd.checkCondition();
+                }
+                break;
+            default:
+                assert(0);
+        }
     }
 }
 
 class PNetSilos(T): LocalSilosI!(T){
-    enum RunLevel:int{
-        Setup,
-        Running,
-        WaitPending,
-        Stopping,
-        Stopped
-    }
     RunLevel runLevel;
     SilosGen input;
     UniqueNumber!(ulong) nextLocalId;
     UniqueNumber!(ulong) nextPntNr;
-    char[] nameId;
+    UniqueNumber!(uint)  nextTag;
+    string nameId;
     SKey _key;
-    bool hasKey(SKey k){ return _key==k||k==SKeyVal.Any; }
+    bool hasKey(SKey k){ return _key==k||k==SKeyVal.Any||(k==SKeyVal.Master && paraEnv.myRank==0); }
     HashMap!(SKey,PNetSilosI!(T)) silos; // contains self
     MinHeapSync!(LoadStats) loads; 
     BatchedGrowableArray!(Point,batchSize) localPointsKeys; // indexes for local owned points
     HashMap!(Point,SKey) owner;
     HashMap!(Point,CachedPoint!(T)) localCache;
     HashMap!(Point,PointBcastProgress!(T)) publishingPoints;
-    HashMap!(Point,PointInProgress) pointsInProgress;
+    PendingEvals!(T) pendingEvals;
     DenseLocalPointArray!(MainPointI!(T)) localPoints; /// local points (position,...)
+    string name(){
+        return nameId;
+    }
     /// random number generator
     RandomSync rand(){ return _rand; }
     RandomSync _rand;
@@ -480,11 +536,12 @@ class PNetSilos(T): LocalSilosI!(T){
     }
     NotificationCenter _nCenter;
     /// explorers
-    Deque!(ExplorerI!(T)) explorers;
-    Deque!(ExplorerI!(T)) activeExplorers;
+    HashMap!(char[],ExplorerI!(T)) explorers;
+    Deque!(char[]) activeExplorers;
     WaitCondition waitExplorers;
-    WaitCondition waitPendingPoint;
-    
+    WaitCondition waitPendingEnd;
+    Deque!(EvalOp!(T)) localOps;
+    long nPendingOps;
     /// parallel enviroment of silos
     LinearComm silosParaEnv;
     /// observers
@@ -497,6 +554,7 @@ class PNetSilos(T): LocalSilosI!(T){
     Deque!(SilosWorkerI!(T)) monitors;
     Deque!(SilosWorkerI!(T)) finishers;
     long nEvals;
+    SKey[] sKeys; /// keys of the various core silos (index is their rank)
     
     MainPoint!(T)allocPoint(PoolI!(MainPoint!(T))p){
         return new MainPoint!(T)(this,p);
@@ -532,8 +590,10 @@ class PNetSilos(T): LocalSilosI!(T){
     bool speculativeGradient(SKey s,Point p,Real energy){
         bool res=false;
         int i=0;
-        foreach(e;explorers){
-            res=res || e.speculativeGradientLocal(p,energy);
+        synchronized(explorers){
+            foreach(k,e;explorers){
+                res=res || e.speculativeGradientLocal(p,energy);
+            }
         }
         struct EAdd{
             void delegate(SKey,Point,Real) op;
@@ -572,19 +632,12 @@ class PNetSilos(T): LocalSilosI!(T){
         });
     }
     
-    /// returns true if the evaluation of the given point is in progress. Works only master/owner...?
-    bool isInProgress(Point p){
-        bool res=false;
-        synchronized(pointsInProgress){
-            res=(p in pointsInProgress)!is null;
-        }
-        return res;
-    }
-    bool hasNoPointInProgress(){
+    bool isAtPendingEnd(){
         bool res=false,checkPending=false;
-        synchronized(pointsInProgress){
-            if ((pointsInProgress.size==0 && runLevel>RunLevel.Running) || runLevel>RunLevel.WaitPending){
-                if (runLevel==RunLevel.WaitPending) {
+        synchronized(pendingEvals){
+            volatile bool hasOps=pendingEvals.hasNoPendingOps;
+            if ((hasOps && runLevel>RunLevel.Running) || runLevel>RunLevel.WaitPending){
+                if (runLevel==RunLevel.WaitPending && paraEnv.myRank==0) {
                     checkPending=true;
                     runLevel=RunLevel.Stopping;
                 }
@@ -592,11 +645,11 @@ class PNetSilos(T): LocalSilosI!(T){
             }
         }
         if (checkPending){
-            waitPendingPoint.checkCondition();
+            waitPendingEnd.checkCondition();
         }
         return res;
     }
-    mixin(serializeSome("dchem.MinEExplorer_"~T.stringof,``));
+    mixin(descSome("dchem.PNetSilos_"~T.stringof,`_key|runLevel|nextLocalId|nextPntNr|nameId`));
     mixin printOut!();
     
     void startAskers(){
@@ -619,9 +672,12 @@ class PNetSilos(T): LocalSilosI!(T){
         pEnv.barrier();
         silosParaEnv=pEnv;
         evaluator.setup(pEnv,log);
+        CalculationContext cInstance;
+        if (_refPos is null || _constraints is null){
+            cInstance=evaluator.getCalculator(true,[]);
+        }
         // setup refPos
         if (_refPos is null){
-            CalculationContext cInstance=evaluator.getCalculator(true,[]);
             switch(cInstance.activePrecision()){
             case Precision.Real:
                 _refPos=cInstance.refPSysReal.dupT!(T)(PSDupLevel.All);
@@ -632,26 +688,47 @@ class PNetSilos(T): LocalSilosI!(T){
             default:
                 assert(0,"unknown activePrecision");
             }
-            auto cGen=cInstance.constraintGen;
-            _constraints=constraintT!(T)(cGen,_refPos);
         }
-        if (_constraints is null) _constraints=new NoConstraint!(T)();
-        
+        if (_constraints is null){
+            auto cGen=cInstance.constraintGen;
+            if (cGen is null) {
+                _constraints=new NoConstraint!(T)();
+            } else {
+                _constraints=constraintT!(T)(cGen,_refPos);
+            }
+        }
         // run the loaders
         foreach(sw;loaders){
             sw.workOn(this);
         }
         runLevel=RunLevel.Running;
+        if (explorers.length==0){
+            log("no explorers, stopping (to avoid this add a dchem.WaitExplorer)\n");
+            increaseRunLevel(SKeyVal.All,RunLevel.WaitPending);
+        }
         pEnv.barrier();
-        
+        sKeys=new SKey[](pEnv.dim);
+        mpiAllGatherT(pEnv,_key,sKeys);
+        if (sKeys.length>1){
+            auto sortedK=sKeys.dup;
+            sort(sortedK);
+            foreach(i,v;sortedK[1..$]){
+                if (sortedK[i]==v){
+                    throw new Exception("key collision",__FILE__,__LINE__);
+                }
+            }
+        }
         /// start the askers
         Task("startAskers",&startAskers).autorelease.submitYield();
     }
     void run(LinearComm pEnv, CharSink log){
         start(pEnv,log);
-        waitPendingPoint.wait();
+        waitPendingEnd.wait();
+        if (paraEnv.myRank==0){
+            increaseRunLevel(SKeyVal.All,RunLevel.Stopping);
+        }
         pEnv.barrier();
-        synchronized(pointsInProgress){
+        synchronized(pendingEvals){
             if (runLevel>RunLevel.Stopping) return;
             runLevel=RunLevel.Stopping;
         }
@@ -663,110 +740,126 @@ class PNetSilos(T): LocalSilosI!(T){
         runLevel=RunLevel.Stopped;
     }
     
-    bool nextExplorer(ref ExplorerI!(T) res){
-        synchronized(explorers){
-            if (activeExplorers.popFront(res)){
-                explorers.append(res);
-            } else {
-                res=null;
-            }
-        }
-        return res!is null;
-    }
-    
-    void addBackExplorer(ExplorerI!(T)e)
+    void activateExplorer(SKey key,char[] name)
     in{
-        foreach(expl;activeExplorers){
-            assert(expl!is e);
+        synchronized(explorers){
+            assert(name in explorers);
         }
-        bool found=false;
-        foreach(expl;explorers){
-            if (expl is e){
-                found=true;
-            }
-        }
-        assert(found);
     } body {
-        activeExplorers.pushBack(e);
-        waitExplorers.checkCondition();
-    }
-    
-    void addPointInProgress(Point p){
-        PointInProgress pp;
-        pp.point=p;
-        pp.start=noToutWatcher.now();
-        pp.last=pp.start;
-        pp.count=1;
-        synchronized(pointsInProgress){
-            auto oldP=p in pointsInProgress;
-            if (oldP!is null){
-                oldP.count=oldP.count+1;
-                oldP.last=noToutWatcher.now();
+        if (hasKey(key)){
+            if (_key!=sKeys[0]) throw new Exception("unexpected sKey in activateExplorer",__FILE__,__LINE__);
+            foreach(expl;activeExplorers){
+                if (expl == name) return;
+            }
+            if (paraEnv.myRank==0){
+                activeExplorers.pushBack(name);
+                waitExplorers.checkCondition();
             } else {
-                pointsInProgress[p]=pp;
+                activateExplorer(SKeyVal.Master,name);
             }
+        } else {
+            silosForKey(key).activateExplorer(key,name);
         }
     }
-    
-    void rmPointInProgress(Point p){
-        synchronized(pointsInProgress){
-            auto oldP=p in pointsInProgress;
-            if (oldP!is null){
-                if (oldP.count==1) {
-                    pointsInProgress.removeKey(p);
-                } else {
-                    assert(oldP.count>0);
-                    --oldP.count;
-                }
-            }
-        }
-        waitPendingPoint.checkCondition();
+    void addBackExplorer(ExplorerI!(T) e){
+        activateExplorer(SKeyVal.Master,e.name);
     }
-    
-    /// returns the next point to evaluate
-    Point pointToEvaluate(SKey s){
+    /// updates a pending operation status, should remove the operation when finished
+    void updateEvalStatus(SKey owner,char[] opId,ModifyEvalOp!(T) op,EvalOp!(T).Status newStat){
+        if (hasKey(owner)){
+            pendingEvals.updateEvalStatus(opId,op,newStat);
+        }
+    }
+    void addEvalOp(SKey s,EvalOp!(T)op){
+        if (hasKey(s)){
+            localOps.pushBack(op);
+        } else {
+            silosForKey(s).addEvalOp(s,op);
+        }
+    }
+    /// this should be called by the master process sending it to SKey.All
+    /// to receive a new operation to do
+    void prepareNextOp(SKey s, int tag){
         if (s==SKeyVal.All){
-            foreach(sK,sL;silos){
-                sL.pointToEvaluate(sK);
+            foreach (sK,sL;silos){
+                sL.prepareNextOp(sK,tag);
             }
         } else if (hasKey(s)){
-            synchronized(this){
-                if (runLevel>=RunLevel.Running) return Point(0);
-                if (nEvals>=input.explorationSteps) {
-                    runLevel=RunLevel.WaitPending;
-                    waitPendingPoint.checkCondition();
-                    return Point(0);
-                }
-                ++nEvals;
-            }
             ExplorerI!(T) e;
-            for (int i=0;i<input.maxExplorationTries;++i){
-                if (activeExplorers.popFront(e)){
-                    auto res=e.pointToEvaluateLocal(&this.addBackExplorer);
-                    if (res.isValid) {
-                        addPointInProgress(res);
-                        return res;
+            loop:for (int i=0;i<input.maxExplorationTries;++i){
+                char[] explName;
+                if (paraEnv.myRank==0 && (!activeExplorers.popFront(explName))){
+                    for (int j=0;j<10;++j){
+                        waitExplorers.wait();// to do: should have a timeout
+                        if (activeExplorers.popFront(explName)) break;
                     }
-                    if (res.data==0){
-                        explorers.filterInPlace(delegate bool(ExplorerI!(T) expl){ return expl !is e; });
-                    }
-                } else if (explorers.length==0){
-                    return Point(0);
                 }
-                waitExplorers.wait();// to do: should have a timeout
+                mpiBcastT(paraEnv,explName,0,tag);
+                if (explName.length>0){
+                    synchronized(explorers){
+                        e=explorers[explName];
+                    }
+                    auto res=e.nextOp(&this.addBackExplorer,tag);
+                    switch(res){
+                    case ExplorerI!(T).ReturnFlag.NoOp:
+                        // remove explorer
+                        activeExplorers.filterInPlace(/+scope+/ delegate bool(cstring s){
+                            return s==explName;
+                        });
+                        paraEnv.barrier();
+                        explorers.removeKey(explName); // this forces explorers to return null only when there are no pending ops...
+                        break loop;
+                    case ExplorerI!(T).ReturnFlag.SkipOp:
+                        if (paraEnv.myRank==0){
+                            auto emptyOp=new EvalOp!(T)();
+                            registerPendingOp(emptyOp);
+                            localOps.pushBack(emptyOp);
+                        }
+                        break loop;
+                    case ExplorerI!(T).ReturnFlag.LocalOp:
+                        assert(paraEnv.myRank!=0);
+                        if (paraEnv.myRank==0){
+                            atomicAdd(pendingEvals.nPending,1);
+                        }
+                        break loop;
+                    default:
+                        assert(0);
+                    }
+                }
+                if (explorers.length==0) break loop;
             }
             if (explorers.length==0){
-                synchronized(pointsInProgress){
-                    if (runLevel==RunLevel.Running) {
-                        runLevel=RunLevel.WaitPending;
-                    }
-                }
-                waitPendingPoint.checkCondition();
-                return Point(0);
+                increaseRunLevel(SKeyVal.Any,RunLevel.WaitPending);
             }
-            return Point(1);
         } else {
-            return silosForKey(s).pointToEvaluate(s);
+            silosForKey(s).prepareNextOp(s,tag);
+        }
+    }
+    /// this should be sent only to the master, and will return a new operation to do
+    /// returns an EmptyOp if there is no work
+    EvalOp!(T) getNextOp(SKey s){
+        if (hasKey(s)){
+            assert(hasKey(SKeyVal.Master),"works only on master");
+            assert((cast(int)paraEnv.maxTagMask)>0);
+            EvalOp!(T) res;
+            while (!localOps.popFront(res)){
+                int tag;
+                do {
+                    tag=cast(int)(nextTag.next & paraEnv.maxTagMask);
+                } while (tag==0)
+                synchronized(this){
+                    if (runLevel>=RunLevel.Running) return null;
+                    if (nEvals>=input.explorationSteps) {
+                        runLevel=RunLevel.WaitPending;
+                        waitPendingEnd.checkCondition();
+                        return null;
+                    }
+                    ++nEvals;
+                }
+            }
+            return res;
+        } else {
+            return silosForKey(s).getNextOp(s);
         }
     }
     /// called when an evaluation fails, flags: attemptRetry/don't Retry
@@ -792,6 +885,25 @@ class PNetSilos(T): LocalSilosI!(T){
             return silosForKey(s).nextFreeSilos(s);
         }
     }
+    
+    int nextSilosRank(int tag){
+        ubyte[256] buf;
+        auto lMem=LocalMem(buf);
+        double myLoad=load(SKeyVal.Any);
+        double[] resLoad=lMem.allocArr!(double)(paraEnv.dim);
+        mpiAllGatherT(paraEnv,myLoad,resLoad,tag);
+        double minLoad=double.min;
+        int iVal=0;
+        foreach(i,lAtt;resLoad){
+            if (minLoad>lAtt){
+                minLoad=lAtt;
+                iVal=i;
+            }
+        }
+        lMem.deallocArr(resLoad);
+        return iVal;
+    }
+    
     void stop(){
         synchronized(this){
             explorers.clear; // drops all explorers
@@ -982,34 +1094,29 @@ class PNetSilos(T): LocalSilosI!(T){
             silosForKey(s).didLocalPublish(s,p0,source);
         }
     }
-    /// stops all silos (at the moment there is no support for dynamic adding/removal of silos, worth adding???)
-    void shutdown(SKey s,int speed){
+    /// increases the runLevel on all silos, i.e. you should call it only with SKeyVal.All
+    /// (at the moment there is no support for dynamic adding/removal of silos)
+    void increaseRunLevel(SKey s,RunLevel newRunLevel){
         if (s==SKeyVal.All){
             foreach(sK,sL;silos){
-                sL.shutdown(sK,speed);
+                sL.increaseRunLevel(sK,newRunLevel);
             }
         } else if (hasKey(s)){
-            bool shouldStop=false;
+            bool runLevelChanged=false;
             synchronized(this){
-                if (runLevel<RunLevel.Stopped){
-                    if (speed<0){
-                        return; // don't stop
-                    } else if (speed==0){
-                        runLevel=RunLevel.WaitPending;
-                    } else {
-                        runLevel=RunLevel.Stopped;
-                    }
-                    shouldStop=true;
+                if (runLevel<newRunLevel){
+                    runLevel=newRunLevel;
+                    runLevelChanged=true;
                 }
             }
-            if (shouldStop){ // square b-cast, change??
-                waitPendingPoint.checkCondition();
+            if (runLevelChanged){ // square b-cast, change??
+                waitPendingEnd.checkCondition();
                 notifyLocalObservers(delegate void(ExplorationObserverI!(T)obs){
-                    obs.shutdown(s,speed);
+                    obs.increaseRunLevel(s,newRunLevel);
                 });
             }
         } else {
-            silosForKey(s).shutdown(s,speed);
+            assert(0,"should be called only with SKeyVal.All");
         }
     }
 
@@ -1153,16 +1260,24 @@ class PNetSilos(T): LocalSilosI!(T){
     }
     /// adds an extra explorer that can generate new points
     void addExplorer(ExplorerI!(T)o){
-        explorers.append(o);
+        synchronized(explorers){
+            explorers[o.name]=o;
+        }
     }
     /// removes the given explorer
-    void rmExplorer(ExplorerI!(T)o){
-        explorers.filterInPlace(delegate bool(ExplorerI!(T) i){ return i!is o; });
+    void rmExplorerNamed(char[] name){
+        synchronized(explorers){
+            explorers.removeKey(name);
+        }
     }
     void notifyLocalObservers(void delegate(ExplorationObserverI!(T))op){
         foreach(obs;observers){
             op(obs);
         }
+    }
+    /// linear communicator (valid only inside the real silos, not in the clients)
+    LinearComm paraEnv(){
+        return silosParaEnv;
     }
     SKey pointOwner(SKey s,Point p){
         if (hasKey(s)){
@@ -1181,6 +1296,7 @@ class PNetSilos(T): LocalSilosI!(T){
         if (k==SKeyVal.Invalid||k==SKeyVal.All){
             throw new Exception(((k==SKeyVal.Invalid)?"invalid SKey"[]:"broadcast key not acceptable in this context"[]),__FILE__,__LINE__);
         }
+        if (k==SKeyVal.Master) k=sKeys[0];
         if (hasKey(k)) return this;
         return silos[k];
     }
@@ -1233,6 +1349,10 @@ class PNetSilos(T): LocalSilosI!(T){
             localCache.removeKey(p.point);
         }
     }
+    /// registers a pending operation (sets id,...)
+    void registerPendingOp(EvalOp!(T)op){
+        pendingEvals.addPendingOp(op);
+    }
     mixin(rpcMixin("dchem.PNetSilos!("~T.stringof~")", "PNetSilosI!("~T.stringof~")",silosMethodsStr));
     DefaultVendor mainVendor;
     char[] silosCoreUrl(){
@@ -1241,6 +1361,7 @@ class PNetSilos(T): LocalSilosI!(T){
     this(SilosGen sGen,char[] nameId,SKey key,ParticleSys!(T) refPos=null,ConstraintI!(T) constraints=null,
         CharSink log=sout.call,NotificationCenter _nCenter=null,PoolI!(MainPoint!(T)) pPool=null){
         this.input=sGen;
+        assert(this.input!is null);
         this.runLevel=RunLevel.Setup;
         this.nextLocalId=UniqueNumber!(ulong)(1);
         this.nextPntNr=UniqueNumber!(ulong)(3);
@@ -1253,7 +1374,9 @@ class PNetSilos(T): LocalSilosI!(T){
         this.localPointsKeys=new BatchedGrowableArray!(Point,batchSize)();
         this.owner=new HashMap!(Point,SKey)();
         this.localCache=new HashMap!(Point,CachedPoint!(T))();
-        this.pointsInProgress=new HashMap!(Point,PointInProgress)();
+        this.pendingEvals=new PendingEvals!(T)(this);
+        this.localOps=new Deque!(EvalOp!(T))();
+        this.nPendingOps=0;
         this.localPoints=new DenseLocalPointArray!(MainPointI!(T))(); /// local points (position,...)
         this._rand=new RandomSync();
         this._refPos=refPos;
@@ -1261,7 +1384,7 @@ class PNetSilos(T): LocalSilosI!(T){
         this.log=log;
         this._nCenter=nCenter;
         if (nCenter is null) this._nCenter=new NotificationCenter();
-        this.explorers=new Deque!(ExplorerI!(T))();
+        this.explorers=new HashMap!(char[],ExplorerI!(T))();
         this.observers=new Deque!(ExplorationObserverI!(T))();
         this.evaluator=cast(Method)this.input.evaluator.contentObj;
         if (this.input.evaluatorTask!is null) {
@@ -1278,15 +1401,18 @@ class PNetSilos(T): LocalSilosI!(T){
             auto o=e.contentObj;
             if (cast(ExplorerGen)o !is null){
                 auto expl=explorerT!(T)(cast(ExplorerGen)o,this);
-                explorers.append(expl);
+                explorers[expl.name]=expl;
                 observers.append(expl);
             } else {
                 observers.append(observerT!(T)(cast(ExplorationObserverGen)o,this));
             }
         }
-        this.activeExplorers=activeExplorers.dup();
+        this.activeExplorers=new Deque!(string)();
+        foreach (k,e;explorers){
+            this.activeExplorers.pushBack(k);
+        }
         this.waitExplorers=new WaitCondition(&this.hasActiveExpl);
-        this.waitPendingPoint=new WaitCondition(&this.hasNoPointInProgress);
+        this.waitPendingEnd=new WaitCondition(&this.isAtPendingEnd);
         this.loaders=new Deque!(SilosWorkerI!(T))();
         this.monitors=new Deque!(SilosWorkerI!(T))();
         this.finishers=new Deque!(SilosWorkerI!(T))();

@@ -5,6 +5,7 @@ public import blip.narray.NArray: index_type;
 import blip.omg.core.LinearAlgebra;
 public import blip.omg.core.Algebra: scalar,cscalar;
 public import blip.omg.core.LinearAlgebra:Vector,Quaternion,Matrix;
+public import blip.Comp;
 
 alias real   HighP;
 alias double Real;

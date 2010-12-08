@@ -26,6 +26,7 @@ import dchem.pnet.MainPoint;
 import blip.io.EventWatcher;
 import blip.container.HashMap;
 import blip.container.GrowableArray;
+import blip.parallel.mpi.MpiModels;
 
 /// help structure 
 struct CachedPoint(T){
@@ -42,7 +43,7 @@ class PNetSilosClientGen:InputElement {
     ownerCacheSize: amount of points whose owner is cached (10)`));
     mixin printOut!();
     mixin myFieldMixin!();
-    
+    this(){ }
     this(char[] connectionUrl,long ownerCacheSize=10){
         this.connectionUrl=connectionUrl;
         this.ownerCacheSize=ownerCacheSize;
@@ -135,11 +136,28 @@ class PNetSilosClient(T): LocalSilosI!(T){
     }
     // ExplorationObserverI
     
+    string name(){
+        return "PNetSilosClient_"~input.myFieldName;
+    }
+    /// updates a pending operation status, should remove the operation when finished
+    void updateEvalStatus(SKey owner,char[] opId, ModifyEvalOp!(T) op,EvalOp!(T).Status newStat){
+        connection.updateEvalStatus(owner,opId,op,newStat);
+    }
+    /// this should be called by the master process sending it to SKey.All
+    /// to receive a new operation to do
+    void prepareNextOp(SKey s, int tag){
+        connection.prepareNextOp(s,tag);
+    }
+    /// inserts an operation to execute into the server (target should be SKeyVal.Master)
+    void addEvalOp(SKey s,EvalOp!(T)op){
+        connection.addEvalOp(s,op);
+    }
     /// stops a silos
     /// at the moment there is no support for dynamic adding/removal of silos, (worth adding???)
     /// so s should be only SKeyVal.All
-    void shutdown(SKey s,int speed){
-        connection.shutdown(s,speed);
+    void increaseRunLevel(SKey s,RunLevel level){
+        if (s!= SKeyVal.All) throw new Exception("should be called only with SKeyVal.All");
+        connection.increaseRunLevel(s,level);
     }
     /// adds energy for a point local to s and bCasts addEnergyEval
     void addEnergyEvalLocal(SKey s,Point p,Real energy){
@@ -187,9 +205,9 @@ class PNetSilosClient(T): LocalSilosI!(T){
     // these method are not public/remote
     // ExplorerI(T)
     
-    /// returns a point to evaluate
-    Point pointToEvaluate(SKey s){
-        return connection.pointToEvaluate(s);
+    /// returns the next operation to execute
+    EvalOp!(T) getNextOp(SKey s){
+        return connection.getNextOp(s);
     }
     /// called when an evaluation fails, flags: attemptRetry/don't Retry
     void evaluationFailed(SKey s,Point p){
@@ -233,6 +251,12 @@ class PNetSilosClient(T): LocalSilosI!(T){
     /// the next free silos (for storage)
     SKey nextFreeSilos(SKey s){
         return connection.nextFreeSilos(s);
+    }
+    int nextSilosRank(int tag){
+        assert(0,"implemented only in core silos");
+    }
+    void activateExplorer(SKey key,char[] name){
+        return connection.activateExplorer(key,name);
     }
 
     /// tells the local points neighs that they have p0 as neighbor
@@ -323,14 +347,17 @@ class PNetSilosClient(T): LocalSilosI!(T){
         throw new Exception("addition of explorers not supported",__FILE__,__LINE__);
     }
     /// removes the given explorer
-    void rmExplorer(ExplorerI!(T)o){
+    void rmExplorerNamed(char[]){
         throw new Exception("removal of explorers not supported",__FILE__,__LINE__);
     }
     /// notify observers, the operation should not raise (or the whole program stops)
     void notifyLocalObservers(void delegate(ExplorationObserverI!(T))n){
         // no local observers
     }
-    
+    /// linear communicator (valid only inside the real silos, not in the clients)
+    LinearComm paraEnv(){
+        return null;
+    }
     /// reference position, this should be used just to create other ParticleSystem, never directly
     ParticleSys!(T) refPos(){
         return _refPos;
@@ -398,6 +425,10 @@ class PNetSilosClient(T): LocalSilosI!(T){
         synchronized(localCache){
             localCache.removeKey(p.point);
         }
+    }
+    /// registers a pending operation (sets id,...)
+    void registerPendingOp(EvalOp!(T)op){
+        assert(0,"no pending ops in silos client");
     }
 
     /// an url that can be used to contact the silos core

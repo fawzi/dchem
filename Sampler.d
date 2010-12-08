@@ -15,6 +15,8 @@ import dchem.sampler.AllSamplers;
 import blip.io.EventWatcher;
 import blip.parallel.rpc.Rpc;
 import blip.parallel.mpi.Mpi;
+import dchem.pnet.WorkAsker;
+import blip.stdc.stdlib:exit;
 
 int main(char[][]args){
     ProtocolHandler.defaultProtocol.startServer(false); // starting the rpc server...
@@ -25,7 +27,11 @@ int main(char[][]args){
     auto parser=new TextParser!(char)(toReaderT!(char)((new DataFileInput(args[1])).file.input));
     SegmentedArray!(real) sArr;
     auto rFile=new RootInput();
-    rFile.readInput(parser,serr.call);
+    auto inputOk=rFile.readInput(parser,serr.call);
+    if (!inputOk){
+        sout("error while reading input!\n");
+        exit(1);
+    }
     auto mainInp="main" in rFile.knownNames;
     if (mainInp is null){
         sout("did not find 'main' in the input fields, nothing to do, stopping\n");
@@ -40,5 +46,6 @@ int main(char[][]args){
         }
     }
     noToutWatcher.stopLoop();
+    exit(0);
     return 0;
 }

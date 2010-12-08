@@ -40,7 +40,7 @@ class WorkAskerGen:RemoteCCTask,Sampler {
         bool res=true;
         auto log=dumper(s);
         if (precision!="LowP" && precision!="Real"){
-            log("precision should be either LowP or Real, not '")(precision)("' in field ")(myField)("\n");
+            log("precision should be either LowP or Real, not '")(precision)("' in field ")(myFieldName)("\n");
             res=false;
         }
         if (maxDuration<=0){
@@ -55,8 +55,8 @@ class WorkAskerGen:RemoteCCTask,Sampler {
             dumper(s)("maxEval should be larger than 0 in field ")(myFieldName)("\n");
             res=false;
         }
-        if (evaluator is null || (cast(Method)evaluator.contentObj)is null){
-            dumper(s)("evaluator should be valid and of type Method in field")(myFieldName)("\n");
+        if (evaluator !is null && (cast(Method)evaluator.contentObj)is null){
+            dumper(s)("evaluator if given should be of type Method in field ")(myFieldName)("\n");
             res=false;
         }
         return res;
@@ -197,41 +197,18 @@ class WorkAsker(T){
                 });
             }
             while(leftEvals>0 && timeEnd>ev_time() && status==Status.Running){
-                auto p=silos.pointToEvaluate(SKeyVal.All);
-                version(TrackWorkAsker) {
-                    sinkTogether(sout,delegate void(CharSink s){
-                        dumper(s)(this)(" should eval point ")(p)("\n");
-                    });
-                }
-                if (p.data == 0){
-                    break;
-                }
-                if (p.data == 1){
-                    if (maxWait<0) break;
-                    --maxWait;
-                    continue;
-                } else {
-                    maxWait=input.maxWait;
-                }
-                auto time=ev_time();
-                try{
-                    auto localP=silos.createLocalPoint(p,time);
-                    if (localP.evalWithContext(ctx)){
-                        version(TrackWorkAsker) {
-                            sinkTogether(sout,delegate void(CharSink s){
-                                dumper(s)(this)(" did eval point ")(p)("\n");
-                            });
-                        }
-                        --leftEvals;
-                    } else {
-                        version(TrackWorkAsker) {
-                            sinkTogether(sout,delegate void(CharSink s){
-                                dumper(s)(this)(" did *not* eval point ")(p)("\n");
-                            });
-                        }
+                auto newOp=silos.getNextOp(SKeyVal.Master);
+                if (newOp!is null){
+                    newOp.initOp(ctx,silos);
+                    version(TrackWorkAsker) {
+                        sinkTogether(sout,delegate void(CharSink s){
+                            dumper(s)(this)(" should eval ")(newOp)("\n");
+                        });
                     }
-                } catch (Exception e){
-                    silos.evaluationFailed(SKeyVal.All,p);
+                    --leftEvals;
+                    newOp.doOp();
+                } else {
+                    break;
                 }
             }
         } catch(Exception e){

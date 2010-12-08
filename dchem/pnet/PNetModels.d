@@ -21,6 +21,8 @@ import blip.math.random.Random;
 import blip.container.Cache;
 import blip.container.Pool;
 import blip.io.EventWatcher: ev_tstamp,ev_time;
+import blip.parallel.mpi.MpiModels;
+import blip.io.EventWatcher;
 
 /// unique key for a point, dimensions might change
 /// key might have some special values,
@@ -65,6 +67,9 @@ struct Point{
     }
     int opCmp(Point p2){
         return ((data>p2.data)?1:((data==p2.data)?0:-1));
+    }
+    static enum:bool{
+        isSimpleData=true
     }
 }
 
@@ -133,6 +138,9 @@ struct PointAndDir{
     int opCmp(PointAndDir p2){
         return ((data>p2.data)?1:((data==p2.data)?0:-1));
     }
+    static enum:bool{
+        isSimpleData=true
+    }
 }
 
 /// a structure to keep point and its energy together
@@ -143,6 +151,9 @@ struct PointAndEnergy{
     mixin printOut!();
     int opCmp(PointAndEnergy p2){
         return ((energy<p2.energy)?-1:((energy>p2.energy)?1:point.opCmp(p2.point)));
+    }
+    static enum:bool{
+        isSimpleData=true
     }
 }
 
@@ -539,7 +550,9 @@ alias ulong SKey; /// silos key
 enum SKeyVal:SKey{
     Invalid=0,
     Any=1,
-    All=2
+    All=2,
+    Master=3,
+    FirstValid=4,
 }
 
 /// calls that make an exploration progress, and correspond to notifications that are called.
@@ -548,10 +561,16 @@ enum SKeyVal:SKey{
 /// for redundancy/load balancing in the future. This approach make it easy to hide a complex
 /// parallel network behind a single connection.
 interface ExplorationObserverI(T){
-    /// stops a silos
-    /// at the moment there is no support for dynamic adding/removal of silos, (worth adding???)
-    /// so s should be only SKeyVal.All
-    void shutdown(SKey s,int speed);
+    enum RunLevel:int{
+        Setup,
+        Running,
+        WaitPending,
+        Stopping,
+        Stopped
+    }
+    /// increases the runLevel on all silos, i.e. you should call it only with SKeyVal.All
+    /// (at the moment there is no support for dynamic adding/removal of silos)
+    void increaseRunLevel(SKey s,RunLevel speed);
     /// adds energy for a point local to s and bCasts addEnergyEval
     void addEnergyEvalLocal(SKey s,Point p,Real energy);
     /// adds gradient value to a point that should be owned by s. Energy if not NAN replaces the previous value
@@ -576,18 +595,95 @@ interface ExplorationObserverI(T){
     /// drops all calculation/storage connected with the given point, the point will be added with another key
     /// (called upon collisions)
     void publishCollision(SKey,Point);
+    /// unique name to identify this observer (the different processes should use the same name)
+    char[] name();
+}
+
+/// an operation on a context and SilosConnection
+class EvalOp(T):Serializable{
+    enum Status{
+        ToDo,
+        InProgress,
+        Failure,
+        Success,
+    }
+    char[] id;
+    SKey owner;
+    ev_tstamp started;
+    ev_tstamp lastUpdate;
+    int attempts;
+    Status status;
+    
+    LocalCalculationContext ctx;
+    LocalSilosI!(T) silos;
+    char[][] executersUrl;
+    enum{ maxAttempts=5 }
+    
+    /// initialize a pending op
+    void initMaster(char[] id,LocalSilosI!(T) silos, SKey owner,Status status=Status.InProgress){
+        this.id=id;
+        this.silos=silos;
+        this.owner=owner;
+        this.started=ev_time();
+        this.lastUpdate=this.started;
+        this.attempts=0;
+        this.status=status;
+    }
+    this(){}
+    /// initializes the operation (called after an unserialization...)
+    void initOp(LocalCalculationContext ctx,LocalSilosI!(T) silos){
+        this.ctx=ctx;
+        this.silos=silos;
+        synchronized(this){
+            if (this.status<Status.InProgress)
+                this.status=Status.InProgress;
+        }
+    }
+    /// performs the operation
+    void doOp(){
+        updateStatus(Status.Success);
+        noToutWatcher.sleepTask(1.0);
+        silos.updateEvalStatus(owner,id,null,Status.Success);
+    }
+    /// tries to stop the operation early
+    void stopOp(){ }
+    /// update the status
+    bool updateStatus(Status status){
+        synchronized(this){
+            if (status==Status.Failure){
+                ++attempts;
+            }
+            if (status>=this.status){
+                this.status=status;
+            }
+        }
+        return (attempts<=maxAttempts);
+    }
+    
+    mixin(serializeSome("EvalOp!("~T.stringof~")",`id|owner|started|attempts|status`));
+    mixin printOut!();
+}
+
+interface ModifyEvalOp(T):Serializable{
+    void modifyEvalOp(EvalOp!(T)op);
 }
 
 /// an object that can offer new points to explore
 /// actually should not inherit from ExplorationObserverI, but this way we avoid multiple inheritance bugs
 /// these method are *not* public/remote
 interface ExplorerI(T):ExplorationObserverI!(T){
-    /// returns a point to evaluate, calls available when a new point might be available, returns 1 if one should wait, 0 if the explorer has finished exploring
-    Point pointToEvaluateLocal(void delegate(ExplorerI!(T)) availableAgain);
-    /// called when an evaluation fails, returns 1, retry, 0 no choice, -1 do not retry
-    int evaluationFailedLocal(Point);
+    enum ReturnFlag{
+        NoOp,    /// no operation returned
+        SkipOp,  /// skip operation (i.e. wait)
+        LocalOp  /// one silos has a valid operation
+    }
+    /// should send an operation to evaluate to the master silos
+    /// is called on all core silos in parallel
+    ReturnFlag nextOp(void delegate(ExplorerI!(T)) availableAgain,int req);
     /// should speculatively calculate the gradient? PNetSilos version calls addEnergyEvalLocal
     bool speculativeGradientLocal(Point p,Real energy);
+    /// called when an evaluation fails
+    void evaluationFailed(SKey s,Point);
 }
 
 /// a task that can be transferred to a silos and performed there
@@ -600,9 +696,16 @@ interface RemoteSilosOpI(T):Serializable{ // could be Serializable and SilosWork
 ///
 /// just like ExplorationObserverI all methods have SKey as first argument (see there for the rationale)
 interface PNetSilosI(T):ExplorationObserverI!(T){
-    /// returns a point to evaluate, returns 0 if there are no further points, 1 if there are no points now
-    /// but there should be in the future
-    Point pointToEvaluate(SKey);
+    /// updates a pending operation status, should remove the operation when finished
+    void updateEvalStatus(SKey owner,char[] opId, ModifyEvalOp!(T) op,EvalOp!(T).Status newStat);
+    /// this should be called by the master process sending it to SKey.All
+    /// to receive a new operation to do
+    void prepareNextOp(SKey, int tag);
+    /// this should be sent only to the master, and will return a new operation to do
+    /// returns an EmptyOp if there is no work
+    EvalOp!(T) getNextOp(SKey);
+    /// inserts an operation to execute into the server (target should be SKeyVal.Master)
+    void addEvalOp(SKey,EvalOp!(T));
     /// called when an evaluation fails
     void evaluationFailed(SKey s,Point);
     /// should speculatively calculate the gradient? PNetSilos version calls addEnergyEvalLocal
@@ -630,13 +733,15 @@ interface PNetSilosI(T):ExplorationObserverI!(T){
     bool addNeighDirsToLocalPoint(SKey s,Point p0,PointAndDir[]neighDirs,DirDistances!(T)[]dirDists,bool hadGrad);
     /// operation to be executed on the given silos
     void executeLocally(SKey s,RemoteSilosOpI!(T) op);
+    /// activates the given explorer
+    void activateExplorer(SKey key,char[] name);
     
     /// dictionary with the values of the various properties
     Real[char[]] propertiesDict(SKey s);
     // expose creation & bcast of points and update from dried points? merging should be done carefully to avoid problems... so for now you should do them via executeLocal...
 }
 
-const char[] silosMethodsStr=`shutdown|addEnergyEvalLocal|addGradEvalLocal|publishPoint|neighborHasEnergy|neighborHasGradient|finishedExploringPoint|didLocalPublish|publishCollision|pointToEvaluate|evaluationFailed|speculativeGradient|load|energyForPointsLocal|energyForPoints|mainPoint|mainPointLocal|pointOwner|nextFreeSilos|addPointToLocalNeighs|addNeighDirsToLocalPoint|executeLocally|propertiesDict`;
+const char[] silosMethodsStr=`increaseRunLevel|addEnergyEvalLocal|addGradEvalLocal|publishPoint|neighborHasEnergy|neighborHasGradient|finishedExploringPoint|didLocalPublish|publishCollision|updateEvalStatus|prepareNextOp:oneway|getNextOp|evaluationFailed|speculativeGradient|load|energyForPointsLocal|energyForPoints|mainPoint|mainPointLocal|pointOwner|nextFreeSilos|addPointToLocalNeighs|addNeighDirsToLocalPoint|executeLocally|propertiesDict|name|addEvalOp|activateExplorer`;
 
 /// local interface, to a silos (basically a silos client)
 interface LocalSilosI(T): PNetSilosI!(T) {
@@ -659,9 +764,15 @@ interface LocalSilosI(T): PNetSilosI!(T) {
     /// adds an extra explorer that can generate new points
     void addExplorer(ExplorerI!(T)o);
     /// removes the given explorer
-    void rmExplorer(ExplorerI!(T)o);
+    void rmExplorerNamed(char[]);
     /// notify observers, the operation should not raise (or the whole program stops)
     void notifyLocalObservers(void delegate(ExplorationObserverI!(T))n);
+    
+    /// linear communicator (valid only inside the core silos, not in the clients)
+    LinearComm paraEnv();
+    /// the rank of the next silos to be used (should be called synchronously by all core silos)
+    /// this method should be changed if a P2P approach is taken
+    int nextSilosRank(int tag);
     
     /// reference position, this should be used just to create other ParticleSystem, never directly
     ParticleSys!(T) refPos();
@@ -737,6 +848,8 @@ interface LocalSilosI(T): PNetSilosI!(T) {
     MainPointI!(T)createLocalPoint(Point p,ev_tstamp t);
     /// drops a cached point (the point is not in use anymore)
     void dropCachedPoint(MainPointI!(T)p);
+    /// registers a pending operation (sets id,...)
+    void registerPendingOp(EvalOp!(T)op);
 
     /// an url that can be used to contact the silos core
     char[] silosCoreUrl();

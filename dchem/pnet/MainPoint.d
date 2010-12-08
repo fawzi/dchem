@@ -1235,8 +1235,8 @@ class MainPoint(T):MainPointI!(T){
             auto nPts=i.points.length;
             for(size_t iPts=0;iPts<nPts;++iPts){
                 auto pointAtt=i.points()[iPts];
-                scope(exit){ pAtt.release(); }
                 auto pAtt=localContext.createLocalPoint(pointAtt,tNow);
+                scope(exit) { pAtt.release(); }
                 checkIfNeighbor(pAtt.pos.dynVars.x, pointAtt,pAtt.explorationSize);
                 if (!isNaN(pAtt.energy)){
                     if (pAtt.hasFrameOfRef){

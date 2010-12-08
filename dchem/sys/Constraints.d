@@ -269,7 +269,7 @@ class MultiConstraintGen: ConstraintGen{
         foreach (c;constraints){
             auto o=cast(Object)c.content;
             if (cast(ConstraintGen)o is null){
-                log("The constraints have to be of type constraint, not ")((o !is null)?o.classinfo.toString():"*null*"[])(" in field ")(myField)("\n");
+                log("The constraints have to be of type constraint, not ")((o !is null)?o.classinfo.toString():"*null*"[])(" in field ")(myFieldName)("\n");
                 res=false;
             }
         }
