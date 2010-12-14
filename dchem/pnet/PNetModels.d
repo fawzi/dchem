@@ -411,7 +411,7 @@ interface MainPointI(T){
     bool addNeighbors(PointAndDir[] neighs,DirDistances!(T)[] dirDists,bool hadGrad);
     
     /// evaluates with the given context, returns if an evaluation was really done
-    bool evalWithContext(LocalCalculationContext c);
+    bool evalWithContext(LocalCalculationContext c,bool alwaysGrad=false);
     /// notifies a GFlags change from the given gFlags
     void notifyGFlagChange(uint oldGFlags);
     /// the energy of a neighbor was calculated
@@ -753,7 +753,7 @@ interface LocalSilosI(T): PNetSilosI!(T) {
     /// writes out a log message (at once)
     void logMsg(void delegate(void delegate(char[]))writer);
     /// writes out a log message
-    void logMsg(char[]msg);
+    void logMsg1(char[]msg);
     /// owner of the given point (just a utility method)
     SKey ownerOfPoint(Point);
     
@@ -866,6 +866,12 @@ interface SilosWorkerGen:InputElement{
     SilosWorkerI!(LowP) silosWorkerLowP();
 }
 
+/// an object that connects to a silos
+interface SilosConnectorI{
+    string precision(); /// precision of the silos
+    string connectionUrl(); /// connection url
+    void setConnectionAndPrecision(string,string); /// sets url and precision
+}
 /// define silosWorkerT extractor helper
 mixin(genTypeTMixin("SilosWorker","silosWorker","",""));
 

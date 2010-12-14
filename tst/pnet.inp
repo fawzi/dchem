@@ -28,6 +28,11 @@ poorM:{
     startConfig:{ class:Ref name:startConfig}
 }
 
+MinE:{
+    class:"dchem.MinEExplorer"
+    nEval:1
+}
+
 mullerB:{
     class:"dchem.MullerBrownPot"
     startX:0.45
@@ -49,10 +54,16 @@ workAsker:{
     class:dchem.WorkAsker
 }
 
+journal:{
+    class:dchem.PNetJournal
+    journalFormat:json
+}
+
 pnetSilos:{
     class:dchem.Silos,
     evaluator:{ class:Ref, name:limitedMB}
     evaluatorTask:{ class:Ref, name:workAsker}
+    explorers:[ { class:Ref, name:MinE },{ class:Ref, name:journal } ]
 }
 
 main:{class:Ref, name:pnetSilos}

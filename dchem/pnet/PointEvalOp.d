@@ -12,11 +12,13 @@ import blip.io.EventWatcher: ev_tstamp,ev_time;
 /// an operation on a context and SilosConnection
 class PointEvalOp(T):EvalOp!(T){
     Point point;
+    bool evalGrad=false;
 
     this(){ super(); }
-    this(Point point){
+    this(Point point,bool evalGrad=false){
         super();
         this.point=point;
+        this.evalGrad=evalGrad;
     }
     /// performs the operation
     void doOp(){
@@ -27,7 +29,7 @@ class PointEvalOp(T):EvalOp!(T){
                 auto time=ev_time();
                 auto localP=silos.createLocalPoint(point,time);
                 scope(exit) { localP.release(); }
-                if (localP.evalWithContext(ctx)){
+                if (localP.evalWithContext(ctx,evalGrad)){
                     version(TrackWorkAsker) {
                         sinkTogether(sout,delegate void(CharSink s){
                             dumper(s)(this)(" did eval point ")(point)("\n");

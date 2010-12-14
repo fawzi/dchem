@@ -127,7 +127,7 @@ interface CalculationContext{
     /// execute the operation t locally on the context
     void executeLocally(RemoteCCTask t);
     /// log for the calculator context
-    void logMsg(char[]);
+    void logMsg1(char[]);
 }
 
 /// represent the local view to a calculation that might have been aready partially setup, in particular the

@@ -923,9 +923,9 @@ class MainPoint(T):MainPointI!(T){
         addNeighbors(neighAtt.data,dirDist.data,hasGrad);
     }
     /// evaluates with the given context, returns if an evaluate was really done
-    bool evalWithContext(LocalCalculationContext c){
+    bool evalWithContext(LocalCalculationContext c,bool alwaysGrad=false){
         bool calcE=(gFlags&GFlags.EnergyEvaluated)==0;
-        bool calcF=((gFlags&GFlags.GradientEvaluated)==0 && (localContext.cheapGrad()||(gFlags&GFlags.GradientInProgress)!=0));
+        bool calcF=((gFlags&GFlags.GradientEvaluated)==0 && (localContext.cheapGrad()||(gFlags&GFlags.GradientInProgress)!=0)||alwaysGrad);
         if (calcE||calcF){
             Real e=pos.dynVars.potentialEnergy;
             mixin(withPSys(`pSys[]=pos;`,"c."));

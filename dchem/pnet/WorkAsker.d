@@ -11,15 +11,16 @@ import blip.serialization.Serialization;
 import dchem.pnet.PNetSilosClient;
 import blip.io.EventWatcher: ev_tstamp,ev_time;
 import blip.io.Console;
+version=TrackWorkAsker;
 
-class WorkAskerGen:RemoteCCTask,Sampler {
-    char[] connectionUrl;
+class WorkAskerGen:RemoteCCTask,Sampler,SilosConnectorI {
+    char[] _connectionUrl;
     double maxDuration=525600.0;
     double maxDurationTot=525600.0;
     long maxEval=long.max;
     long maxWait=100;
     long ownerCacheSize=10;
-    char[] precision="LowP";
+    char[] _precision="LowP";
     InputField evaluator;
     
     mixin(serializeSome("dchem.WorkAsker",`
@@ -36,9 +37,34 @@ class WorkAskerGen:RemoteCCTask,Sampler {
     WorkAsker!(LowP)[] wAskersLowP;
     WorkAsker!(Real)[] wAskersReal;
     
+    /// precision of the silos
+    string precision(){
+        return _precision;
+    }
+    void precision(string p){
+        _precision=p;
+    }
+    /// connection url
+    string connectionUrl(){
+        return _connectionUrl;
+    }
+    /// sets the connectionUrl
+    void connectionUrl(string c){
+        _connectionUrl=c;
+    }
+    /// sets precision and url
+    void setConnectionAndPrecision(string c,string p){
+        _precision=p;
+        _connectionUrl=c;
+    }
+    
     bool verify(CharSink s){
         bool res=true;
         auto log=dumper(s);
+        /+if (connectionUrl.length==0){
+            log("connectionUrl has to be given to WorkAsker ")(myFieldName)("\n");
+            res=false;
+        }+/
         if (precision!="LowP" && precision!="Real"){
             log("precision should be either LowP or Real, not '")(precision)("' in field ")(myFieldName)("\n");
             res=false;
@@ -64,6 +90,11 @@ class WorkAskerGen:RemoteCCTask,Sampler {
     
     /// runs a work asker
     void run(LinearComm pEnv, CharSink log){
+        if (connectionUrl.length==0){
+            sinkTogether(log,delegate void(CharSink s){
+                dumper(s)("connectionUrl has to be given to WorkAsker ")(myFieldName)("\n");
+            });
+        }
         auto m=cast(Method)evaluator.contentObj;
         assert(m!is null);
         m.setup(pEnv,log);
@@ -80,6 +111,11 @@ class WorkAskerGen:RemoteCCTask,Sampler {
     }
     /// starts the task with the given CalculationContext
     void workOn(LocalCalculationContext cc,ev_tstamp maxTotTime){
+        if (connectionUrl.length==0){
+            throw new Exception(collectAppender(delegate void(CharSink s){
+                dumper(s)("connectionUrl has to be given to WorkAsker ")(myFieldName)("\n");
+            }),__FILE__,__LINE__);
+        }
         switch(precision){
         case "LowP":
             auto lp=new WorkAsker!(LowP)(this,cc);
@@ -176,6 +212,9 @@ class WorkAsker(T){
         status=Status.Configure;
     }
     void start(){
+        version(TrackWorkAsker){
+            sout(input.myFieldName~" starting work asker\n");
+        }
         try{
             synchronized(this){
                 if (status!=Status.Configure){

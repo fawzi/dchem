@@ -8,7 +8,7 @@ import blip.serialization.StringSerialize;
 import blip.serialization.SerializationMixins;
 import blip.text.TextParser;
 import dchem.Common;
-import tango.text.Regex;
+import tango.text.Regex:Regex;
 import blip.text.Utils:trim, contains;
 import tango.math.Math: min,max;
 import blip.io.BasicIO;

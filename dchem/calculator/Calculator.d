@@ -200,7 +200,7 @@ char[] withPSys(char[]op,char[]from=""){
     `;
 }
 const char[] calcCtxMethodsStr=
-`activePrecision|contextId|pSysWriterReal|pSysWriterLowP|pSysWriterRealSet|pSysWriterLowPSet|refPSysReal|refPSysLowP|constraintGen|sysStruct|changeLevel|changeLevelSet|changedDynVars|potentialEnergy|posSet|pos|dposSet|dpos|mddposSet|mddpos|updateEF|activate|deactivate|giveBack|stop|method|storeHistory|exportedUrl|executeLocally|logMsg`;
+`activePrecision|contextId|pSysWriterReal|pSysWriterLowP|pSysWriterRealSet|pSysWriterLowPSet|refPSysReal|refPSysLowP|constraintGen|sysStruct|changeLevel|changeLevelSet|changedDynVars|potentialEnergy|posSet|pos|dposSet|dpos|mddposSet|mddpos|updateEF|activate|deactivate|giveBack|stop|method|storeHistory|exportedUrl|executeLocally|logMsg1`;
 
 /// represent a calculation that might have been aready partially setup, in particular the
 /// number of elements,... cannot change
@@ -216,7 +216,7 @@ class CalcContext:LocalCalculationContext{
     Real maxChange;
     CharSink _logger;
     
-    void logMsg(char[]m){
+    void logMsg1(char[]m){
         _logger(m);
     }
     CharSink logger(){

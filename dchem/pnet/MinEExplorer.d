@@ -16,7 +16,7 @@ import blip.parallel.mpi.MpiModels;
 import dchem.pnet.EmptyExplorer;
 import dchem.pnet.PointEvalOp;
 
-class MinEExplorerDef:SilosWorkerGen{
+class MinEExplorerDef:ExplorerGen{
     long nEval=long.max;
     this(){
     }
@@ -27,11 +27,17 @@ class MinEExplorerDef:SilosWorkerGen{
         return true;
     }
     
-    SilosWorkerI!(Real) silosWorkerReal(){
+    ExplorationObserverI!(Real) observerReal(LocalSilosI!(Real) silos){
+        return explorerReal(silos);
+    }
+    ExplorationObserverI!(LowP) observerLowP(LocalSilosI!(LowP) silos){
+        return explorerLowP(silos);
+    }
+    ExplorerI!(Real) explorerReal(LocalSilosI!(Real) silos){
         auto res=new MinEExplorer!(Real)(this);
         return res;
     }
-    SilosWorkerI!(LowP) silosWorkerLowP(){
+    ExplorerI!(LowP) explorerLowP(LocalSilosI!(LowP) silos){
         auto res=new MinEExplorer!(LowP)(this);
         return res;
     }

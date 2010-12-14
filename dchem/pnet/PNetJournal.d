@@ -43,7 +43,7 @@ class PNetJournalGen:ExplorationObserverGen{
         bool res=true;
         if (journalFormat!="sbin" && journalFormat!="json"){
             res=false;
-            dumper(s)("invalid journalFormat '")(journalFormat)("', expected json or sbin\n");
+            dumper(s)("invalid journalFormat '")(journalFormat)("', expected json or sbin in field '")(myFieldName)("'\n");
         }
         return res;
     }
@@ -51,14 +51,14 @@ class PNetJournalGen:ExplorationObserverGen{
 
 // object that keeps the journal of the computations done
 class PNetJournal(T):ExplorationObserverI!(T){
-    PNetJournalGen context;
+    PNetJournalGen input;
     LocalSilosI!(T) silos;
     char[] journalPath;
     Serializer jSerial;
     const char[] jVersion="PNetJournal v1.0";
     RLock serialLock;
     string name(){
-        return "PNetJournal_"~context.myFieldName;
+        return "PNetJournal_"~input.myFieldName;
     }
     /// points to explore more ordered by energy (at the moment this is replicated)
     /// this could be either distribued, or limited to a given max size + refill upon request
@@ -164,29 +164,38 @@ class PNetJournal(T):ExplorationObserverI!(T){
     
     /// creates a new journal logger
     this(PNetJournalGen c,LocalSilosI!(T) silos){
-        this.context=c;
+        this.input=c;
         this.silos=silos;
         this.serialLock=new RLock();
-        long i=0;
         char[128] buf;
         auto arr=lGrowableArray(buf,0);
         OutputStream stream;
-        while (i<100){
+        Exception lastE;
+        for (int i=0;i<10;++i){
             const File.Style WriteUnique = {File.Access.Read, File.Open.New, File.Share.Read};
-            arr(context.journalDir);
+            arr(input.journalDir);
+            if (input.journalDir.length>0 && input.journalDir[$-1]!='/') arr("/");
+            arr(input.myFieldName);
+            arr("-");
             writeOut(&arr.appendArr,i);
+            arr(".log");
             try{
                 stream=new File(arr.data,WriteUnique);
                 this.journalPath=arr.takeData();
+                lastE=null;
                 break;
             } catch (Exception e){
                 arr.clearData();
+                lastE=e;
             } // should ignore only already present files... improve?
         }
-        if (context.journalFormat=="json"){
+        if (lastE!is null){
+            throw new Exception("exception trying to open journal file",__FILE__,__LINE__,lastE);
+        }
+        if (input.journalFormat=="json"){
             auto charSink=strDumper(stream);
             jSerial=new JsonSerializer!(char)(charSink);
-        } else if (context.journalFormat=="sbin"){
+        } else if (input.journalFormat=="sbin"){
             auto binSink=binaryDumper(stream);
             jSerial=new SBinSerializer(binSink);
         }
@@ -213,11 +222,11 @@ class PNetJournal(T):ExplorationObserverI!(T){
     /// flags: communicate doubleEval?
     void publishPoint(SKey s,SKey owner,Point point,PSysWriter!(T) pos,T pSize,uint flags){
         PSysWriter!(T) dummy;
-        if (context.logOtherStart || silos.hasKey(owner)){
+        if (input.logOtherStart || silos.hasKey(owner)){
             this.serialLock.lock();
             scope(exit){ this.serialLock.unlock(); }
             jSerial(JournalEntry.StartPoint(owner,point,
-                ((context.logOtherPos || silos.hasKey(owner))?pos:dummy),flags));
+                ((input.logOtherPos || silos.hasKey(owner))?pos:dummy),flags));
         }
     }
     /// finished exploring the given local point (remove it from the active points), bcasts finishedExploringPoint
@@ -228,7 +237,7 @@ class PNetJournal(T):ExplorationObserverI!(T){
     }
     /// finished exploring the given point (remove it from the active points)
     void finishedExploringPoint(SKey s,Point p,SKey owner){
-        if (context.logOtherStart){
+        if (input.logOtherStart){
             this.serialLock.lock();
             scope(exit){ this.serialLock.unlock(); }
             jSerial(JournalEntry.FinishedPoint(p,owner));
@@ -241,7 +250,7 @@ class PNetJournal(T):ExplorationObserverI!(T){
     /// drops all calculation/storage connected with the given point, the point will be added with another key
     /// (called upon collisions)
     void publishCollision(SKey s,Point p){
-        if (context.logOtherStart|| silos.hasKey(s)){
+        if (input.logOtherStart|| silos.hasKey(s)){
             this.serialLock.lock();
             scope(exit){ this.serialLock.unlock(); }
             jSerial(JournalEntry.PublishCollision(p));
@@ -251,7 +260,7 @@ class PNetJournal(T):ExplorationObserverI!(T){
     /// a neighbor point has calculated its energy (and not the gradient)
     /// neighbors should be restricted to s
     void neighborHasEnergy(SKey s,Point p,Point[] neighbors,Real energy){
-        if (context.logNeighInfo){
+        if (input.logNeighInfo){
             this.serialLock.lock();
             scope(exit){ this.serialLock.unlock(); }
             jSerial(JournalEntry.NeighborHasEnergy(s,p,neighbors,energy));
@@ -260,7 +269,7 @@ class PNetJournal(T):ExplorationObserverI!(T){
     /// the neighbor point p has calculated its gradient (and energy)
     /// neighbors should be restricted to silos
     void neighborHasGradient(SKey s,LazyMPLoader!(T)p, Point[] neighbors, Real energy){
-        if (context.logNeighInfo){
+        if (input.logNeighInfo){
             this.serialLock.lock();
             scope(exit){ this.serialLock.unlock(); }
             jSerial(JournalEntry.NeighborHasGradient(s,p,neighbors,energy,silos));

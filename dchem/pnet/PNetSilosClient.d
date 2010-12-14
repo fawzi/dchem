@@ -95,7 +95,9 @@ class PNetSilosClient(T): LocalSilosI!(T){
         return new MainPoint!(T)(this,p);
     }
     
-    this(PNetSilosClientGen input, CalculationContext ctx, PNetSilosI!(T) connection=null,NotificationCenter nCenter=null,PoolI!(MainPoint!(T))pPool=null){
+    this(PNetSilosClientGen input, CalculationContext ctx, PNetSilosI!(T) connection=null,NotificationCenter nCenter=null,PoolI!(MainPoint!(T))pPool=null,CharSink log=null){
+        this.log=log;
+        if (log is null) this.log=sout.call;
         this.input=input;
         this.ctx=ctx;
         this.pPool=pPool;
@@ -117,13 +119,16 @@ class PNetSilosClient(T): LocalSilosI!(T){
             }
         }
         ConstraintGen constraintGen=ctx.constraintGen;
-        if (constraintGen is null){
+        if (constraintGen !is null){
             _constraints=constraintT!(T)(constraintGen,_refPos);
         }
         if (_constraints is null) _constraints=new NoConstraint!(T)();
         
         this.connection=connection;
         if (connection is null){
+            logMsg(delegate void(CharSink s){
+                dumper(s)("connectionUrl:")(input.connectionUrl)("\n");
+            });
             this.connection=ProtocolHandler.proxyForUrlT!(PNetSilosI!(T))(input.connectionUrl);
         }
         this._nCenter=nCenter;
@@ -131,7 +136,6 @@ class PNetSilosClient(T): LocalSilosI!(T){
             this._nCenter=new NotificationCenter();
         }
         _rand=new RandomSync();
-        this.log=sout.call;
         properties=this.propertiesDict(SKeyVal.Any);
     }
     // ExplorationObserverI
@@ -294,7 +298,7 @@ class PNetSilosClient(T): LocalSilosI!(T){
         sinkTogether(log,writer);
     }
     /// writes out a log message
-    void logMsg(char[]msg){
+    void logMsg1(char[]msg){
         log(msg);
     }
     /// owner of the given point (just a utility method)

@@ -105,7 +105,7 @@ class RemotePointEval(T):RemoteCCTask{
     
 }
 
-class SilosGen:Sampler{
+class SilosGen:Sampler {
     PNetSilos!(Real)[] silosReal;
     PNetSilos!(LowP)[] silosLowP;
     
@@ -570,12 +570,14 @@ class PNetSilos(T): LocalSilosI!(T){
         char[512] buf;
         auto gArr=lGrowableArray(buf,0);
         auto s=dumper(&gArr.appendArr);
-        s("<MinEELog id=\"")(_key)("\" time=\"")(Clock.now.ticks)("\">");
+        s("<MinEELog id=\"")(_key)("\" time=\"")(ev_time())("\">");
         writer(s.call);
         s("</MinEELog>\n");
+        log(gArr.data);
+        gArr.deallocData;
     }
     /// writes out a log message
-    void logMsg(char[]msg){
+    void logMsg1(char[]msg){
         logMsg(delegate void(CharSink s){ s(msg); });
     }
     /// constraints of the current system
@@ -654,28 +656,51 @@ class PNetSilos(T): LocalSilosI!(T){
     
     void startAskers(){
         if (evaluatorTask is null) return;
+        auto silosC=cast(SilosConnectorI)evaluatorTask;
+        if (silosC!is null){
+            silosC.setConnectionAndPrecision(silosCoreUrl,input.precision);
+        }
         try{
             /// start the askers
             while(true){
+                logMsg1("silos trying to start Asker");
                 CalculationContext cInstance=evaluator.getCalculator(true,[]);
                 if (cInstance is null) break;
+                logMsg1("silos will send to context");
                 cInstance.executeLocally(evaluatorTask);
+                logMsg1("silos sent asker to context");
             }
         } catch (Exception e){
             sinkTogether(log,delegate void(CharSink s){
                 dumper(s)("error while starting askers:")(e)("\n");
             });
         }
+        logMsg1("silos finished Asker starting");
     }
     
     void start(LinearComm pEnv, CharSink log){
-        pEnv.barrier();
         silosParaEnv=pEnv;
+        pEnv.barrier();
+        logMsg1("silos check SKeys");
+        sKeys=new SKey[](pEnv.dim);
+        mpiAllGatherT(pEnv,_key,sKeys);
+        if (sKeys.length>1){
+            auto sortedK=sKeys.dup;
+            sort(sortedK);
+            foreach(i,v;sortedK[1..$]){
+                if (sortedK[i]==v){
+                    throw new Exception("key collision",__FILE__,__LINE__);
+                }
+            }
+        }
+        pEnv.barrier();
+        logMsg1("silos setting up evaluator");
         evaluator.setup(pEnv,log);
         CalculationContext cInstance;
         if (_refPos is null || _constraints is null){
             cInstance=evaluator.getCalculator(true,[]);
         }
+        logMsg1("silos setting up refPos");
         // setup refPos
         if (_refPos is null){
             switch(cInstance.activePrecision()){
@@ -689,6 +714,7 @@ class PNetSilos(T): LocalSilosI!(T){
                 assert(0,"unknown activePrecision");
             }
         }
+        logMsg1("silos setting up constraints");
         if (_constraints is null){
             auto cGen=cInstance.constraintGen;
             if (cGen is null) {
@@ -697,33 +723,34 @@ class PNetSilos(T): LocalSilosI!(T){
                 _constraints=constraintT!(T)(cGen,_refPos);
             }
         }
+        if (cInstance!is null){
+            cInstance.giveBack();
+        }
+        logMsg1("silos will run the loaders");
         // run the loaders
         foreach(sw;loaders){
             sw.workOn(this);
         }
+        paraEnv.barrier();
+        logMsg1("silos did run the loaders");
         runLevel=RunLevel.Running;
-        if (explorers.length==0){
-            log("no explorers, stopping (to avoid this add a dchem.WaitExplorer)\n");
+        int nOps=localOps.length;
+        paraEnv.bcast(nOps,0);
+        if (explorers.length==0 && nOps==0){
+            if (paraEnv.myRank==0) log("no explorers, and no pendingOps, stopping (to avoid this add a dchem.WaitExplorer)\n");
             increaseRunLevel(SKeyVal.All,RunLevel.WaitPending);
-        }
-        pEnv.barrier();
-        sKeys=new SKey[](pEnv.dim);
-        mpiAllGatherT(pEnv,_key,sKeys);
-        if (sKeys.length>1){
-            auto sortedK=sKeys.dup;
-            sort(sortedK);
-            foreach(i,v;sortedK[1..$]){
-                if (sortedK[i]==v){
-                    throw new Exception("key collision",__FILE__,__LINE__);
-                }
-            }
         }
         /// start the askers
         Task("startAskers",&startAskers).autorelease.submitYield();
     }
     void run(LinearComm pEnv, CharSink log){
+        logMsg(delegate void(CharSink s){
+            dumper(s)("PNetSilos!(")(T.stringof)(") was generated from field '")(input.myFieldName)("'");
+        });
         start(pEnv,log);
+        logMsg1("silos started waiting");
         waitPendingEnd.wait();
+        logMsg1("silos finished waiting");
         if (paraEnv.myRank==0){
             increaseRunLevel(SKeyVal.All,RunLevel.Stopping);
         }
@@ -732,11 +759,13 @@ class PNetSilos(T): LocalSilosI!(T){
             if (runLevel>RunLevel.Stopping) return;
             runLevel=RunLevel.Stopping;
         }
+        logMsg1("silos will run the finishers");
         // run the finishers
         foreach(sw;finishers){
             sw.workOn(this);
         }
         pEnv.barrier();
+        logMsg1("silos did run the finishers");
         runLevel=RunLevel.Stopped;
     }
     
