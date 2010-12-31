@@ -335,10 +335,10 @@ interface MainPointI(T){
     /// a separated DirArray
     FlagsArray exploredDirs();
     /// neighbors, and the direction with respect to this point in which they are
-    LocalGrowableArray!(PointAndDir) neighbors();
+    LocalGrowableArray!(PointAndDir)* neighbors();
     /// neighbor distances, stored only if requested. 6 numbers for each neighbor:
     /// dualDist, cartDist, cosDual, rDistDual, cartCos, cartRDist
-    LocalGrowableArray!(DirDistances!(T)) neighDistances();
+    LocalGrowableArray!(DirDistances!(T))* neighDistances();
     /// scale of mindir to recover the dual gradient (useful??)
     T minDirScale();
     /// exploration size for this point (used to establish neighbors,...) 

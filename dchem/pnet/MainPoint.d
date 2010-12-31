@@ -43,11 +43,26 @@ class PointToOwner{
     /// start of the points of each owner (+ end, owner[i] has points[starts[i]..starts[i+1]])
     size_t[] starts;
 
+    mixin(descSome("PointToOwner",`points|idx|owner|starts`));
+    
+    version(TrackPointToOwner){
+        final void logMsg(void delegate(CharSink) logger){
+            sinkTogether(sout.call,delegate void(CharSink s){
+                dumper(s)("<PointToOwner_")(cast(void*)this)(">");
+                logger(s);
+                dumper(s)("</PointToOwner_")(cast(void*)this)(">\n");
+            });
+        }
+    } else {
+        final void logMsg(void delegate(CharSink) logger){}
+    }
     /// internal help structure (to reorder stuff)
     struct PIdxOwn{
         Point point;
         size_t idx;
         SKey owner;
+        mixin(serializeSome("dchem.PointToOwner.PIdxOwn",`point|idx|owner`));
+        mixin printOut!();
     }
     /// returns a PointToOwner that contains the points extracted with getPnt ordered by owner and point
     /// if compressPts is true (default) then duplicate points are removed
@@ -56,12 +71,16 @@ class PointToOwner{
         if (nPts==0) return;
 
         PIdxOwn[128] buf;
-        auto pts=lGrowableArray(buf,1);
+        auto pts=lGrowableArray(buf,0);
         scope(exit){ pts.deallocData(); }
         size_t i=0,j=1;
-        pts[0].point=getPnt(0);
-        pts[0].idx=0;
-        pts[0].owner=ownerMap(getPnt(0));
+        {
+            PIdxOwn pNew;
+            pNew.point=getPnt(0);
+            pNew.idx=0;
+            pNew.owner=ownerMap(getPnt(0));
+            pts(pNew);
+        }
         while(j<nPts){
             if ((!compressPts) || pts[i].point!=getPnt(j)){
                 PIdxOwn pNew;
@@ -75,9 +94,24 @@ class PointToOwner{
         }
         ++i;
         auto points=pts.data;
+        version(TrackPointToOwner){
+            logMsg((CharSink s){
+                dumper(s)("nonOrdPoints:")(points);
+            });
+        }
         sort(points,delegate bool(PIdxOwn a,PIdxOwn b){ return a.owner<b.owner || (a.owner==b.owner && a.point<b.point); });
+        version(TrackPointToOwner){
+            logMsg((CharSink s){
+                dumper(s)("ordPoints:")(points);
+            });
+        }
         if (compressPts){
             points=compress(points,delegate bool(PIdxOwn a,PIdxOwn b){ return a.point==b.point; });
+            version(TrackPointToOwner){
+                logMsg((CharSink s){
+                    dumper(s)("compressed Points:")(points);
+                });
+            }
         }
         this.points=new Point[](points.length);
         for (size_t ii=0;ii<points.length;++ii){
@@ -191,6 +225,7 @@ class PointToOwner{
                 auto nOwn=pOwn.owner.length;
                 for (size_t iOwn=0;iOwn<nOwn;++iOwn){
                     auto nIter=pool.getObj();
+                    nIter.pOwn=pOwn;
                     nIter.action=&doIter;
                     nIter.iOwn=iOwn;
                     Task("PointToOwnerPLoopIter",&nIter.doAction).appendOnFinish(&nIter.giveBack).autorelease.submitYield();
@@ -260,11 +295,11 @@ class MainPoint(T):MainPointI!(T){
     FlagsArray exploredDirs(){ return _exploredDirs; }
     FlagsArray _exploredDirs;
     /// neighbors, and the direction with respect to this point in which they are
-    LocalGrowableArray!(PointAndDir) neighbors(){ return _neighbors; }
+    GrowableArray!(PointAndDir) neighbors(){ return &_neighbors; }
     LocalGrowableArray!(PointAndDir) _neighbors;
     /// neighbor distances, stored only if requested. 6 numbers for each neighbor:
     /// dualDist, cartDist, cosDual, rDistDual, cartCos, cartRDist
-    LocalGrowableArray!(DirDistances!(T)) neighDistances(){ return _neighDistances; }
+    GrowableArray!(DirDistances!(T)) neighDistances(){ return &_neighDistances; }
     LocalGrowableArray!(DirDistances!(T)) _neighDistances;
     /// scale of mindir to recover the dual gradient (useful??)
     T minDirScale(){ return _minDirScale; }
@@ -275,9 +310,21 @@ class MainPoint(T):MainPointI!(T){
     /// bit-or of GFlags of the current point
     uint gFlags(){ return _gFlags; }
     uint _gFlags;
-    size_t refCount;
+    size_t refCount=1;
     PoolI!(MainPoint) pool;
     
+    void logMsg(void delegate(CharSink)logger){
+        localContext.logMsg(delegate void(CharSink sink){
+            auto s=dumper(sink);
+            s("<MainPoint");
+            s(" point=")(point.data,"x");
+            s(" addr=@")(cast(void*)this);
+            if (isLocalCopy) s(" copy=1");
+            s(">");
+            logger(sink);
+            s("</MainPoint>");
+        });
+    }
     SKey owner(){
         return localContext.ownerOfPoint(point);
     }
@@ -321,13 +368,14 @@ class MainPoint(T):MainPointI!(T){
         res.pos=pSysWriter(pos);
         res.minDir=dynPVectorWriter(minDir);
         res.exploredDirs=exploredDirs;
-        res.neighbors=neighbors;
+        res.neighbors=_neighbors;
         res.minDirScale=minDirScale;
         res.explorationSize=explorationSize;
         return res;
     }
     /// if given the neighbor are taken into ownership, and freed by this object.
     this(LocalSilosI!(T) localContext, PoolI!(MainPoint) p,PointAndDir[] neighbors=[]){
+        this.refCount=1;
         this._localContext=localContext;
         this.pool=p;
         this._pos=localContext.refPos.dup(PSDupLevel.EmptyDyn);
@@ -353,9 +401,13 @@ class MainPoint(T):MainPointI!(T){
         T explorationSize,DynPVector!(T,DualDxType) minDir,T minDirScale=T.init,
         FlagsArray exploredDirs=null,PointAndDir[] neighbors=null,PoolI!(MainPoint)pool=null)
     {
+        this.refCount=1;
         this._localContext=localContext;
         this._point=point;
         this._pos=pos;
+        if (this.pos is null){
+            this._pos=localContext.refPos.dup(PSDupLevel.EmptyDyn);
+        }
         this._gFlags=gFlags;
         this._explorationSize=explorationSize;
         if (this.explorationSize<=0) this._explorationSize=localContext.explorationSize;
@@ -478,8 +530,8 @@ class MainPoint(T):MainPointI!(T){
         auto cartesianNorm=pos.projectInDualTSpace(newDir);
         auto projNorm=newDir.norm2();
         if (cartesianNorm<=localContext.minRealNormSelf0){
-            localContext.logMsg(delegate(CharSink s){
-                dumper(s)("exploration in direction ")(dir)(" of point ")(point)(" discarded because cartesian norm is too small. Projected norm was ")(projNorm)(".");
+            logMsg(delegate(CharSink s){
+                dumper(s)("exploration in direction ")(dir)(" discarded because cartesian norm is too small. Projected norm was ")(projNorm)(".");
             });
             return null; // continue all the same or return pos???
         }
@@ -488,8 +540,8 @@ class MainPoint(T):MainPointI!(T){
         /// immediately check expected cartesian norm change and possibly increase length
         /// this could be wrong for periodic directions, but is most likely better than not doing it
         if (cartesianNorm*scaleAtt<localContext.minRealNormSelf1){
-            localContext.logMsg(delegate(CharSink s){
-                dumper(s)("exploration in direction ")(dir)(" of point ")(point)(" has small cartesian norm, increasing search length");
+            logMsg(delegate(CharSink s){
+                dumper(s)("exploration in direction ")(dir)(" has small cartesian norm, increasing search length");
             });
             scaleAtt=localContext.minRealNormSelf1/cartesianNorm;
         }
@@ -500,8 +552,8 @@ class MainPoint(T):MainPointI!(T){
         newDir.giveBack();
         auto err=localContext.constraints.applyR(resPSys);
         if (err>0.1){
-            localContext.logMsg(delegate(CharSink s){
-                dumper(s)("exploration in direction ")(dir)(" of point ")(point)("discarded because we might have a constraint clash");
+            logMsg(delegate(CharSink s){
+                dumper(s)("exploration in direction ")(dir)("discarded because we might have a constraint clash");
             });
             return null;
         }
@@ -536,24 +588,23 @@ class MainPoint(T):MainPointI!(T){
         auto mainDists=addDirsOf(newPos,newPoint,localPoint.explorationSize,neighAtt,dirDist);
 
         if (mainDists.xDist<localContext.minMoveInternal){
-            localContext.logMsg(delegate void(CharSink s){
-                dumper(s)("norm in the internal coordinates of exploration direction ")(dir)(" of point ")
-                    (point)(" is too small in internal coordinates ")(mainDists.xDist)(", discarding evaluation");
+            logMsg(delegate void(CharSink s){
+                dumper(s)("norm in the internal coordinates of exploration direction ")(dir)(" is too small in internal coordinates ")(mainDists.xDist)(", discarding evaluation");
             });
             return false;
         }
         // original norm in dual space
         auto origNorm=mainDists.dualDist;
         if (origNorm<=localContext.minNormDualSelf()*explorationSize){
-            localContext.logMsg(delegate void(CharSink s){
-                dumper(s)("norm in dual space of exploration in direction ")(dir)(" of point ")(point)
+            logMsg(delegate void(CharSink s){
+                dumper(s)("norm in dual space of exploration in direction ")(dir)
                     (" is too small:")(origNorm)(", discarding evaluation");
             });
             return false;
         }
         if (origNorm>localContext.maxNormDual*explorationSize || origNorm<localContext.minNormDual*explorationSize){
-            localContext.logMsg(delegate void(CharSink s){
-                dumper(s)("norm in dual space of exploration in direction ")(dir)(" of point ")(point)
+            logMsg(delegate void(CharSink s){
+                dumper(s)("norm in dual space of exploration in direction ")(dir)
                     (" is outside the exploration zone with length ")(origNorm/explorationSize)("*")(explorationSize)
                     (", continuing evaluation");
             });
@@ -561,8 +612,8 @@ class MainPoint(T):MainPointI!(T){
         // norm in cartesian units
         auto normCartesian=mainDists.cartesianDist;
         if (normCartesian<localContext.minRealNormSelf2){
-            localContext.logMsg(delegate void(CharSink s){
-                dumper(s)("norm in real space of exploration in direction ")(dir)(" of point ")(point)
+            logMsg(delegate void(CharSink s){
+                dumper(s)("norm in real space of exploration in direction ")(dir)
                     (" is too small:")(normCartesian)(", discarding evaluation");
             });
         }
@@ -587,8 +638,8 @@ class MainPoint(T):MainPointI!(T){
             
             // not in the expected direction
             if (neighAtt.length==0){ // not a neighbor...
-                localContext.logMsg(delegate void(CharSink s){
-                    dumper(s)("exploration in direction ")(dir)(" of point ")(point)
+                logMsg(delegate void(CharSink s){
+                    dumper(s)("exploration in direction ")(dir)
                         (" is not a neighbor, continuing evaluation..."); // stop instead?
                 });
                 return true;
@@ -611,30 +662,30 @@ class MainPoint(T):MainPointI!(T){
                 for (size_t idir=0;idir<neighAtt.length;++idir){
                     if (neighAtt[idir].dir==0){
                         if (dirMax==dir){
-                            localContext.logMsg(delegate void(CharSink s){
-                                dumper(s)("exploration in direction ")(dir)(" of point ")(point)
+                            logMsg(delegate void(CharSink s){
+                                dumper(s)("exploration in direction ")(dir)
                                     (" is  mostly in the expected direction in the dual space, but ")
                                     (iMax)(", but not in the expected region, continuing evaluation");
                             });
                             nonVisited=true;
                         } else {
-                            localContext.logMsg(delegate void(CharSink s){
-                                dumper(s)("exploration in direction ")(dir)(" of point ")(point)
+                            logMsg(delegate void(CharSink s){
+                                dumper(s)("exploration in direction ")(dir)
                                     (" is  very close to the starting point, and not in the expected direction");
                             });
                         }
                     } else {
                         auto actualDirFlags=exploredDirs.atomicCAS(iMax,DirFlags.Explored,DirFlags.Free);
                         if (actualDirFlags == DirFlags.Free){
-                            localContext.logMsg(delegate void(CharSink s){
-                                dumper(s)("exploration in direction ")(dir)(" of point ")(point)
+                            logMsg(delegate void(CharSink s){
+                                dumper(s)("exploration in direction ")(dir)
                                     (" is not mostly in the expected direction in the dual space, but in dir ")
                                     (neighAtt[idir].dir)(", continuing evaluation declaring also it as visited");
                             });
                             nonVisited=true;
                         } else {
-                            localContext.logMsg(delegate void(CharSink s){
-                                dumper(s)("exploration in direction ")(dir)(" of point ")(point)
+                            logMsg(delegate void(CharSink s){
+                                dumper(s)("exploration in direction ")(dir)
                                     (" is not mostly in the expected direction in the dual space, but in dir ")
                                     (neighAtt[idir].dir)(", and that was already visited");
                             });
@@ -642,8 +693,8 @@ class MainPoint(T):MainPointI!(T){
                     }
                 }
                 if (!nonVisited) {
-                    localContext.logMsg(delegate void(CharSink s){
-                        dumper(s)("exploration in direction ")(dir)(" of point ")(point)
+                    logMsg(delegate void(CharSink s){
+                        dumper(s)("exploration in direction ")(dir)
                             (" is not mostly in the expected direction in the dual space, but in directions that ")
                             ("where already visited, discarding it");
                     });
@@ -665,7 +716,12 @@ class MainPoint(T):MainPointI!(T){
             assert(p.point==newPoint,"expected addition of a single point"); // lift constraint??
         }
     } body {
-        if (neighs.length==0) return true; // return false?
+        version(TrackPNet){
+            logMsg(delegate void(CharSink s){
+                dumper(s)("addNeighbors(")(neighs)(",")(dirDist)(",")(hadGradient)(")");
+            });
+        }
+        if (neighs.length==0) return false; // return true?
         if (isLocalCopy){
             bool added=localContext.addNeighDirsToLocalPoint(localContext.ownerOfPoint(point),point,neighs,dirDist,hadGradient);
             return added;
@@ -678,13 +734,14 @@ class MainPoint(T):MainPointI!(T){
             if (pos!=neighbors.data.length){
                 return false;
             }
-            if (!hadGradient && hasFrameOfRef){
+            if ((!hadGradient) && hasFrameOfRef){
                 gradChanged=true;
             } else {
                 neighbors.appendArr(neighs); // duplicates are stored contiguously
             }
         }
         if (gradChanged){
+            version(TrackPNet) logMsg(delegate void(CharSink s){ s("gradChanged"); });
             PointAndDir[128] buf;
             auto neighAtt=lGrowableArray(buf,0);
             DirDistances!(T)[128] bufDirDist;
@@ -700,10 +757,16 @@ class MainPoint(T):MainPointI!(T){
             return addNeighbors(neighAtt.data,dirDist1.data,true);
         }
         // communicate to neighbors
+        version(TrackPNet) logMsg(delegate void(CharSink s){
+            dumper(s)("communicate to neighbors the addition of ")(newPoint.data,"x");
+        });
         auto neigToNotify=new PointToOwner(&localContext.ownerOfPoint,delegate Point(size_t i){ return neighs[i].point; },neighs.length);
         foreach (iPts;neigToNotify.pLoop){
             localContext.addPointToLocalNeighs(iPts.owner,point,iPts.points);
         }
+        version(TrackPNet) logMsg(delegate void(CharSink s){
+            dumper(s)("notify PointHasNewNeighbors ")(newPoint.data,"x");
+        });
         // notify
         PointNeighbors!(T) pn;
         pn.point=point;
@@ -711,6 +774,9 @@ class MainPoint(T):MainPointI!(T){
         pn.dirDist=dirDist;
         pn.time=Clock.now;
         localContext.nCenter.notify("PointHasNewNeighbors",Variant(pn));
+        version(TrackPNet) logMsg(delegate void(CharSink s){
+            dumper(s)("completed addition of ")(newPoint.data,"x");
+        });
         return true;
     }
 
@@ -746,6 +812,13 @@ class MainPoint(T):MainPointI!(T){
     DirDistances!(T) addDirsOf(DynPVector!(T,XType)newPos,Point newPoint,T pSize,ref LocalGrowableArray!(PointAndDir) neighAtt,
         ref LocalGrowableArray!(DirDistances!(T)) dirDist)
     {
+        void log(void delegate(CharSink s)writer){
+            logMsg(delegate void(CharSink sink){
+                dumper(sink)(".addDirsOf")(newPoint.data,"x")(" ");
+                writer(sink);
+            });
+        }
+        log(delegate void(CharSink s){s("starting");});
         bool veryClose=false;
         bool discarded=false;
         bool added=false;
@@ -754,7 +827,7 @@ class MainPoint(T):MainPointI!(T){
         diff.opBypax(pos.dynVars.x,-1,1);
         DirDistances!(T) dDist;
         
-        auto internalDiff=sqrt(diff.norm2()); // diff norm in internal coordinates
+        auto internalDiff=diff.norm2(); // diff norm in internal coordinates
         dDist.xDist=internalDiff;
         if (dDist.veryFar(localContext)) return dDist;
         auto deriv1=pos.dynVars.dVarStruct.emptyDx();
@@ -765,21 +838,35 @@ class MainPoint(T):MainPointI!(T){
         auto deriv1Dual=pos.dynVars.dVarStruct.emptyDualDx();
         pos.toDualTSpace!(T)(deriv1,deriv1Dual);
         // original norm in dual space
-        auto origNorm=sqrt(deriv1Dual.norm2());
+        auto origNorm=deriv1Dual.norm2();
         dDist.dualDist=origNorm;
-        if (dDist.veryFar(localContext)) return dDist;
+        log((CharSink s){ dumper(s)("distance is ")(dDist); });
+        if (dDist.veryFar(localContext)) {
+            log((CharSink s){ dumper(s)("veryFar"); });
+            return dDist;
+        }
         if (origNorm<localContext.minNormDual()*explorationSize){
+            log((CharSink s){ dumper(s)("veryClose"); });
             veryClose=true;
         }
         // norm in cartesian units (T space approx)
         auto normCartesian=sqrt(pos.dotInTSpace(deriv1,deriv1Dual));
         dDist.cartesianDist=normCartesian;
-        if (dDist.veryFar(localContext)) return dDist;
+        log((CharSink s){ dumper(s)("did cartesian dist, now ")(dDist); });
+        if (dDist.veryFar(localContext)) {
+            log((CharSink s){ dumper(s)("veryFar"); });
+            return dDist;
+        }
         if (normCartesian<localContext.minRealNormSelf2){
+            log((CharSink s){ dumper(s)("veryClose"); });
             veryClose=true;
         }
-        if (!dDist.neighbor(localContext,explorationSize,pSize)) return dDist;
+        if (!dDist.neighbor(localContext,explorationSize,pSize)) {
+            log((CharSink s){ dumper(s)("not neighbor"); });
+            return dDist;
+        }
         if (hasFrameOfRef){
+            log((CharSink s){ dumper(s)("checking frameOfRef"); });
             uint dirMax=invalidDir;
             size_t iMax;
             if (origNorm>localContext.minNormDual*explorationSize && origNorm<localContext.maxNormDual*explorationSize){ // this direction is the "main" direction and should be the first
@@ -806,11 +893,14 @@ class MainPoint(T):MainPointI!(T){
                         }
                     }
                     dirMax=toDir(iMax,deriv2Dual[iMax]<0);
+                    log((CharSink s){ dumper(s)("mostly in the direction ")(dirMax)(", dimension ")(iMax); });
                     bool noDir=false;
                     auto cosVal=maxVal/origNorm;
                     if (cosVal>localContext.sameDirCosAngle()){
+                        log((CharSink s){ dumper(s)("mainly in same dir"); });
                         auto dOpt2=pow2(explorationSize-maxVal)+pow2(origNorm)-pow2(maxVal);
                         if (dOpt2<localContext.dirDualSize2){
+                            log((CharSink s){ dumper(s)("within perfect dir radius"); });
                             auto dOpt=((dOpt2>0)?cast(T)sqrt(dOpt2):cast(T)0);
                             DirDistances!(T) dDist1=dDist;
                             neighAtt(PointAndDir(newPoint,dirMax));
@@ -819,6 +909,7 @@ class MainPoint(T):MainPointI!(T){
                             dDist1.dualCos=cosVal;
                             dirDist(dDist1);
                             auto actualDirFlags=exploredDirs.atomicCAS(iMax,DirFlags.Explored,DirFlags.Free);
+                            log((CharSink s){ dumper(s)("added direction"); });
                         }
                     }
                     deriv2Dual.giveBack();
@@ -849,6 +940,7 @@ class MainPoint(T):MainPointI!(T){
                 auto dOpt2=pow2(normCartesian)-pow2(deriv2[iMax])
                     +localContext.inDirCartesianScale2()*pow2(abs(deriv2[iMax])-idealLen);
                 dDist1.cartesianDirDist=dOpt2;
+                log((CharSink s){ dumper(s)("completed data of main dir dDist"); });
             }
             // loop on all directions checking cartesian thresholds
             auto dim=ndim;
@@ -861,6 +953,7 @@ class MainPoint(T):MainPointI!(T){
                         +localContext.inDirCartesianScale2()*pow2(abs(deriv2[idim])-idealLen);
                     if (dOpt2<=localContext.dirCartesianSize2){
                         auto dirAtt=toDir(idim,deriv2[idim]<0);
+                        log((CharSink s){ dumper(s)("found almost linear dependent direction ")(dirAtt); });
                         if (dirAtt!=dirMax){
                             exploredDirs.atomicCAS(dirAtt,DirFlags.Explored,DirFlags.Free);
                             if (idealLen<=localContext.zeroLen()){ // don't store directions for invalid dirs
@@ -870,6 +963,9 @@ class MainPoint(T):MainPointI!(T){
                                 added=true;
                                 neighAtt(PointAndDir(newPoint,dirAtt));
                                 dirDist(dDist1);
+                                log((CharSink s){ dumper(s)("storing almost linear dependent direction ")(dirAtt); });
+                            } else {
+                                log((CharSink s){ dumper(s)("avoiding storing linear dependent direction ")(dirAtt); });
                             }
                         }
                     }
@@ -880,25 +976,30 @@ class MainPoint(T):MainPointI!(T){
             added=true;
             neighAtt(PointAndDir(newPoint,0));
             dirDist(dDist);
+            log((CharSink s){ dumper(s)("adding very close direction"); });
         }
         if ((!added)){
             if (origNorm<=localContext.maxNormDual*explorationSize+localContext.zeroLen()){
                 added=true;
                 neighAtt(PointAndDir(newPoint,ndirs)); // not in a specific direction
                 dirDist(dDist);
+                log((CharSink s){ dumper(s)("storing unspecific direction"); });
             } else {
                 assert(origNorm<=localContext.maxNormDual*pSize+localContext.zeroLen());
                 added=true;
                 neighAtt(PointAndDir(newPoint,invalidDir)); // a neighbor of the other point
                 dirDist(dDist);
+                log((CharSink s){ dumper(s)("storing as neighbor of the other point only"); });
             }
         }
+        log((CharSink s){ dumper(s)("final dDist:")(dDist); });
         return dDist;
     }
     /// adds the given point as neighbor
     void addNeighbor(Point p){
         synchronized(this){
             if (findFirstPred(neighbors.data,delegate bool(PointAndDir pDir){ return pDir.point==p; })!=neighbors.length){
+                sout("addNeighbor(")(p)(") already added\n");
                 return;
             }
         }
@@ -916,22 +1017,31 @@ class MainPoint(T):MainPointI!(T){
         }
         bool hasGrad=hasFrameOfRef;
         auto res=addDirsOf(newPos,p,mPoint.explorationSize,neighAtt,dirDist);
-        if (neighAtt.length==0){
+        if (neighAtt.length==0){ // should not be needed
             neighAtt(PointAndDir(p,invalidDir));
             dirDist(res);
         }
+        sout("addNeighbor(")(p)(") will add ")(dirDist.data);
         addNeighbors(neighAtt.data,dirDist.data,hasGrad);
     }
     /// evaluates with the given context, returns if an evaluate was really done
     bool evalWithContext(LocalCalculationContext c,bool alwaysGrad=false){
+        version(TrackPNet){
+            logMsg(delegate void(CharSink s){
+                dumper(s)("evalWithContext(")(c.contextId)(",")(alwaysGrad)(")");
+            });
+        }
         bool calcE=(gFlags&GFlags.EnergyEvaluated)==0;
         bool calcF=((gFlags&GFlags.GradientEvaluated)==0 && (localContext.cheapGrad()||(gFlags&GFlags.GradientInProgress)!=0)||alwaysGrad);
         if (calcE||calcF){
             Real e=pos.dynVars.potentialEnergy;
             mixin(withPSys(`pSys[]=pos;`,"c."));
+            version(TrackPNet) logMsg(delegate void(CharSink s){ s("will calculate EF"); });
             c.updateEF(calcE,calcF);
+            version(TrackPNet) logMsg(delegate void(CharSink s){ s("did calculate EF"); });
             if (calcF) pos.checkMddx();
             mixin(withPSys(`pos[]=pSys;`,"c."));
+            
             if (isNaN(pos.dynVars.potentialEnergy)) {
                 pos.dynVars.potentialEnergy=e; // replace with if(!calcE) ?
             } else {
@@ -943,16 +1053,17 @@ class MainPoint(T):MainPointI!(T){
                 }),__FILE__,__LINE__);
             }
             auto target=localContext.ownerOfPoint(point);
-            if (!calcF){
+            if (calcE){
+                version(TrackPNet) logMsg(delegate void(CharSink s){ s("will communicate energy"); });
                 localContext.addEnergyEvalLocal(target,point,e);
             }
             bool calcMore=false;
             if (!calcF){
+                version(TrackPNet) logMsg(delegate void(CharSink s){ s("ask for extra gradient"); });
                 calcMore=localContext.speculativeGradient(target,point,e);
-            } else {
-                addEnergyEvalLocal(e);
             }
             if (calcMore){
+                version(TrackPNet) logMsg(delegate void(CharSink s){ s("calc extra gradient"); });
                 calcF=true;
                 pos.checkMddx();
                 c.updateEF(false,true);
@@ -960,14 +1071,25 @@ class MainPoint(T):MainPointI!(T){
                 // update also the energy? it should not change...
             }
             if (calcF){
+                version(TrackPNet) logMsg(delegate void(CharSink s){ s("communicate force eval"); });
                 if ((gFlags&GFlags.LocalCopy)!=0){
                     localContext.addGradEvalLocal(target,point,pSysWriter(pos));
                 } else {
                     didGradEval();
                 }
             }
+            version(TrackPNet){
+                logMsg(delegate void(CharSink s){
+                    dumper(s)(" did evalWithContext(")(c.contextId)(",")(alwaysGrad)(")");
+                });
+            }
             return true;
         } else {
+            version(TrackPNet){
+                logMsg(delegate void(CharSink s){
+                    dumper(s)(" no calculation in evalWithContext(")(c.contextId)(",")(alwaysGrad)(")");
+                });
+            }
             return false;
         }
     }
@@ -992,8 +1114,8 @@ class MainPoint(T):MainPointI!(T){
             if (isNaN(energy) || (gFlags&GFlags.EnergyEvaluated)==0) {
                 assert((gFlags&GFlags.EnergyInfo)==GFlags.InProgress,collectAppender(delegate void(CharSink s){
                     dumper(s)("invalid energy and not in progress in point ")(this); }));
-                localContext.logMsg(delegate void(CharSink s){
-                    dumper(s)("skipping energy info (")(e)(") of neighbor ")(neigh)(" of point ")(point)
+                logMsg(delegate void(CharSink s){
+                    dumper(s)("skipping energy info (")(e)(") of neighbor ")(neigh)
                         (" as this point doesn't have a calculated energy yet");
                 });
                 return;
@@ -1034,16 +1156,16 @@ class MainPoint(T):MainPointI!(T){
             size_t iStart=0;
             while (1){
                 while(iStart<neighbors.length){
-                    if (p==neighbors[iStart].point) break;
+                    if (p==_neighbors[iStart].point) break;
                     ++iStart;
                 }
                 if (iStart==neighbors.length) break;
                 size_t iEnd=iStart+1;
                 while(iEnd<neighbors.length){
-                    if (p!=neighbors[iEnd].point) break;
+                    if (p!=_neighbors[iEnd].point) break;
                     ++iEnd;
                 }
-                localCopy.appendArr(neighbors.data[iStart..iEnd]);
+                localCopy.appendArr(_neighbors.data[iStart..iEnd]);
                 iStart=iEnd;
             }
         }
@@ -1065,8 +1187,8 @@ class MainPoint(T):MainPointI!(T){
         uint oldGFlags;
         synchronized(this){
             if ((! isNaN(pos.dynVars.potentialEnergy))&&(pos.dynVars.potentialEnergy!=e)){
-                localContext.logMsg(delegate void(CharSink s){
-                    dumper(s)("double eval of energy (")(e)(" and ")(pos.dynVars.potentialEnergy)(") in point ")(point);
+                logMsg(delegate void(CharSink s){
+                    dumper(s)("double eval of energy (")(e)(" and ")(pos.dynVars.potentialEnergy)(")");
                 });
             }
             pos.dynVars.potentialEnergy=e;
@@ -1115,8 +1237,8 @@ class MainPoint(T):MainPointI!(T){
             if (isNaN(energy) || (gFlags&GFlags.EnergyEvaluated)==0) {
                 assert((gFlags&GFlags.EnergyInfo)==GFlags.InProgress,collectAppender(delegate void(CharSink s){
                     dumper(s)("invalid energy and not in progress in point ")(this); }));
-                localContext.logMsg(delegate void(CharSink s){
-                    dumper(s)("skipping energy info (")(e)(") of neighbor ")(neigh)(" of point ")(point)
+                logMsg(delegate void(CharSink s){
+                    dumper(s)("skipping energy info (")(e)(") of neighbor ")(neigh)
                         (" as this point doesn't have a calculated energy yet");
                 });
                 return;
@@ -1168,13 +1290,13 @@ class MainPoint(T):MainPointI!(T){
             size_t iStart=0;
             while (1){
                 while(iStart<neighbors.length){
-                    if (p==neighbors[iStart].point) break;
+                    if (p==_neighbors[iStart].point) break;
                     ++iStart;
                 }
                 if (iStart==neighbors.length) break;
                 size_t iEnd=iStart+1;
                 while(iEnd<neighbors.length){
-                    if (p!=neighbors[iEnd].point) break;
+                    if (p!=(*(neighbors()))[iEnd].point) break;
                     ++iEnd;
                 }
                 localCopy.appendArr(neighbors.data[iStart..iEnd]);
@@ -1260,7 +1382,7 @@ class MainPoint(T):MainPointI!(T){
         assert((gFlags&GFlags.GradientInfo)==GFlags.GradientKnown,"needs gradient");
         auto newMinDir=pos.dynVars.dVarStruct.emptyDualDx();
         pos.toDualTSpace(pos.dynVars.mddx,newMinDir);
-        auto n2=newMinDir.norm2();
+        auto n2=newMinDir.norm22();
         if (n2==0){
             newMinDir[0]=1;
             _minDirScale=0;
@@ -1293,8 +1415,13 @@ class MainPoint(T):MainPointI!(T){
     }
     void opSliceAssign(DriedPoint!(T)p){
         _point=p.point;
-        pos[]=p.pos;
-        minDir[]=p.minDir;
+        p.pos.copyTo(pos);
+        if (!p.minDir.isDummy){
+            if (_minDir.isDummy){
+                _minDir=pos.dynVars.dVarStruct.emptyDualDx();
+            }
+            _minDir[]=p.minDir;
+        }
         _exploredDirs=p.exploredDirs;
         _neighbors=p.neighbors;
         _minDirScale=p.minDirScale;
@@ -1303,4 +1430,4 @@ class MainPoint(T):MainPointI!(T){
     }
 }
 
-MainPoint!(Real) dummyP;
+private MainPoint!(Real) dummyP; // to get some errors already compiling this

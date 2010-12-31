@@ -101,6 +101,8 @@ class PNetSilosClient(T): LocalSilosI!(T){
         this.input=input;
         this.ctx=ctx;
         this.pPool=pPool;
+        this.ownerCache=new Deque!(PointAndOwner)();
+        this.localCache=new HashMap!(Point,CachedPoint!(T))();
         if (pPool is null) this.pPool=cachedPool(&this.allocPoint);
         if (ctx is null){
             assert(0,"CalculationContext should not be null");
@@ -211,7 +213,12 @@ class PNetSilosClient(T): LocalSilosI!(T){
     
     /// returns the next operation to execute
     EvalOp!(T) getNextOp(SKey s){
-        return connection.getNextOp(s);
+        version(TrackPNet) logMsg1("trying to getNextOp");
+        auto res=connection.getNextOp(s);
+        version(TrackPNet) logMsg(delegate void(CharSink s){
+            dumper(s)("nextOp is ")(res);
+        });
+        return res;
     }
     /// called when an evaluation fails, flags: attemptRetry/don't Retry
     void evaluationFailed(SKey s,Point p){
@@ -295,11 +302,17 @@ class PNetSilosClient(T): LocalSilosI!(T){
     }
     /// writes out a log message (at once)
     void logMsg(void delegate(void delegate(char[]))writer){
-        sinkTogether(log,writer);
+        sinkTogether(log,delegate void(CharSink s){
+            dumper(s)("<PNetSilosClient_")(input.myFieldName)("@")(cast(void*)this)
+                (" time=")(ev_time())(">")(writer)("</PNetSilosClient_")(input.myFieldName)(">\n");
+        });
     }
     /// writes out a log message
     void logMsg1(char[]msg){
-        log(msg);
+        sinkTogether(log,delegate void(CharSink s){
+            dumper(s)("<PNetSilosClient_")(input.myFieldName)("@")(cast(void*)this)
+                (" time=")(ev_time())(">")(msg)("</PNetSilosClient_")(input.myFieldName)(">\n");
+        });
     }
     /// owner of the given point (just a utility method)
     SKey ownerOfPoint(Point p){
@@ -400,6 +413,9 @@ class PNetSilosClient(T): LocalSilosI!(T){
     /// a local point (possibly a copy), is retained, and needs to be released (thus the create in the name)
     /// the time t is used to decide if a cached version can be used
     MainPointI!(T)createLocalPoint(Point p,ev_tstamp t){
+        version(TrackPNet) logMsg(delegate void(CharSink s){
+            dumper(s)("creating new pocal point ")(p);
+        });
         CachedPoint!(T) cachedP;
         CachedPoint!(T) * pC;
         synchronized(localCache){
@@ -408,25 +424,36 @@ class PNetSilosClient(T): LocalSilosI!(T){
                 cachedP=*pC;
             }
         }
-        if (pC is null){
-            cachedP.mainPoint=pPool.getObj();
-            cachedP.mainPoint.pos.checkX();
-            cachedP.mainPoint._point=p;
-            cachedP.mainPoint._gFlags|=GFlags.LocalCopy;
-        } else if (cachedP.lastSync>t){
+        if (pC !is null && cachedP.lastSync>t){
             cachedP.mainPoint.retain;
+            version(TrackPNet) logMsg(delegate void(CharSink s){
+                dumper(s)("will return ")(cachedP.mainPoint);
+            });
             return cachedP.mainPoint;
         }
+        cachedP.mainPoint=pPool.getObj();
+        cachedP.mainPoint.pos.checkX();
+        cachedP.mainPoint._point=p;
+        cachedP.mainPoint._gFlags|=GFlags.LocalCopy;
+
         cachedP.lastSync=ev_time();
         cachedP.mainPoint[]=mainPoint(ownerOfPoint(p),p);
         synchronized(localCache){
             localCache[p]=cachedP;
         }
+        version(TrackPNet) logMsg(delegate void(CharSink s){
+            dumper(s)("will return ")(cachedP.mainPoint);
+        });
+        cachedP.mainPoint.retain;
         return cachedP.mainPoint;
     }
     /// drops a cached point (the point is not in use anymore)
     void dropCachedPoint(MainPointI!(T)p){
         synchronized(localCache){
+            auto lP=p.point in localCache;
+            if (lP!is null && lP.mainPoint is p){
+                p.release;
+            }
             localCache.removeKey(p.point);
         }
     }

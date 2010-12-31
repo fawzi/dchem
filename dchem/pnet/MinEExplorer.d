@@ -34,11 +34,11 @@ class MinEExplorerDef:ExplorerGen{
         return explorerLowP(silos);
     }
     ExplorerI!(Real) explorerReal(LocalSilosI!(Real) silos){
-        auto res=new MinEExplorer!(Real)(this);
+        auto res=new MinEExplorer!(Real)(this,silos);
         return res;
     }
     ExplorerI!(LowP) explorerLowP(LocalSilosI!(LowP) silos){
-        auto res=new MinEExplorer!(LowP)(this);
+        auto res=new MinEExplorer!(LowP)(this,silos);
         return res;
     }
 }
@@ -70,10 +70,11 @@ class MinEExplorer(T):EmptyExplorer!(T){
     long availEval;
     
     MinEExplorerDef input;
-    this(MinEExplorerDef input){
+    this(MinEExplorerDef input,LocalSilosI!(T)silos){
         this.input=input;
         this.toExploreMore=new MinHeapSync!(PointAndEnergy)();
         this.removedPoints=new HashSet!(Point);
+        this.silos=silos;
     }
 
     /// adds energy for a local point and bCasts addEnergyEval
@@ -238,9 +239,4 @@ class MinEExplorer(T):EmptyExplorer!(T){
     void rmPoint(Point p){
         removedPoints.add(p);
     }
-    void workOn(LocalSilosI!(T) s){
-        s.addExplorer(this);
-        this.silos=s;
-    }
-    
 }

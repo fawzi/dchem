@@ -6,6 +6,7 @@ import dchem.sys.ParticleSys;
 import dchem.pnet.PointEvalOp;
 import blip.serialization.Serialization;
 import blip.io.BasicIO;
+import blip.io.Console;
 
 /// adds the ref pos to the silos as point to evaluate
 class AddRefPosGen:SilosWorkerGen {
@@ -26,15 +27,18 @@ class AddRefPosGen:SilosWorkerGen {
 
 class AddRefPos(T):SilosWorkerI!(T) {
     AddRefPosGen input;
-    LocalSilosI!(T) silos;
     this(AddRefPosGen input){
         this.input=input;
     }
     
     void workOn(LocalSilosI!(T) silos){
+        silos.logMsg1("AddRefPos");
+        assert(silos!is null);
         if (silos.paraEnv.myRank==0){
-            ParticleSys!(T) pos=this.silos.refPos();
+            ParticleSys!(T) pos=silos.refPos();
+            assert(pos!is null);
             auto newP=silos.newPointAt(pos.dynVars.x);
+            assert(newP!is null);
             newP=silos.bcastPoint(newP);
             EvalOp!(T) newOp=new PointEvalOp!(T)(newP.point,true);
             silos.addEvalOp(SKeyVal.Master,newOp);

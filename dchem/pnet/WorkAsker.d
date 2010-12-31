@@ -11,17 +11,20 @@ import blip.serialization.Serialization;
 import dchem.pnet.PNetSilosClient;
 import blip.io.EventWatcher: ev_tstamp,ev_time;
 import blip.io.Console;
+import blip.parallel.rpc.Rpc;
 version=TrackWorkAsker;
 
 class WorkAskerGen:RemoteCCTask,Sampler,SilosConnectorI {
-    char[] _connectionUrl;
+    string _connectionUrl;
+    string mainWGenUrl;
     double maxDuration=525600.0;
     double maxDurationTot=525600.0;
     long maxEval=long.max;
     long maxWait=100;
     long ownerCacheSize=10;
-    char[] _precision="LowP";
+    string _precision="LowP";
     InputField evaluator;
+    bool _noWorkLeft=false;
     
     mixin(serializeSome("dchem.WorkAsker",`
     connectionUrl: the url to use to get the connection to the silos
@@ -36,6 +39,16 @@ class WorkAskerGen:RemoteCCTask,Sampler,SilosConnectorI {
     mixin myFieldMixin!();
     WorkAsker!(LowP)[] wAskersLowP;
     WorkAsker!(Real)[] wAskersReal;
+    
+    void noWorkLeft(){
+        _noWorkLeft=true;
+        if (mainVendor is null && mainWGenUrl.length>0){
+            rpcManualVoidCall(mainWGenUrl~"/noWorkLeft");
+        }
+    }
+
+    mixin(rpcMixin("dchem.WorkAsker", "","noWorkLeft"));
+    DefaultVendor mainVendor;
     
     /// precision of the silos
     string precision(){
@@ -90,16 +103,28 @@ class WorkAskerGen:RemoteCCTask,Sampler,SilosConnectorI {
     
     /// runs a work asker
     void run(LinearComm pEnv, CharSink log){
+        assert(pEnv!is null,"pEnv");
+        assert(log!is null,"log");
         if (connectionUrl.length==0){
             sinkTogether(log,delegate void(CharSink s){
                 dumper(s)("connectionUrl has to be given to WorkAsker ")(myFieldName)("\n");
             });
         }
+        if (mainWGenUrl.length==0){
+            if (mainVendor is null){
+                if (pEnv.myRank==0){
+                    mainVendor=new DefaultVendor(this);
+                    ProtocolHandler.defaultProtocol.publisher.publishObject(mainVendor,"WorkAsker_"~myFieldName,true);
+                    mainWGenUrl=mainVendor.proxyObjUrl();
+                }
+                mpiBcastT(pEnv,mainWGenUrl,0);
+            }
+        }
         auto m=cast(Method)evaluator.contentObj;
         assert(m!is null);
         m.setup(pEnv,log);
         auto maxTotTime=ev_time()+maxDurationTot*60;
-        while(true){
+        while(!_noWorkLeft){
             auto cc=m.getCalculator(true,[]);
             if (cc is null) break;
             cc.executeLocally(this);
@@ -215,6 +240,13 @@ class WorkAsker(T){
         version(TrackWorkAsker){
             sout(input.myFieldName~" starting work asker\n");
         }
+        assert(status<=Status.Running);
+        bool noWorkLeft=false;
+        scope(exit){
+            input.rmWorkAsker(this);
+            status=Status.Stopped;
+            ctx.giveBack();
+        }
         try{
             synchronized(this){
                 if (status!=Status.Configure){
@@ -247,6 +279,7 @@ class WorkAsker(T){
                     --leftEvals;
                     newOp.doOp();
                 } else {
+                    input.noWorkLeft();
                     break;
                 }
             }
@@ -257,12 +290,9 @@ class WorkAsker(T){
         }
         version(TrackWorkAsker) {
             sinkTogether(sout,delegate void(CharSink s){
-                dumper(s)("finished")(this)("\n");
+                dumper(s)("finished ")(this)("\n");
             });
         }
-        input.rmWorkAsker(this);
-        status=Status.Stopped;
-        ctx.giveBack();
     }
     
     void stop(){

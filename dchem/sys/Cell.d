@@ -110,7 +110,7 @@ char[] cellLoopMixin(char[][] names,char[]op){
 }
 
 /++
- +  description of the simulation cell
+ +  description of the simulation cell (this should normally behave as an immutable object)
  +   - periodicity: an array with 1 if that dimension is periodic, 0 if it isn't
  +   - h: matrix that maps the cell [0,1]^3 to the real cell in atomic units
  +   - h_inv: inverse of h
@@ -120,50 +120,80 @@ char[] cellLoopMixin(char[][] names,char[]op){
 class Cell(T)
 {
     alias T dtype;
-    Matrix!(T,3,3) h,hInv;
+    Matrix!(T,3,3) h,_hInv;
     Vector!(T,3) x0;
     int[3] periodic;
+    bool hInvOk;
 
     this(){} // just for serialization
     
     this(Matrix!(T,3,3) h,int[3] periodic){
-        this(h,periodic,Vector!(T,3).zero,h.inverse);
+        this(h,periodic,Vector!(T,3).zero);
     }
-    this(Matrix!(T,3,3) h,int[3] periodic,Vector!(T,3) x0){
-        this(h,periodic,x0,h.inverse);
-    }
-    this(Matrix!(T,3,3) h,int[3] periodic,Vector!(T,3) x0,Matrix!(T,3,3)hInv){
+    this(Matrix!(T,3,3) h,int[3] periodic,Vector!(T,3) x0,bool hInvOk=false){
         this.h=h;
         this.periodic[]=periodic;
-        this.hInv=hInv;
+        this._hInv=hInv;
+        this.hInvOk=hInvOk;
         this.x0=x0;
     }
     
+    Matrix!(T,3,3) hInv(){
+        if (!hInvOk){
+            synchronized(this){
+                if (!hInvOk){
+                    /+if (h==Matrix!(T,3,3).zero){
+                        _hInv=Matrix!(T,3,3).identity;
+                    } else {+/
+                        _hInv=h.inverse;
+                    /+}+/
+                    hInvOk=true;
+                }
+            }
+        }
+        return _hInv;
+    }
+    
+    static void bypaxOp(V)(ref Cell!(T) y, Cell!(V)x,T a=cscalar!(T,1),T b=cscalar!(T,1)){
+        auto res=y.dup();
+        res.opBypax(x,a,b);
+        y=res;
+    }
+    Cell!(T) opMul(V)(V x){
+        auto res=this.dup();
+        static if (is(typeof(res.opMulAssign(x)))){
+            res.opMulAssign(cast(T)x);
+        } else {
+            static assert(0,"cannot perform Cell!("~T.stringof~".opMul with "~V.stringof~")");
+        }
+        return res;
+    }
     /// y.opBypax(x,a,b): y = ax+by
-    void opBypax(V)(Cell!(V) x,T a=cscalar!(T,1),T b=cscalar!(T,1)){
+    private void opBypax(V)(Cell!(V) x,T a=cscalar!(T,1),T b=cscalar!(T,1)){
         auto y=this;
         h.opBypax(h,a,b);
         mixin(cellLoopMixin(["y","x"],"y.opBypax(x,a,b);"));
     }
     
-    void opMulAssign()(T scale){
+    private void opMulAssign()(T scale){
         auto x=this;
         mixin(cellLoopMixin(["x"],"x*=scale;"));
     }
-    void opMulAssign(V)(Cell!(V) y){
+    private void opMulAssign(V)(Cell!(V) y){
         auto x=this;
         mixin(cellLoopMixin(["x","y"],"x *= y;"));
     }
     
-    void opSliceAssign(V)(ref Cell!(V) c2){
+    private void opSliceAssign(V)(ref Cell!(V) c2){
         periodic[]=c2.periodic;
         h.set(c2.h);
-        hInv.set(c2.hInv);// recalculate inverse in case the precision of T> precision of V?
+        _hInv.set(c2._hInv);// recalculate inverse in case the precision of T> precision of V?
+        hInvOk=c2.hInvOk;
         x0.set(c2.x0);
     }
-    void opSliceAssign()(T val){
+    private void opSliceAssign()(T val){
         h[]=val;
-        hInv[]=T.init;
+        hInvOk=false;
         x0[]=val;
     }
     Cell!(V) dupT(V=T)(){
@@ -172,7 +202,7 @@ class Cell(T)
         return res;
     }
     alias dupT!(T) dup;
-    mixin(serializeSome("","periodic|h|hInv|x0"));
+    mixin(serializeSome("","periodic|h|x0"));
     mixin printOut!();
 }
 

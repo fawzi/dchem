@@ -14,6 +14,7 @@ import blip.io.StreamConverters;
 import tango.io.device.File;
 import tango.io.device.Conduit;
 import dchem.input.RootInput;
+import blip.io.EventWatcher:ev_time;
 
 // object that keeps the journal of the computations done
 class PNetJournalGen:ExplorationObserverGen{
@@ -23,6 +24,7 @@ class PNetJournalGen:ExplorationObserverGen{
     bool logOtherStart;
     bool logOtherPos;
     bool logNeighInfo;
+    int maxJournalIds=10;
 
     this(){}
     ExplorationObserverI!(Real) observerReal(LocalSilosI!(Real) silos){
@@ -149,7 +151,7 @@ class PNetJournal(T):ExplorationObserverI!(T){
             bool skip=s.canDropDefaults();
             s.field(metaI[0],kind);
             s.field(metaI[1],point);
-            if (!skip || pos.isNonNull()) s.field(metaI[2],pos);
+            if ((!skip) || (!pos.isDummy())) s.field(metaI[2],pos);
             if (!skip || kind==Kind.EvalE || kind==Kind.NeighborHasGradient || kind==Kind.NeighborHasEnergy) s.field(metaI[3],energy);
             if (!skip || kind==Kind.StartPoint) s.field(metaI[4],flags);
             if (!skip || kind==Kind.NeighborHasEnergy|| kind==Kind.NeighborHasEnergy) s.field(metaI[5],neighs);
@@ -171,8 +173,8 @@ class PNetJournal(T):ExplorationObserverI!(T){
         auto arr=lGrowableArray(buf,0);
         OutputStream stream;
         Exception lastE;
-        for (int i=0;i<10;++i){
-            const File.Style WriteUnique = {File.Access.Read, File.Open.New, File.Share.Read};
+        for (int i=0;i<input.maxJournalIds;++i){
+            const File.Style WriteUnique = {File.Access.Write, File.Open.New, File.Share.Read};
             arr(input.journalDir);
             if (input.journalDir.length>0 && input.journalDir[$-1]!='/') arr("/");
             arr(input.myFieldName);
@@ -199,6 +201,8 @@ class PNetJournal(T):ExplorationObserverI!(T){
             auto binSink=binaryDumper(stream);
             jSerial=new SBinSerializer(binSink);
         }
+        jSerial("journal start @ ");
+        jSerial(ev_time());
     }
     
     // ExplorationObserverI(T)

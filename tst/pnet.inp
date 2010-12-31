@@ -51,7 +51,8 @@ limitedMB:{
 }
 
 workAsker:{
-    class:dchem.WorkAsker
+    class:dchem.WorkAsker,
+    evaluator:{ class:Ref, name:limitedMB}
 }
 
 journal:{
@@ -59,11 +60,16 @@ journal:{
     journalFormat:json
 }
 
+initialPos:{
+    class:dchem.AddRefPos
+}
+
 pnetSilos:{
     class:dchem.Silos,
     evaluator:{ class:Ref, name:limitedMB}
     evaluatorTask:{ class:Ref, name:workAsker}
     explorers:[ { class:Ref, name:MinE },{ class:Ref, name:journal } ]
+    loaders:[{ class:Ref, name:initialPos }]
 }
 
 main:{class:Ref, name:pnetSilos}

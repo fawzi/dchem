@@ -29,14 +29,16 @@ class DenseLocalPointArray(T){
         readBarrier();
         auto idx=lBound(keys,k,0,nKeys);
         assert(idx<nKeys && keys[idx]==k,"could not find local key "~k.toString());
-        if (values.length<idx){
+        if (values.length<=idx){
             values.growTo(keys.length);
         }
-        return values.ptrI(idx);
+        auto res=values.ptrI(idx);
+        return res;
     }
     void opIndexAssign(T val,Point k){
         synchronized(this){
-            *ptrI(k)=val;
+            auto vPos=ptrI(k);
+            *vPos=val;
         }
     }
     T* opIn_r(Point k){
@@ -68,8 +70,11 @@ class DenseLocalPointArray(T){
         return keys.length;
     }
     
-    this(){
-        keys=new BatchedGrowableArray!(Point,batchSize)();
+    this(BatchedGrowableArray!(Point,batchSize) pointsKey){
+        keys=pointsKey;
         values=new BatchedGrowableArray!(T,batchSize)();
+    }
+    this(){
+        this(new BatchedGrowableArray!(Point,batchSize)());
     }
 }

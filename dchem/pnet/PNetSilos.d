@@ -36,6 +36,7 @@ import blip.io.Console;
 import blip.parallel.rpc.RpcMixins;
 import blip.parallel.mpi.Mpi;
 import blip.io.EventWatcher;
+import dchem.pnet.WaitOp;
 //import dchem.pnet.WorkAsker;
 
 /// help structure 
@@ -110,7 +111,7 @@ class SilosGen:Sampler {
     PNetSilos!(LowP)[] silosLowP;
     
     /// number of exploration steps to perform
-    long explorationSteps;
+    long explorationSteps=long.max;
     /// number of exploration steps to perform
     long maxExplorationTries=10;
     /// the current method for energy evaluation
@@ -153,6 +154,9 @@ class SilosGen:Sampler {
     /// distance that is considered equivalent to 0
     Real zeroLen=1.e-10;
     
+    /// the time to wait when no task is available
+    double noTaskWaitTime=10;
+    
     // implicit topology parameters
     /// minimum norm in the real (cartesian) space for a self generated direction to be accepted before moving
     Real minRealNormSelf0(){
@@ -192,8 +196,9 @@ class SilosGen:Sampler {
     
     mixin myFieldMixin!();
     mixin(serializeSome("dchem.Silos",`
+        noTaskWaitTime: the number of seconds to wait when no task is available (10)
         evaluator: the method to perform energy evaluations
-        evaluatorTask: the task to execute on the evaluator (with no task you should start them manually)
+        evaluatorTask: the task to execute (normally to start clients that will perform evaluations, if a SilosConnectorI then it is passed silos and accuracy before starting)
         precision: the precision with which the points are stored
         explorers: the observers and explorers active on the point network
         loaders: SilosWorkers that load already evaluated points (called after the explorer are set up, before exploring)
@@ -225,8 +230,8 @@ class SilosGen:Sampler {
             log("evaluator should be valid and be a Method in field ")(myFieldName)("\n");
             res=false;
         }
-        if (evaluatorTask !is null && cast(RemoteCCTask)evaluatorTask.contentObj is null){
-            log("evaluatorTask if given should be a RemoteCCTask in field ")(myFieldName)("\n");
+        if (evaluatorTask !is null && cast(Sampler)evaluatorTask.contentObj is null){
+            log("evaluatorTask if given should be a Sampler in field ")(myFieldName)("\n");
             res=false;
         }
         if (precision!="LowP" && precision!="Real"){
@@ -336,7 +341,10 @@ class PointBcastProgress(T){
     WaitConditionT!(false) nameKnown;
     PointBcastProgress nextPoint;
     PoolI!(PointBcastProgress) pool;
-    this(PoolI!(PointBcastProgress)p){ pool=p; }
+    this(PoolI!(PointBcastProgress)p){
+        pool=p;
+        this.nameKnown=new WaitConditionT!(false)(&this.nameIsKnown);
+    }
     this(MainPointI!(T) p,PoolI!(PointBcastProgress)pool=null){
         pointToBCast=p;
         this.pool=pool;
@@ -364,6 +372,9 @@ class PointBcastProgress(T){
         return nP;
     }
     void publish(){
+        synchronized(localContext.publishingPoints){
+            this.localContext.publishingPoints[pointToBCast.point]=this;
+        }
         foreach(sK,sL;localContext.silos){
             synchronized(this){
                 ++waitingName;
@@ -392,9 +403,6 @@ class PointBcastProgress(T){
             auto np=localContext.newPointAt(pointToBCast.pos.dynVars.x);
             np[]=dP;
             nextPP=PointBcastProgress(np);
-            synchronized(localContext.publishingPoints){
-                localContext.publishingPoints[np.point]=nextPP;
-            }
             nextPP.publish();
         }
         synchronized(this){
@@ -407,6 +415,7 @@ class PointBcastProgress(T){
         synchronized(this){
             --waitingName;
         }
+        assert(nameKnown!is null);
         nameKnown.checkCondition();
     }
     MainPointI!(T) finalName(){
@@ -419,10 +428,10 @@ class PointBcastProgress(T){
         if (nextP!is null) {
             res=nextP.finalName;
         }
-        if (pool!is null) pool.giveBack(this);
         synchronized(localContext.publishingPoints){
             localContext.publishingPoints.removeKey(pointToBCast.point);
         }
+        if (pool!is null) pool.giveBack(this);
         return res;
     }
 }
@@ -548,7 +557,7 @@ class PNetSilos(T): LocalSilosI!(T){
     Deque!(ExplorationObserverI!(T)) observers;
     /// evaluator
     Method evaluator;
-    RemoteCCTask evaluatorTask;
+    Sampler evaluatorTask;
     PoolI!(MainPoint!(T)) pPool;
     Deque!(SilosWorkerI!(T)) loaders;
     Deque!(SilosWorkerI!(T)) monitors;
@@ -656,26 +665,13 @@ class PNetSilos(T): LocalSilosI!(T){
     
     void startAskers(){
         if (evaluatorTask is null) return;
-        auto silosC=cast(SilosConnectorI)evaluatorTask;
+        auto silosC=cast(SilosConnectorI)cast(Object)evaluatorTask;
         if (silosC!is null){
             silosC.setConnectionAndPrecision(silosCoreUrl,input.precision);
         }
-        try{
-            /// start the askers
-            while(true){
-                logMsg1("silos trying to start Asker");
-                CalculationContext cInstance=evaluator.getCalculator(true,[]);
-                if (cInstance is null) break;
-                logMsg1("silos will send to context");
-                cInstance.executeLocally(evaluatorTask);
-                logMsg1("silos sent asker to context");
-            }
-        } catch (Exception e){
-            sinkTogether(log,delegate void(CharSink s){
-                dumper(s)("error while starting askers:")(e)("\n");
-            });
-        }
-        logMsg1("silos finished Asker starting");
+        logMsg1("starting evaluatorTask");
+        evaluatorTask.run(silosParaEnv,log);
+        logMsg1("evaluatorTask finished");
     }
     
     void start(LinearComm pEnv, CharSink log){
@@ -810,20 +806,33 @@ class PNetSilos(T): LocalSilosI!(T){
     /// to receive a new operation to do
     void prepareNextOp(SKey s, int tag){
         if (s==SKeyVal.All){
+            SKey myK;
             foreach (sK,sL;silos){
-                sL.prepareNextOp(sK,tag);
+                if (!hasKey(sK)){
+                    sL.prepareNextOp(sK,tag);
+                } else {
+                    myK=sK;
+                }
             }
+            assert(hasKey(myK));
+            prepareNextOp(myK,tag);
         } else if (hasKey(s)){
             ExplorerI!(T) e;
             loop:for (int i=0;i<input.maxExplorationTries;++i){
                 char[] explName;
-                if (paraEnv.myRank==0 && (!activeExplorers.popFront(explName))){
-                    for (int j=0;j<10;++j){
-                        waitExplorers.wait();// to do: should have a timeout
-                        if (activeExplorers.popFront(explName)) break;
+                if (paraEnv.myRank==0){
+                    if (!activeExplorers.popFront(explName)){
+                        for (int j=0;j<10;++j){
+                            waitExplorers.wait();// to do: should have a timeout
+                            if (activeExplorers.popFront(explName)) break;
+                        }
                     }
+                    explName=explName.dup; // bcast needs a mutable copy...
                 }
                 mpiBcastT(paraEnv,explName,0,tag);
+                logMsg(delegate void(CharSink s){
+                    dumper(s)("prepareNextOp choosenExplorer:")(explName)("\n");
+                });
                 if (explName.length>0){
                     synchronized(explorers){
                         e=explorers[explName];
@@ -840,7 +849,7 @@ class PNetSilos(T): LocalSilosI!(T){
                         break loop;
                     case ExplorerI!(T).ReturnFlag.SkipOp:
                         if (paraEnv.myRank==0){
-                            auto emptyOp=new EvalOp!(T)();
+                            auto emptyOp=new WaitOp!(T)(input.noTaskWaitTime);
                             registerPendingOp(emptyOp);
                             localOps.pushBack(emptyOp);
                         }
@@ -868,6 +877,7 @@ class PNetSilos(T): LocalSilosI!(T){
     /// returns an EmptyOp if there is no work
     EvalOp!(T) getNextOp(SKey s){
         if (hasKey(s)){
+            version(TrackPNet) logMsg1("starting getNextOp");
             assert(hasKey(SKeyVal.Master),"works only on master");
             assert((cast(int)paraEnv.maxTagMask)>0);
             EvalOp!(T) res;
@@ -877,21 +887,27 @@ class PNetSilos(T): LocalSilosI!(T){
                     tag=cast(int)(nextTag.next & paraEnv.maxTagMask);
                 } while (tag==0)
                 synchronized(this){
-                    if (runLevel>=RunLevel.Running) return null;
+                    if (runLevel>RunLevel.Running) {
+                        version(TrackPNet) logMsg(delegate void(CharSink s){ dumper(s)("getNextOp runLevel>running, will return null"); });
+                        return null;
+                    }
                     if (nEvals>=input.explorationSteps) {
                         runLevel=RunLevel.WaitPending;
                         waitPendingEnd.checkCondition();
+                        version(TrackPNet) logMsg(delegate void(CharSink s){ dumper(s)("getNextOp will return null"); });
                         return null;
                     }
                     ++nEvals;
                 }
+                prepareNextOp(SKeyVal.All,tag);
             }
+            version(TrackPNet) logMsg(delegate void(CharSink s){ dumper(s)("getNextOp will return ")(res); });
             return res;
         } else {
             return silosForKey(s).getNextOp(s);
         }
     }
-    /// called when an evaluation fails, flags: attemptRetry/don't Retry
+    /// called when an evaluation fails
     void evaluationFailed(SKey s,Point p){
         assert(0,"to do");
     }
@@ -944,7 +960,7 @@ class PNetSilos(T): LocalSilosI!(T){
         assert(driedPoint.pos!is null,"position has to be valid");
         pSys[]=driedPoint.pos;
         DynPVect!(T,DualDxType) mDir;
-        if (driedPoint.minDir.isNonNull()){
+        if (!driedPoint.minDir.isDummy()){
             mDir=pSys.dynVars.dVarStruct.emptyDualDx();
             mDir[]=minDir;
         }
@@ -958,7 +974,7 @@ class PNetSilos(T): LocalSilosI!(T){
     void addEnergyEvalLocal(SKey s,Point p,Real energy){
         if (hasKey(s)) {
             auto mp=localPoints[p];
-            if (! mp.isLocalCopy){
+            if (mp.isLocalCopy){
                 throw new Exception("Local copy in PNetSilos.addEnergyEvalLocal",__FILE__,__LINE__);
             }
             mp.addEnergyEvalLocal(energy);
@@ -1015,7 +1031,7 @@ class PNetSilos(T): LocalSilosI!(T){
             }
             silosForKey(owner).didLocalPublish(owner,newPoint,s);
             foreach(p,mp;localPoints){
-                auto newPos=refPos.dynVars.dVarStruct.emptyX();
+                auto newPos=refPos.dynVars.dVarStruct.emptyX(true);
                 newPos[]=pos.x;
                 if (mp!is null){
                     mp.checkIfNeighbor(newPos,newPoint,pSize);
@@ -1092,7 +1108,8 @@ class PNetSilos(T): LocalSilosI!(T){
             if (mp!is null){
                 PointBcastProgress!(T) pp;
                 synchronized(publishingPoints){
-                    pp=publishingPoints[point];
+                    auto ppPtr=point in publishingPoints;
+                    if (ppPtr!is null) pp=*ppPtr;
                 }
                 pp.communicateCollision();
                 mp.drop(); // redundant...
@@ -1115,6 +1132,7 @@ class PNetSilos(T): LocalSilosI!(T){
             synchronized(publishingPoints){
                 pp=publishingPoints[p0];
             }
+            assert(pp!is null);
             pp.communicatePublish(source);
             notifyLocalObservers(delegate void(ExplorationObserverI!(T)obs){
                 obs.didLocalPublish(s,p0,source);
@@ -1243,6 +1261,9 @@ class PNetSilos(T): LocalSilosI!(T){
     /// thas supports it, use a RemoteSilosOpI and executeLocally to create, setup & bcast it 
     MainPointI!(T) newPointAt(DynPVector!(T,XType) newPos){
         MainPoint!(T) newP=pPool.getObj();
+        refPos.checkX();
+        auto p2=refPos.dup(PSDupLevel.EmptyDyn);
+        p2.checkX();
         newP.pos.checkX();
         newP.pos.dynVars.x[]=newPos;
         synchronized(localPoints){ // don't allow null mainpoints...
@@ -1349,20 +1370,20 @@ class PNetSilos(T): LocalSilosI!(T){
                 cachedP=*pC;
             }
         }
-        if (pC is null){
-            cachedP.mainPoint=pPool.getObj();
-            cachedP.mainPoint.pos.checkX();
-            cachedP.mainPoint._point=p;
-            cachedP.mainPoint._gFlags|=GFlags.LocalCopy;
-        } else if (cachedP.lastSync>t){
+        if (pC !is null && cachedP.lastSync>t){
             cachedP.mainPoint.retain;
             return cachedP.mainPoint;
         }
+        cachedP.mainPoint=pPool.getObj();
+        cachedP.mainPoint.pos.checkX();
+        cachedP.mainPoint._point=p;
+        cachedP.mainPoint._gFlags|=GFlags.LocalCopy;
         cachedP.lastSync=ev_time();
         cachedP.mainPoint[]=mainPoint(ownerOfPoint(p),p);
         synchronized(localCache){
             localCache[p]=cachedP;
         }
+        cachedP.mainPoint.retain;
         return cachedP.mainPoint;
     }
     /// makes a point "public" informing other silos that that region has been explored
@@ -1375,6 +1396,10 @@ class PNetSilos(T): LocalSilosI!(T){
     /// drops a cached point (the point is not in use anymore)
     void dropCachedPoint(MainPointI!(T)p){
         synchronized(localCache){
+            auto lP=p.point in localCache;
+            if (lP!is null && lP.mainPoint is p){
+                p.release;
+            }
             localCache.removeKey(p.point);
         }
     }
@@ -1403,10 +1428,11 @@ class PNetSilos(T): LocalSilosI!(T){
         this.localPointsKeys=new BatchedGrowableArray!(Point,batchSize)();
         this.owner=new HashMap!(Point,SKey)();
         this.localCache=new HashMap!(Point,CachedPoint!(T))();
+        this.publishingPoints=new HashMap!(Point,PointBcastProgress!(T))();
         this.pendingEvals=new PendingEvals!(T)(this);
         this.localOps=new Deque!(EvalOp!(T))();
         this.nPendingOps=0;
-        this.localPoints=new DenseLocalPointArray!(MainPointI!(T))(); /// local points (position,...)
+        this.localPoints=new DenseLocalPointArray!(MainPointI!(T))(this.localPointsKeys); /// local points (position,...)
         this._rand=new RandomSync();
         this._refPos=refPos;
         this._constraints=constraints;
@@ -1417,7 +1443,7 @@ class PNetSilos(T): LocalSilosI!(T){
         this.observers=new Deque!(ExplorationObserverI!(T))();
         this.evaluator=cast(Method)this.input.evaluator.contentObj;
         if (this.input.evaluatorTask!is null) {
-            this.evaluatorTask=cast(RemoteCCTask)this.input.evaluatorTask.contentObj;
+            this.evaluatorTask=cast(Sampler)this.input.evaluatorTask.contentObj;
         }
         if (this.evaluatorTask is null){
             // add this dependency??

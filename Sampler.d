@@ -18,11 +18,25 @@ import blip.parallel.mpi.Mpi;
 import dchem.pnet.WorkAsker;
 import blip.stdc.stdlib:exit;
 
+struct SamplerRunner{
+    Sampler sampler;
+    LinearComm paraEnv;
+    CharSink log;
+    
+    void run(){
+        sampler.run(paraEnv,log);
+    }
+}
+
 int main(char[][]args){
+    /+scope(exit){
+        noToutWatcher.sleepTask(1.0);
+        exit(1);
+    }+/
     ProtocolHandler.defaultProtocol.startServer(false); // starting the rpc server...
     if (args.length!=2){
         sout("Expected a single argument (inputfile)\n");
-        return 1;
+        exit(1);
     }
     auto parser=new TextParser!(char)(toReaderT!(char)((new DataFileInput(args[1])).file.input));
     SegmentedArray!(real) sArr;
@@ -42,7 +56,11 @@ int main(char[][]args){
         if (samp is null){
             sout("Error: 'main' should be a sampler, stopping\n");
         } else {
-            samp.run(mpiWorld,sout.call);
+            auto closure=new SamplerRunner;
+            closure.sampler=samp;
+            closure.paraEnv=mpiWorld;
+            closure.log=sout.call;
+            Task("mainSampler",&closure.run).autorelease.executeNow();
         }
     }
     noToutWatcher.stopLoop();

@@ -11,6 +11,7 @@ import blip.sync.Atomic;
 import blip.container.BulkArray;
 import blip.util.Grow;
 import stdlib=blip.stdc.stdlib;
+import dchem.sys.Cell;
 
 /// writes out an xyz file
 void writeXyz(T)(CharSink sink,SysStruct sysStruct,SegmentedArray!(Vector!(T,3))pos,char[] comments){
@@ -73,7 +74,7 @@ struct SegArrWriter(T){
     void serialize(Serializer s){
         s.field(metaI[0],kRange);
         s.field(metaI[1],kindStarts);
-        auto dataS=LazyArray!(T)(&opApply,kindStarts[$-1]-kindStarts[0]);
+        auto dataS=LazyArray!(T)(&opApply,((kindStarts.length==0)?0:kindStarts[$-1]-kindStarts[0]));
         s.field(metaI[2],dataS);
     }
     void unserialize(Unserializer s){
@@ -226,6 +227,7 @@ struct SegArrWriter(T){
     }
     /// copies to an array of the given type, this might cast (checks kindStarts to decide if reinterpret the memory or cast/convert)
     void copyTo(V)(SegmentedArray!(V) s){
+        if (s is null) stdlib.abort();
         assert(s!is null,"copy to only to allocated arrays");
         uint dimMult=V.sizeof/T.sizeof;
         auto dData=BulkArray!(V)((cast(V*)data.ptr)[0..data.length/dimMult],data.guard);
@@ -240,14 +242,16 @@ struct SegArrWriter(T){
 /// structure to dump out a DynPVector
 struct DynPVectorWriter(T,int group){
     T[] cell;
+    T[] cellX0;
     SegArrWriter!(T) pos;
     SegArrWriter!(T) orient;
     SegArrWriter!(T) dof;
-    mixin(serializeSome("dchem.DynPVectorWriter!("~T.stringof~")","cell|pos|orient|dof"));
+    int[3] cellPeriod;
+    mixin(serializeSome("dchem.DynPVectorWriter!("~T.stringof~")","cell|cellX0|cellPeriod|pos|orient|dof"));
     mixin printOut!();
-    /// true if this represents a non null the DynPVector
-    bool isNonNull(){
-        return pos.kindStarts.length!=0 || orient.kindStarts.length!=0 || dof.kindStarts.length!=0;
+    /// true if this represents a null DynPVector
+    bool isDummy(){
+        return !(pos.kindStarts.length!=0 || orient.kindStarts.length!=0 || dof.kindStarts.length!=0);
     }
     /// destroys the memory used by this object if it owns it
     void deallocData(){
@@ -258,7 +262,11 @@ struct DynPVectorWriter(T,int group){
     /// greates a writer for the given vector
     static DynPVectorWriter opCall(DynPVector!(T,group) v){
         DynPVectorWriter res;
-        if (v.cell!is null) res.cell=v.cell.h.cell;
+        if (v.cell!is null) {
+            res.cell=v.cell.h.cell;
+            res.cellX0=v.cell.x0.cell;
+            res.cellPeriod[]=v.cell.periodic;
+        }
         res.pos=SegArrWriter!(T)(v.pos);
         res.orient=SegArrWriter!(T)(v.orient);
         res.dof=SegArrWriter!(T)(v.dof);
@@ -271,7 +279,12 @@ struct DynPVectorWriter(T,int group){
         DynPVector!(T,group) res;
         if (cell.length!=0){
             assert(cell.length==9,"invalid cell length");
-            res.cell=new Cell(Matrix!(T,3,3)(cell),pVStruct.cellPeriod);
+            Vector!(T,3) x0;
+            if (cellX0.length!=0){
+                assert(cellX0.length==3);
+                x0=Vector!(T,3)(cellX0[0],cellX0[1],cellX0[2]);
+            }
+            res.cell=new Cell!(T)(Matrix!(T,3,3)(cell),cellPeriod,x0);
         }
         res.pos=pos.toSegArr!(Vector!(T,3))(pVStruct.poolPos,steal);
         res.orient=orient.toSegArr!(Vector!(T,3))(pVStruct.poolOrient,steal);
@@ -283,13 +296,12 @@ struct DynPVectorWriter(T,int group){
         static assert(group2==group,"copy only to same group");
         if (cell.length!=0){
             assert(cell.length==9,"invalid cell length");
-            auto period=[0,0,0];
-            if (v.cell is null){
-                throw new Exception("cannot copy to null cell",__FILE__,__LINE__);
+            Vector!(T,3) x0;
+            if (cellX0.length!=0){
+                assert(cellX0.length==3);
+                x0=Vector!(T,3)(cellX0[0],cellX0[1],cellX0[2]);
             }
-            // create a new cell instead
-            v.cell.h=Matrix!(T,3,3)(cell);
-            v.cell.hInv=v.cell.h.inverse;
+            v.cell=new Cell!(T)(Matrix!(T,3,3)(cell),cellPeriod,x0);
         }
         pos.copyTo(v.pos);
         orient.copyTo(v.orient);
@@ -327,15 +339,15 @@ struct PSysWriter(T){
         assert(pSys!is null,"cannot copy to null pSys");
         pSys.dynVars.potentialEnergy=potentialEnergy;
         // could be smarter about reusing memory...
-        if (x.isNonNull()) {
+        if (!x.isDummy()) {
             pSys.checkX();
             x.copyTo!(V,XType)(pSys.dynVars.x); // explicit instantiation of //pSys.dynVars.x[]=x;
         }
-        if (dx.isNonNull()){
+        if (!dx.isDummy()){
             pSys.checkDx();
             pSys.dynVars.dx[]=dx;
         }
-        if (mddx.isNonNull()){
+        if (!mddx.isDummy()){
             pSys.checkMddx();
             pSys.dynVars.mddx[]=mddx;
         }
@@ -344,8 +356,8 @@ struct PSysWriter(T){
         }
     }
     /// if the system is null
-    bool isNonNull(){
-        return x.isNonNull()||dx.isNonNull()||mddx.isNonNull()||hVars !is null;
+    bool isDummy(){
+        return x.isDummy()&&dx.isDummy()&&mddx.isDummy()&&hVars is null;
     }
 }
 

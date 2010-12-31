@@ -19,6 +19,7 @@ import blip.narray.NArray;
 import blip.core.Traits: ctfe_i2a;
 import blip.sync.Atomic;
 import blip.util.TemplateFu: nArgs;
+import blip.io.BasicIO;
 
 enum{
     XType=0,
@@ -27,7 +28,7 @@ enum{
 }
 
 /// this is at the same time a pool and a structure for a DynPVector
-/// setup as follow: init, update *Structs, possibly consolidateStructs, allocPools, possibly consolidate
+/// setup as follow: init, update *Structs, possibly consolidateStructs, allocPools, possibly consolidate (normally done by DynamicsVarsStruct.freezeStructs)
 class DynPVectStruct(T){
     char[] name;
     int[3] cellPeriod;
@@ -45,6 +46,12 @@ class DynPVectStruct(T){
         if (t is null) return 0;
         return (posStruct==t.posStruct && orientStruct==t.orientStruct && dofStruct==t.dofStruct);
     }
+    /// compatible if they have the same structure
+    bool compatible(V)(DynPVectStruct!(V) t){
+        if (t is null) return false;
+        return (posStruct==t.posStruct && orientStruct==t.orientStruct && dofStruct==t.dofStruct);
+    }
+    mixin(descSome("dchem.DynPVectStruct!("~T.stringof~")",`name|cellPeriod|posStruct|orientStruct|dofStruct`));
     
     /// constructor, sets up the structures
     this(char[]name,SubMapping submapping,KindRange kRange,SegmentedArrayStruct.Flags f=SegmentedArrayStruct.Flags.None){
@@ -162,9 +169,17 @@ class DynPVectStruct(T){
     }
 }
 
+/// defines the possible null handlings when doing operations on segmented arrays
+/// if any operator is null no operation is performed, but extra checks are performed
+/// according with the requested NullHandling
+enum NullHandling{
+    NullConsistent,  /// either all operators are null, or none is
+    IgnoreRightNull, /// the right side might have more nulls than the left
+    IgnoreAllNull,   /// if any operator is null skips the operation
+}
+
 /// perform an operation on the segmented arrays and cell of a dynPVector
-/// assumes the existence of a boolean variable named "weak" that if true suppress the exception
-/// when some of the arrays are null and other aren't
+/// assumes the existence of a int variable named "nullHandling" that controls the handling of null 
 /// if cell is false does the operation only on the SegmentedArray.
 /// if nonEq is true checks that the first variable (namesLocal[0].*) is different from all the others
 /// switch to storing a pointer to a DynPVectStruct?
@@ -185,14 +200,24 @@ char[] dynPVectorOp(char[][]namesLocal,char[] op,bool cell=true,bool nonEq=false
         res~=`) {`;
         if (namesLocal.length>0){
             res~=`
-            if ((!weak) && (`;
+            if ((nullHandling==NullHandling.NullConsistent && (`;
             foreach (i,n; namesLocal){
                 if (i!=0) res~="||";
                 res~=n;
                 res~=pp;
                 res~=" !is null ";
             }
-            res~=`)) {
+            if (namesLocal.length>1){
+                res~=`))||
+                (nullHandling==NullHandling.IgnoreRightNull && (`;
+                foreach (i,n; namesLocal[1..$]){
+                    if (i!=0) res~="||";
+                    res~=n;
+                    res~=pp;
+                    res~=" !is null ";
+                }
+            }
+            res~=`))) {
                 throw new Exception("non equivalent DynPVector in `~pp~`",__FILE__,__LINE__);
             }
         }`;
@@ -235,10 +260,14 @@ char[] dynPVectorOp(char[][]namesLocal,char[] op,bool cell=true,bool nonEq=false
 /// the basic type to represent a state is DynamicsVars, so that forces dependent on the velocity, forces,...
 /// can be represented cleanly, but for normal conservative systems DynPVector is a useful abstraction.
 /// group is used just to subdivide DynPVectors in typechecked incompatible groups (position (0), and derivatives (1) for example)
+///
+/// an important thing about DynPVector is if to store their structure or not.
+/// at the moment it is nt stored, this decision might change in the future
 struct DynPVector(T,int group){
     alias T dtype;
     enum{ vGroup=group }
 
+    /// cell
     Cell!(T) cell;
     /// position in 3D space
     SegmentedArray!(Vector!(T, 3)) pos;
@@ -290,22 +319,34 @@ struct DynPVector(T,int group){
     }
     void opBypax(V)(V x,T a=1,T b=1){
         static assert(is(V==DynPVector!(V.dtype,group)),"opBypax only between DynPVectors of the same group, not "~V.stringof);
-        enum{ weak=true }
-        if ((cell is x.cell) && cell !is null){
-            throw new Exception("identical cells in opBypax",__FILE__,__LINE__);
-        }
+        alias NullHandling.NullConsistent nullHandling; // relax? then lhs might need a scaling if the rhs is null
         auto y=this;
-        mixin(dynPVectorOp(["x","y"],"y.opBypax(x,a,b);",true,false));
+        if (cell!is null){
+            if (x.cell !is null){
+                bypax(y.cell,x.cell,a,b);
+            } else {
+                cell=cell*b;
+            }
+        }
+        mixin(dynPVectorOp(["x","y"],"bypax(y,x,a,b);",false,false));
     }
     void opMulAssign()(T scale){
-        enum{ weak=false }
+        alias NullHandling.IgnoreAllNull nullHandling;
         auto x=this;
-        mixin(dynPVectorOp(["x"],"x*=scale;",true,false));
+        if (cell !is null){
+            cell=cell*scale;
+        }
+        mixin(dynPVectorOp(["x"],"x*=scale;",false,false));
     }
     void opMulAssign(V)(DynPVector!(V,group) y){
-        enum{ weak=false }
+        alias NullHandling.IgnoreRightNull nullHandling;
         auto x=this;
-        mixin(dynPVectorOp(["x","y"],"x*=y;",true,false));
+        if (cell !is null && y.cell !is null){
+            cell=cell*y.cell;
+        } else {
+            assert(y.cell is null);
+        }
+        mixin(dynPVectorOp(["x","y"],"x*=y;",false,false));
     }
     /// outer product supported only if t or u are scalars
     static V outerOp(T,U,V,R,M)(T t,U u,V v,R scaleA,M scaleRes){
@@ -318,9 +359,14 @@ struct DynPVector(T,int group){
     }
     void opSliceAssignT(V,int gg)(DynPVector!(V,gg) b){
         static assert(gg==group,"slice assign only within the same group");
-        enum{ weak=false }
+        alias NullHandling.IgnoreRightNull nullHandling;
         auto a=this;
-        mixin(dynPVectorOp(["a","b"],"a[]=b;",true,true));
+        mixin(dynPVectorOp(["a","b"],"a[]=b;",false,true));
+        static if (is(T==V)){
+            if (b.cell!is null) cell=b.cell;
+        } else {
+            if (b.cell!is null) cell=b.cell.dupT!(T)();
+        }
     }
     void opSliceAssignEl(T val){
         if (cell!is null)   cell[]=val;
@@ -410,6 +456,8 @@ struct DynPVector(T,int group){
         }
         if (cell!is null){
             if (idx<9){
+                cell=cell.dup(); // eccessive copying??? introduce ref counting and avoid copying if unique?
+                cell.hInvOk=false;
                 cell.h.cell[idx]=val;
                 return;
             }
@@ -765,7 +813,7 @@ struct DynPVector(T,int group){
     /// allocates an empty vector from the given pool
     static DynPVector allocFromPool(DynPVectStruct!(T) p,bool allocCell=false){
         DynPVector res;
-        if (allocCell) res.cell=new Cell!(T)(Matrix!(T,3,3).identity,[0,0,0]);
+        if (allocCell) res.cell=new Cell!(T)(Matrix!(T,3,3).identity,p.cellPeriod);
         res.pos=p.newPos();
         res.orient=p.newOrient();
         res.dof=p.newDof();
@@ -983,10 +1031,16 @@ class DynamicsVarsStruct(T){
     /// is distributed the local vectors will indeed be incompatible)
     DynPVectStruct!(T) dualDxGroup;
 
+    /// if the structures are compatible
+    bool compatible(V)(DynamicsVarsStruct!(V) t){
+        if (t is null) return false;
+        return this is t || (xGroup.compatible(t.xGroup) && 
+            dxGroup.compatible(t.dxGroup) && dualDxGroup.compatible(t.dualDxGroup));
+    }
     override equals_t opEquals(Object o){
         auto t=cast(DynamicsVarsStruct)o;
         if (t is null) return 0;
-        return this is t || (xGroup==t.xGroup && dxGroup==t.dxGroup && dualDxGroup==t.dualDxGroup);
+        return this.compatible(t);
     }
     /// utility method, returns an empty position vector (like x)
     DynPVector!(T,XType) emptyX(bool allocCell=false){
@@ -1022,7 +1076,17 @@ class DynamicsVarsStruct(T){
         auto xGroup=new DynPVectStruct!(T)("xGroup",s2.xGroup.posStruct,s2.xGroup.orientStruct,s2.xGroup.dofStruct);
         auto dxGroup=new DynPVectStruct!(T)("dxGroup",s2.dxGroup.posStruct,s2.dxGroup.orientStruct,s2.dxGroup.dofStruct);
         auto dualDxGroup=new DynPVectStruct!(T)("dualDxGroup",s2.dualDxGroup.posStruct,s2.dualDxGroup.orientStruct,s2.dualDxGroup.dofStruct);
-        return new DynamicsVarsStruct(xGroup,dxGroup,dualDxGroup);
+        auto res=new DynamicsVarsStruct(xGroup,dxGroup,dualDxGroup);
+        static if(is(T==V)) {
+            res.xGroup.allocPools(xGroup);
+            res.dxGroup.allocPools(dxGroup);
+            res.dualDxGroup.allocPools(dualDxGroup);
+        } else {
+            xGroup.allocPools();
+            dxGroup.allocPools(xGroup);
+            dualDxGroup.allocPools(dxGroup);
+        }
+        return res;
     }
     /// constructor, allocates the segmented array structures
     this(SubMapping fullSystem,KindRange kRange){
@@ -1096,6 +1160,9 @@ struct DynamicsVars(T){
     /// forces vector
     DynPVector!(T,DxType) mddx;
     
+    bool isDummy(){
+        return x.isDummy && dx.isDummy && mddx.isDummy;
+    }
     /// returns a copy with a nullified cell
     DynamicsVars nullCell(){
         DynamicsVars res=*this;
@@ -1119,19 +1186,38 @@ struct DynamicsVars(T){
     }
     
     void opSliceAssignT(V)(ref DynamicsVars!(V) d2){
-        assert((dVarStruct is null && d2.dVarStruct is null)|| dVarStruct is d2.dVarStruct || dVarStruct == d2.dVarStruct,
-            "incompatible structures");
+        assert(dVarStruct!is null);
+        assert(dVarStruct.compatible(d2.dVarStruct),"incompatible structures");
         potentialEnergy=d2.potentialEnergy;
-        x[]=d2.x;
-        dx[]=d2.dx;
-        mddx[]=d2.mddx;
+        x.opSliceAssignT!(V)(d2.x);
+        dx.opSliceAssignT!(V)(d2.dx);
+        mddx.opSliceAssignT!(V)(d2.mddx);
+    }
+    /// copies this dynvar to d2 (taking care of needed allocations)
+    void copyTo(V)(ref DynamicsVars!(V) d2){
+        if (!x.isDummy) {
+            d2.checkX();
+        } else if (!d2.x.isDummy) {
+            d2.x.giveBack();
+        }
+        if (!dx.isDummy) {
+            d2.checkDx();
+        } else if (!d2.dx.isDummy) {
+            d2.dx.giveBack();
+        }
+        if (!mddx.isDummy) {
+            d2.checkMddx();
+        } else if (!d2.mddx.isDummy) {
+            ds.mddx.giveBack();
+        }
+        opSliceAssignT!(V)(d2);
     }
     void opSliceAssignEl(T val){
         assert((dVarStruct !is null),"invalid structures");
         potentialEnergy=0;
-        x[]=val;
-        dx[]=val;
-        mddx[]=val;
+        x.opSliceAssignEl(val);
+        dx.opSliceAssignEl(val);
+        mddx.opSliceAssignEl(val);
     }
     void opSliceAssign(V)(V v){
         static if (is(typeof(opSliceAssignEl(v)))){
@@ -1239,7 +1325,6 @@ struct DynamicsVars(T){
     mixin(serializeSome("dchem.sys.DynamicsVars("~T.stringof~")","potentialEnergy|x|dx|mddx"));
     mixin printOut!();
 }
-
 // to have minimal compiletime checks when compiling this module alone
 version(InstantiateSome){
     pragma(msg,"DynVars InstantiateSome");
