@@ -37,6 +37,8 @@ import blip.parallel.rpc.RpcMixins;
 import blip.parallel.mpi.Mpi;
 import blip.io.EventWatcher;
 import dchem.pnet.WaitOp;
+import blip.container.AtomicSLink;
+import blip.util.RefCount;
 //import dchem.pnet.WorkAsker;
 
 /// help structure 
@@ -124,6 +126,8 @@ class SilosGen:Sampler {
     char[] baseName="Silos";
     /// precision with which the points are stored
     char[] precision="LowP";
+    /// eagerness in calculating the gradients
+    char[] gradEagerness="OnRequest";
     /// list of observers and explorers
     InputField[] explorers;
     /// list of loaders (called after the explorer are set up, before exploring)
@@ -132,8 +136,7 @@ class SilosGen:Sampler {
     InputField[] monitors; // use simply SilosWorkerGen[]??
     /// list of finishers, called after the exploration is finished
     InputField[] finishers; // use simply SilosWorkerGen[]??
-    /// the operations to execute on the contexts 
-
+    
     // topology parameters
     /// minimum residual after projecting out the linear dependend directions
     Real minProjectionResidual=0.05;
@@ -201,6 +204,7 @@ class SilosGen:Sampler {
         evaluator: the method to perform energy evaluations
         evaluatorTask: the task to execute (normally to start clients that will perform evaluations, if a SilosConnectorI then it is passed silos and accuracy before starting)
         precision: the precision with which the points are stored
+        gradEagerness: the eagerness in calculating gradients (OnRequest,Speculative,Always)
         explorers: the observers and explorers active on the point network
         loaders: SilosWorkers that load already evaluated points (called after the explorer are set up, before exploring)
         monitors: SilosWorkers called at regular intervals during the exploration
@@ -240,6 +244,10 @@ class SilosGen:Sampler {
             log("precision should be either LowP or Real, not '")(precision)("' in field ")(myFieldName)("\n");
             res=false;
         }
+        if (gradEagerness!="OnRequest" && gradEagerness!="Speculative" && gradEagerness!="Always"){
+            log("gradEagerness should be either OnRequest or Speculative or Always, not '")(gradEagerness)("' in field ")(myFieldName)("\n");
+            res=false;
+        }
         foreach(e;explorers){
             auto o=cast(Object)e.content;
             if (cast(ExplorationObserverGen)o is null){
@@ -269,6 +277,19 @@ class SilosGen:Sampler {
             }
         }
         return res;
+    }
+    
+    GradEagerness gEagerness(){
+        switch(gradEagerness){
+            case "OnRequest":
+                return GradEagerness.OnRequest;
+            case "Speculative":
+                return GradEagerness.Speculative;
+            case "Always":
+                return GradEagerness.Always;
+            default:
+                assert(0,"invalid gradEagerness");
+        }
     }
 
     void run(LinearComm pWorld,CharSink log){
@@ -339,7 +360,7 @@ class PointBcastProgress(T){
     PNetSilos!(T) localContext;
     MainPointI!(T) pointToBCast;
     HashMap!(SKey,int) publishLevel;
-    long waitingName=1;
+    long waitingName=1,waitingNeigh=1;
     WaitConditionT!(false) nameKnown;
     PointBcastProgress nextPoint;
     PoolI!(PointBcastProgress) pool;
@@ -365,7 +386,9 @@ class PointBcastProgress(T){
     }
     void reset(MainPointI!(T) p){
         pointToBCast=p;
+        refCount=1;
         waitingName=1;
+        waitingNeigh=1;
         this.localContext=cast(PNetSilos!(T))cast(Object)p.localContext;
         assert(this.localContext!is null);
     }
@@ -375,18 +398,28 @@ class PointBcastProgress(T){
         return nP;
     }
     void publish(){
+        retain();
         synchronized(localContext.publishingPoints){
             this.localContext.publishingPoints[pointToBCast.point]=this;
         }
         foreach(sK,sL;localContext.silos){
             synchronized(this){
                 ++waitingName;
+                ++waitingNeigh;
             }
             sL.publishPoint(sK,localContext._key,pointToBCast.point,pSysWriter(pointToBCast.pos),
                 pointToBCast.explorationSize,pointToBCast.gFlags);
         }
+        bool last;
         synchronized(this){
             --waitingName;
+            --waitingNeigh;
+            last= (waitingNeigh==0);
+        }
+        nameKnown.checkCondition();
+        if (last){
+            pointToBCast.bcastLevel(1);
+            release();
         }
     }
     bool nameIsKnown(){
@@ -408,18 +441,45 @@ class PointBcastProgress(T){
             nextPP=PointBcastProgress(np);
             nextPP.publish();
         }
+        bool last=false;
         synchronized(this){
             if (nextPP!is null) nextPoint=nextPP;
             --waitingName;
+            --waitingNeigh;
+            if (waitingNeigh==0) last=true;
+        }
+        if (last){
+            pointToBCast.bcastLevel(1);
+            release();
         }
         nameKnown.checkCondition();
     }
-    void communicatePublish(SKey origin){
-        synchronized(this){
-            --waitingName;
+    void communicatePublish(SKey origin,int level){
+        bool last=false;
+        switch(level){
+        case 0:
+            synchronized(this){
+                --waitingName;
+            }
+            assert(nameKnown!is null);
+            nameKnown.checkCondition();
+            break;
+        case 1:
+            synchronized(this){
+                --waitingNeigh;
+                if (waitingNeigh==0) last=true;
+            }
+            if (waitingNeigh<0){
+                throw new Exception("waitingNeigh<0",__FILE__,__LINE__);
+            }
+            if (last) {
+                pointToBCast.bcastLevel(1);
+                release();
+            }
+            break;
+        default:
+            assert(0);
         }
-        assert(nameKnown!is null);
-        nameKnown.checkCondition();
     }
     MainPointI!(T) finalName(){
         nameKnown.wait();
@@ -431,12 +491,17 @@ class PointBcastProgress(T){
         if (nextP!is null) {
             res=nextP.finalName;
         }
+        res.bcastLevel(0);
+        release();
+        return res;
+    }
+    void release0(){
         synchronized(localContext.publishingPoints){
             localContext.publishingPoints.removeKey(pointToBCast.point);
         }
         if (pool!is null) pool.giveBack(this);
-        return res;
     }
+    mixin RefCountMixin!();
 }
 
 class PendingEvals(T) {
@@ -561,7 +626,10 @@ class PNetSilos(T): LocalSilosI!(T){
     /// parallel enviroment of silos
     LinearComm silosParaEnv;
     /// observers
-    Deque!(ExplorationObserverI!(T)) observers;
+    alias SLinkT!(ExplorationObserverI!(T)) ObserversEl;
+    ObserversEl* observers; // could use a better persistent structure... but it isn't critical
+    HashMap!(string,SilosComponentI!(T)) _components; // ideally should also be persistent...
+    
     /// evaluator
     Method evaluator;
     Sampler evaluatorTask;
@@ -600,35 +668,30 @@ class PNetSilos(T): LocalSilosI!(T){
     ConstraintI!(T) constraints(){
         return _constraints;
     }
-    /// if the gradient is cheap to compute
-    bool cheapGrad(){
-        return false;
+    /// how eagerly the gradient is calculated
+    GradEagerness gradEagerness(){
+        return input.gEagerness(); // cache?
     }
     /// if the gradient should be speculatively calculated. calls addEnergyEvalLocal (in background)
+    /// (should be called on the owner of the point only)
     bool speculativeGradient(SKey s,Point p,Real energy){
-        bool res=false;
-        int i=0;
-        synchronized(explorers){
-            foreach(k,e;explorers){
-                res=res || e.speculativeGradientLocal(p,energy);
+        if (hasKey(s)){
+            bool res=false;
+            int i=0;
+            auto pAtt=mainPointL(p);
+            if (pAtt.setEnergy(energy)){
+                Task("didEnergyEval",&pAtt.didEnergyEval).autorelease.submit(defaultTask);
             }
-        }
-        struct EAdd{
-            void delegate(SKey,Point,Real) op;
-            SKey s;
-            Point p;
-            Real energy;
-            void doOp(){
-                op(s,p,energy);
+            if ((pAtt.gFlags&GFlags.GradientInfo)==0){ // not already in progress or done...
+                foreach(k,e;explorers){
+                    res=res || e.speculativeGradientLocal(p,energy);
+                }
             }
+            if (res) res=pAtt.shouldCalculateGradient();
+            return res;
+        } else {
+            return silosForKey(s).speculativeGradient(s,p,energy);
         }
-        auto eAdd=new EAdd;
-        eAdd.s=s;
-        eAdd.energy=energy;
-        eAdd.p=p;
-        eAdd.op=&addEnergyEvalLocal;
-        Task("addOp",&eAdd.doOp).autorelease.submit(defaultTask);
-        return res;
     }
     
     mixin(realFromInput(propertiesList));
@@ -636,7 +699,7 @@ class PNetSilos(T): LocalSilosI!(T){
     Real[char[]] propertiesDict(SKey s){
         if (hasKey(s)){
             auto res=propertiesDict0();
-            res["cheapGrad"]=cheapGrad();
+            res["gradEagerness"]=cast(Real)cast(uint)gradEagerness();
             return res;
         } else {
             return silosForKey(s).propertiesDict(s);
@@ -997,10 +1060,9 @@ class PNetSilos(T): LocalSilosI!(T){
             if (mp.isLocalCopy){
                 throw new Exception("Local copy in PNetSilos.addEnergyEvalLocal",__FILE__,__LINE__);
             }
-            mp.addEnergyEvalLocal(energy);
-            notifyLocalObservers(delegate void(ExplorationObserverI!(T)obs){
-                obs.addEnergyEvalLocal(s,p,energy);
-            });
+            if (mp.setEnergy(energy)){
+                mp.didEnergyEval();
+            }
         } else {
             silosForKey(s).addEnergyEvalLocal(s,p,energy);
         }
@@ -1049,7 +1111,7 @@ class PNetSilos(T): LocalSilosI!(T){
                 publishCollision(SKeyVal.All,newPoint);
                 return;
             }
-            silosForKey(owner).didLocalPublish(owner,newPoint,s);
+            silosForKey(owner).didLocalPublish(owner,newPoint,s,0);
             foreach(p,mp;localPoints){
                 auto newPos=refPos.dynVars.dVarStruct.emptyX(true);
                 newPos[]=pos.x;
@@ -1061,6 +1123,7 @@ class PNetSilos(T): LocalSilosI!(T){
             notifyLocalObservers(delegate void(ExplorationObserverI!(T)obs){
                 obs.publishPoint(s,owner,newPoint,pos,pSize,flags);
             });
+            silosForKey(owner).didLocalPublish(owner,newPoint,s,1);
         } else {
             silosForKey(s).publishPoint(s,owner,newPoint,pos,pSize,flags);
         }
@@ -1142,10 +1205,10 @@ class PNetSilos(T): LocalSilosI!(T){
         }
     }
     /// informs that source has processed point p0
-    void didLocalPublish(SKey s,Point p0,SKey source){
+    void didLocalPublish(SKey s,Point p0,SKey source,int level){
         if (s==SKeyVal.All){
             foreach(sK,sL;silos){
-                sL.didLocalPublish(sK,p0,source);
+                sL.didLocalPublish(sK,p0,source,level);
             }
         } else if (hasKey(s)){
             PointBcastProgress!(T) pp;
@@ -1153,12 +1216,12 @@ class PNetSilos(T): LocalSilosI!(T){
                 pp=publishingPoints[p0];
             }
             assert(pp!is null);
-            pp.communicatePublish(source);
+            pp.communicatePublish(source,level);
             notifyLocalObservers(delegate void(ExplorationObserverI!(T)obs){
-                obs.didLocalPublish(s,p0,source);
+                obs.didLocalPublish(s,p0,source,level);
             });
         } else {
-            silosForKey(s).didLocalPublish(s,p0,source);
+            silosForKey(s).didLocalPublish(s,p0,source,level);
         }
     }
     /// increases the runLevel on all silos, i.e. you should call it only with SKeyVal.All
@@ -1322,11 +1385,38 @@ class PNetSilos(T): LocalSilosI!(T){
     // LocalSilosI
     /// adds an extra observer that will be notified about the network changes
     void addObserver(ExplorationObserverI!(T) o){
-        observers.append(o);
+        synchronized(this){
+            insertAt(observers,ObserversEl(o));
+        }
     }
     /// removes the given observer if present
     void rmObserver(ExplorationObserverI!(T) o){
-        observers.filterInPlace(delegate bool(ExplorationObserverI!(T) i){ return i!is o; });
+        ObserversEl* newList;
+        ObserversEl* newListLast;
+        synchronized(this){
+            auto pAtt=observers;
+            while(pAtt!is null && pAtt.val!is o){
+                newListLast=ObserversEl(pAtt.val,newList);
+                if (newList is null) newList=newListLast;
+            }
+            if (pAtt.val is o){
+                if (newListLast!is null) {
+                    newListLast.next=pAtt.next;
+                    writeBarrier();
+                    observers=newList;
+                } else {
+                    writeBarrier();
+                    observers=pAtt.next;
+                }
+            } else {
+                assert(pAtt is null);
+                while(newList!is null){
+                    newListLast=newList.next;
+                    delete newList;
+                    newList=newListLast;
+                }
+            }
+        }
     }
     /// adds an extra explorer that can generate new points
     void addExplorer(ExplorerI!(T)o){
@@ -1335,16 +1425,41 @@ class PNetSilos(T): LocalSilosI!(T){
         }
     }
     /// removes the given explorer
-    void rmExplorerNamed(char[] name){
+    bool rmExplorerNamed(char[] name){
         synchronized(explorers){
-            explorers.removeKey(name);
+            return explorers.removeKey(name);
         }
     }
     void notifyLocalObservers(void delegate(ExplorationObserverI!(T))op){
-        foreach(obs;observers){
-            op(obs);
+        auto oAtt=observers;
+        while(oAtt!is null){
+            op(oAtt.val);
+            oAtt=oAtt.next;
         }
     }
+    /// adds a component
+    void addComponent(SilosComponentI!(T)component){
+        synchronized(_components){
+            if (component.name in _components){
+                if (_components[component.name]!is component){
+                    throw new Exception("collision with component named "~component.name,__FILE__,__LINE__);
+                }
+            } else {
+                _components[component.name]=component;
+            }
+        }
+    }
+    /// removes the component with the given name (stopping it)
+    bool rmComponentNamed(string name){
+        synchronized(_components){
+            return _components.removeKey(name);
+        }
+    }
+    /// returns the actual components
+    HashMap!(string,SilosComponentI!(T)) components(){
+        return _components;
+    }
+    
     /// linear communicator (valid only inside the real silos, not in the clients)
     LinearComm paraEnv(){
         return silosParaEnv;
@@ -1459,7 +1574,8 @@ class PNetSilos(T): LocalSilosI!(T){
         this._nCenter=nCenter;
         if (nCenter is null) this._nCenter=new NotificationCenter();
         this.explorers=new HashMap!(char[],ExplorerI!(T))();
-        this.observers=new Deque!(ExplorationObserverI!(T))();
+        this.observers=null;
+        this._components=new HashMap!(string,SilosComponentI!(T))();
         this.evaluator=cast(Method)this.input.evaluator.contentObj;
         if (this.input.evaluatorTask!is null) {
             this.evaluatorTask=cast(Sampler)this.input.evaluatorTask.contentObj;
@@ -1476,9 +1592,9 @@ class PNetSilos(T): LocalSilosI!(T){
             if (cast(ExplorerGen)o !is null){
                 auto expl=explorerT!(T)(cast(ExplorerGen)o,this);
                 explorers[expl.name]=expl;
-                observers.append(expl);
+                addObserver(expl);
             } else {
-                observers.append(observerT!(T)(cast(ExplorationObserverGen)o,this));
+                addObserver(observerT!(T)(cast(ExplorationObserverGen)o,this));
             }
         }
         this.activeExplorers=new Deque!(string)();

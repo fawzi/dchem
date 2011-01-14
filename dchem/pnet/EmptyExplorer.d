@@ -57,7 +57,7 @@ class EmptyExplorer(T):ExplorerI!(T),SilosWorkerI!(T){
     void finishedExploringPoint(SKey s,Point,SKey owner){ }
     /// informs silos s that source has done the initial processing of point p0,
     /// and p0 is now known and collision free
-    void didLocalPublish(SKey s,Point p0,SKey source){ }
+    void didLocalPublish(SKey s,Point p0,SKey source,int level){ }
     /// drops all calculation/storage connected with the given point, the point will be added with another key
     /// (called upon collisions)
     void publishCollision(SKey,Point){ }

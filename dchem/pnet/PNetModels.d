@@ -20,9 +20,11 @@ import blip.math.IEEE;
 import blip.math.random.Random;
 import blip.container.Cache;
 import blip.container.Pool;
+import blip.io.BasicIO;
 import blip.io.EventWatcher: ev_tstamp,ev_time;
 import blip.parallel.mpi.MpiModels;
 import blip.io.EventWatcher;
+import blip.container.HashMap;
 
 /// unique key for a point, dimensions might change
 /// key might have some special values,
@@ -112,7 +114,9 @@ struct PointAndDir{
         data=(0xFFFF_F000_0000_0000 & data)|(k.data & 0x0000_0FFF_FFFF_FFFFUL);
     }
     mixin(serializeSome("dchem.PointAndDir","data"));// split in Point and dir???
-    mixin printOut!();
+    void desc(CharSink s){
+        dumper(s)("Point")(data,"x");
+    }
     struct ExpandedPointAndDir{
         PointAndDir pDir;
         uint dir(){
@@ -220,9 +224,9 @@ struct DirDistances(T){
 
 /// encodes a discrete probability level
 enum Prob{
-    Unlikely=0, /// from the current information it is unlikely that the point has that feature
-    Possible=1, /// one indicator is pointing toward the point having that feature
-    Likely=2, /// it is likely that the point has that feature
+    Unlikely=0,  /// from the current information it is unlikely that the point has that feature
+    Possible=1,  /// one indicator is pointing toward the point having that feature
+    Likely=2,    /// it is likely that the point has that feature
     Confirmed=3, /// it has been confirmed that the point has that feature
 }
 /// flags of the point
@@ -230,35 +234,43 @@ enum GFlags{
     None=0,/// no flags
     EnergyInfo =(3<<0),
     EnergyInProgress=(1<<0),        /// energy calculation at this point is in progress
-    EnergyKnown =(3<<0),              /// the energy is known
+    EnergyKnown =(3<<0),            /// the energy is known
     EnergyEvaluated =(2<<0),        /// the energy was evaluated (b-cast done)
     GradientInfo =(3<<2),
     GradientInProgress=(1<<2),      /// gradient calculation at this point is in progress
-    GradientKnown =(3<<2),            /// gradient is known
+    GradientKnown =(3<<2),          /// gradient is known
     GradientEvaluated =(2<<2),      /// gradient was evaluated, frame of reference is established, b-cast done
     InProgress=EnergyInProgress|GradientInProgress, /// a calculation is in progress
-    DoNotExplore=(1<<4),            /// no further exploration should be performed starting from this point
-    FullyExplored=(1<<5),           /// all directions around this point have been explored
-    FullyEvaluated=(1<<6),          /// all directions around this point have been explored and evaluated
-    OldApprox=(1<<7),               /// energy/gradient are based on old data, newer better data should be available (also set when dropped)
-    LocalCopy=(1<<8),               /// this MainPoint is a local copy done for efficency reasons (localContext is not the owner)
-    AlongForces=(3<<9),             /// codify what happens going along the minimuma direction
+    HasRefFrame =(1<<4),            /// has a reference frame (this is always set if GradientEvaluated, but might be set also before)
+    DoNotExplore=(1<<5),            /// no further exploration should be performed starting from this point
+    FullyExplored=(1<<6),           /// all directions around this point have been explored
+    FullyEvaluated=(1<<7),          /// all directions around this point have been explored and evaluated
+    OldApprox=(1<<8),               /// energy/gradient are based on old data, newer better data should be available (also set when dropped)
+    LocalCopy=(1<<9),               /// this MainPoint is a local copy done for efficency reasons (localContext is not the owner)
+    AlongForces=(3<<10),            /// codify what happens going along the minimuma direction
     AlongForcesUnknow=0,            /// not yet claculated
-    AlongForcesDecrease=(1<<9),     /// along the forces the energy decreases (normal point)
-    AlongForcesIncrease=(2<<9),     /// along the forces the energy increases (critical point close)
-    AlongGradient=(3<<11),          /// codifies what happens along the gradient
+    AlongForcesDecrease=(1<<10),    /// along the forces the energy decreases (normal point)
+    AlongForcesIncrease=(2<<10),    /// along the forces the energy increases (critical point close)
+    AlongGradient=(3<<12),          /// codifies what happens along the gradient
     AlongGradientUnknow=0,          /// not yet calculated
-    AlongGradientDecrease=(1<<11),  /// along the gradient the energy decreases (critical point close)
-    AlongGradientIncrease=(2<<11),  /// along the gradient the energy increases (normal point)
-    NeighVals=(7<<13),              /// codifies the energy values of the neighbors
+    AlongGradientDecrease=(1<<12),  /// along the gradient the energy decreases (critical point close)
+    AlongGradientIncrease=(2<<12),  /// along the gradient the energy increases (normal point)
+    NeighVals=(7<<14),              /// codifies the energy values of the neighbors, if the gradient is known these are only the neighbors "at the same level", i.e. not along forces or gradient
     NeighValsUnknown=0,             /// no neighbor values known yet
-    NeighValsDecrease=(1<<13),      /// some neighbors are smaller
-    NeighValsSame=(2<<13),          /// some neighbors have the same energy
-    NeighValsIncrease=(4<<13),      /// some neighbors are larger
-    AttractorBorder=(3<<16),        /// codifies the current attractor status
-    AttractorBorderForces=(1<<16),  /// we are at the border going along the forces
-    AttractorBorderGradient=(2<<16),/// we are at the border going along the gradients
-    PointBcasted=(1<<17),           /// the point was broadcasted around (dropping is a global op)
+    NeighValsDecrease=(1<<14),      /// some neighbors are smaller
+    NeighValsSame=(2<<14),          /// some neighbors have the same energy
+    NeighValsIncrease=(4<<14),      /// some neighbors are larger
+    CorrNeighVals=(7<<17),              /// codifies the corrected second order energy values of the neighbors "at the same level", i.e. not along forces or gradient
+    CorrNeighValsUnknown=0,             /// no neighbor values known yet
+    CorrNeighValsDecrease=(1<<17),      /// some neighbors are smaller
+    CorrNeighValsSame=(2<<17),          /// some neighbors have the same energy
+    CorrNeighValsIncrease=(4<<17),      /// some neighbors are larger
+    AttractorBorder=(3<<20),        /// codifies the current attractor status
+    AttractorBorderForces=(1<<20),  /// we are at the border going along the forces
+    AttractorBorderGradient=(2<<20),/// we are at the border going along the gradients
+    PointBcastStatus=(3<<22),       /// status of the bcast process
+    PointBcasted=(1<<22),           /// the point was broadcasted around (dropping is a global op)
+    PointNeighBcasted=(2<<22),      /// all the neighbors to points created before this have been broadcasted
 }
 
 // *** topology, functions of gFlags
@@ -273,8 +285,8 @@ Prob minimumForGFlags(uint gFlags){
 }
 /// probability of having a critical point close by for the given gFlags
 Prob criticalPointForGFlags(uint gFlags){
-    if ((gFlags&GFlags.AlongForcesIncrease)!=0) return Prob.Likely;
-    if ((gFlags&GFlags.AlongGradientDecrease)!=0) return Prob.Likely;
+    if ((gFlags&GFlags.AlongForcesIncrease)!=0 && (gFlags&GFlags.AlongForcesDecrease)==0) return Prob.Likely;
+    if ((gFlags&GFlags.AlongGradientDecrease)!=0 && (gFlags&GFlags.AlongGradientIncrease)==0) return Prob.Likely;
     return Prob.Unlikely;
 }
 /// probability of having a saddle point
@@ -283,8 +295,11 @@ Prob saddlePointForGFlags(uint gFlags){
         if ((gFlags&GFlags.AttractorBorder)!=0){
             return Prob.Likely;
         }
-        if ((gFlags&GFlags.NeighValsIncrease)!=0 && (gFlags&GFlags.NeighValsDecrease)!=0){
-            return Prob.Likely;
+        if ((gFlags&GFlags.CorrNeighValsDecrease)==0 && (gFlags&(GFlags.CorrNeighValsIncrease|GFlags.CorrNeighValsSame))!=0){
+            return (((gFlags&GFlags.FullyEvaluated)!=0)?Prob.Confirmed:Prob.Likely);
+        }
+        if ((gFlags&GFlags.NeighValsDecrease)!=0 && (gFlags&GFlags.CorrNeighValsIncrease)!=0){
+            return Prob.Possible; // make it probable???
         }
         return Prob.Possible;
     }
@@ -316,6 +331,23 @@ PointType pointTypeForGFlags(uint gFlags){
         return PointType.TransitionSurface;
     } else {
         return PointType.NormalPoint;
+    }
+}
+/// returns a string for a point type
+string pointTypeStr(PointType p){
+    switch(p){
+    case PointType.Minimum:
+        return "Minimum";
+    case PointType.TransitionPoint:
+        return "TransitionPoint";
+    case PointType.TransitionSurface:
+        return "TransitionSurface";
+    case PointType.CriticalPoint:
+        return "CriticalPoint";
+    case PointType.NormalPoint:
+        return "NormalPoint";
+    default:
+        assert(0);
     }
 }
 
@@ -382,6 +414,8 @@ interface MainPointI(T){
     uint toDir(uint idim,bool neg);
     /// transforms a non core (i.e. non 0) dir to dimension and sign
     void fromDir(uint dir,out uint dim,out bool neg);
+    /// communicates that the point has reached the given bcast level
+    void bcastLevel(int l);
     
     /// this point as dried point
     DriedPoint!(T) driedPoint();
@@ -417,18 +451,22 @@ interface MainPointI(T){
     /// notifies a GFlags change from the given gFlags
     void notifyGFlagChange(uint oldGFlags);
     /// the energy of a neighbor was calculated
-    void localNeighEnergy(PointAndDir[] neigh,Real e);
+    void localNeighEnergy(PointAndDir[] neigh,DirDistances!(T)[],Real e);
     /// adds an energy evaluation for the given point (that should be a neighbor of this point)
     void addEnergyEvalOther(Point p,Real e);
     /// the gradient of a neighbor was calculated (and possibly also the energy for the first time)
-    void localNeighGrad(PointAndDir[] neigh,LazyMPLoader!(T)mainPoint,Real e);
+    void localNeighGrad(PointAndDir[] neigh,DirDistances!(T)[],LazyMPLoader!(T)mainPoint,Real e);
     /// adds an energy evaluation for the given point (that should be a neighbor of this point)
     void addGradEvalOther(LazyMPLoader!(T)p,Real e);
-    
-    /// adds the energy to this point
-    /// energy must be valid
-    /// gFlags is updated at the end getting the energy of all neighbors
-    void addEnergyEvalLocal(Real e);
+    /// if the gradient should be calculated, if returns true, it assumes that the gradient is then in progress
+    bool shouldCalculateGradient();
+    /// sets the energy
+    /// is really perfomed only the first time (and returns true) 
+    /// if true is returned you should call didEnergyEval
+    bool setEnergy(Real e);
+    /// energy must be valid, should be called just once
+    /// gFlags is updated at the end. Sends (and gets) the energy to all neighbors
+    void didEnergyEval();
     /// gets the energies of the neighbors and broadcasts its own energy to them
     void updateNeighE();
     /// to be called after the gradient was added to the pos of this point
@@ -538,6 +576,7 @@ class LazyMPLoader(T):Serializable{
     }
     static LazyMPLoader opCall(Point point,bool weakUpdate,ev_tstamp time,PoolI!(LazyMPLoader) pool=null){
         auto res=gPool.getObj();
+        res.refCount=1;
         res.maxTime=time;
         res.weakUpdate=weakUpdate;
         res.point=point;
@@ -593,7 +632,7 @@ interface ExplorationObserverI(T){
     void finishedExploringPoint(SKey s,Point,SKey owner);
     /// informs silos s that source has done the initial processing of point p0,
     /// and p0 is now known and collision free
-    void didLocalPublish(SKey s,Point p0,SKey source);
+    void didLocalPublish(SKey s,Point p0,SKey source,int level);
     /// drops all calculation/storage connected with the given point, the point will be added with another key
     /// (called upon collisions)
     void publishCollision(SKey,Point);
@@ -745,6 +784,13 @@ interface PNetSilosI(T):ExplorationObserverI!(T){
 
 const char[] silosMethodsStr=`increaseRunLevel|addEnergyEvalLocal|addGradEvalLocal|publishPoint|neighborHasEnergy|neighborHasGradient|finishedExploringPoint|didLocalPublish|publishCollision|updateEvalStatus|prepareNextOp:oneway|getNextOp|evaluationFailed|speculativeGradient|load|energyForPointsLocal|energyForPoints|mainPoint|mainPointLocal|pointOwner|nextFreeSilos|addPointToLocalNeighs|addNeighDirsToLocalPoint|executeLocally|propertiesDict|name|addEvalOp|activateExplorer`;
 
+/// how eagerly the gradient is calculated
+enum GradEagerness:uint{
+    OnRequest, /// gradient is calculated only when requested to build the frame of reference
+    Speculative, /// after an energy calculation a request is performed to decide if to immediately calculate the gradient
+    Always, /// the gradient is always calculated
+}
+
 /// local interface, to a silos (basically a silos client)
 interface LocalSilosI(T): PNetSilosI!(T) {
     /// if this silos is owner of the key k (note that using this rather than having a single key per silos
@@ -766,9 +812,15 @@ interface LocalSilosI(T): PNetSilosI!(T) {
     /// adds an extra explorer that can generate new points
     void addExplorer(ExplorerI!(T)o);
     /// removes the given explorer
-    void rmExplorerNamed(char[]);
+    bool rmExplorerNamed(char[]);
     /// notify observers, the operation should not raise (or the whole program stops)
     void notifyLocalObservers(void delegate(ExplorationObserverI!(T))n);
+    /// adds a component
+    void addComponent(SilosComponentI!(T)component);
+    /// removes the component with the given name (stopping it)
+    bool rmComponentNamed(string name);
+    /// returns the actual components
+    HashMap!(string,SilosComponentI!(T)) components();
     
     /// linear communicator (valid only inside the core silos, not in the clients)
     LinearComm paraEnv();
@@ -780,8 +832,8 @@ interface LocalSilosI(T): PNetSilosI!(T) {
     ParticleSys!(T) refPos();
     /// constraints for this system
     ConstraintI!(T) constraints();
-    /// if the gradient is cheap to compute
-    bool cheapGrad();
+    /// how eagerly the gradient is calculated
+    GradEagerness gradEagerness();
     /// local notification center
     NotificationCenter nCenter();
     
@@ -874,8 +926,17 @@ interface SilosConnectorI{
     string connectionUrl(); /// connection url
     void setConnectionAndPrecision(string,string); /// sets url and precision
 }
+
 /// define silosWorkerT extractor helper
 mixin(genTypeTMixin("SilosWorker","silosWorker","",""));
+
+/// a component that works on a local silos in some persistent way (for example tracking the special points)
+/// it will be connected to the silos, and accessible through it
+interface SilosComponentI(T):SilosWorkerI!(T){
+    void stop();
+    char[] name();
+    char[] kind();
+}
 
 /// an exploration observer generator (what is created by the input)
 interface ExplorationObserverGen:InputElement{

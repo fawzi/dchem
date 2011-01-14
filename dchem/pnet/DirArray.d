@@ -153,6 +153,7 @@ class FlagsArray{
             return 1;
         }
         assert(startPos<nFlags,"startPos out of bounds");
+        assert((!lastLast)||startPos+1<nFlags,"startPos must be smaller if lastLast is true");
         assert(extraCheck is null || extraCheck.length>=length,"extraCheck is too short");
         auto idx=startPos;
         auto blockIdx=idx/bitsPerEl;

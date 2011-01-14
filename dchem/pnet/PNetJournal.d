@@ -18,7 +18,7 @@ import blip.io.EventWatcher:ev_time;
 
 // object that keeps the journal of the computations done
 class PNetJournalGen:ExplorationObserverGen{
-    char[] journalDir;
+    char[] fileBasePath="journal";
     char[] journalFormat="sbin";
     bool logOtherEnergies;
     bool logOtherStart;
@@ -34,7 +34,7 @@ class PNetJournalGen:ExplorationObserverGen{
         return new PNetJournal!(LowP)(this,silos);
     }
     mixin(serializeSome("dchem.PNetJournal",`
-    journalDir: directory where to write the journal
+    fileBasePath: start of the journal filename (defaults to journal)
     journalFormat: to format of the journal: 'sbin' or 'json'
     logOtherEnergies: if the energies of non local points should be logged
     logOtherStart: if the start of non local points should be logged
@@ -63,10 +63,6 @@ class PNetJournal(T):ExplorationObserverI!(T){
     string name(){
         return "PNetJournal_"~input.myFieldName;
     }
-    /// points to explore more ordered by energy (at the moment this is replicated)
-    /// this could be either distribued, or limited to a given max size + refill upon request
-    MinHeapSync!(PointAndEnergy) toExploreMore;
-    HashSet!(Point) pointsToRm;
     
     static struct JournalEntry{
         enum Kind:int{
@@ -174,7 +170,7 @@ class PNetJournal(T):ExplorationObserverI!(T){
         auto arr=lGrowableArray(buf,0);
         OutputStream stream;
         Exception lastE;
-        for (int i=0;i<input.maxJournalIds;++i){
+        /+for (int i=0;i<input.maxJournalIds;++i){
             const File.Style WriteUnique = {File.Access.Write, File.Open.New, File.Share.Read};
             arr(input.journalDir);
             if (input.journalDir.length>0 && input.journalDir[$-1]!='/') arr("/");
@@ -191,7 +187,8 @@ class PNetJournal(T):ExplorationObserverI!(T){
                 arr.clearData();
                 lastE=e;
             } // should ignore only already present files... improve?
-        }
+        }+/
+        stream=new File(input.fileBasePath~"-"~silos.name~"."~input.journalFormat~"Log",File.WriteAppending);
         if (lastE!is null){
             throw new Exception("exception trying to open journal file",__FILE__,__LINE__,lastE);
         }
@@ -250,7 +247,7 @@ class PNetJournal(T):ExplorationObserverI!(T){
     }
     /// informs silos s that source has done the initial processing of point p0,
     /// and p0 is now known and collision free
-    void didLocalPublish(SKey s,Point p0,SKey source){
+    void didLocalPublish(SKey s,Point p0,SKey source,int level){
     }
     /// drops all calculation/storage connected with the given point, the point will be added with another key
     /// (called upon collisions)

@@ -42,7 +42,7 @@ class AddRefPos(T):SilosWorkerI!(T) {
             assert(newP!is null);
             newP=silos.bcastPoint(newP);
             newP.exploredDirs.atomicCAS(0,DirFlags.Explored,DirFlags.Free);
-            EvalOp!(T) newOp=new PointEvalOp!(T)(newP.point,true);
+            EvalOp!(T) newOp=new PointEvalOp!(T)(newP.point,newP.shouldCalculateGradient());
             silos.registerPendingOp(newOp);
             silos.addEvalOp(SKeyVal.Master,newOp,true);
         }

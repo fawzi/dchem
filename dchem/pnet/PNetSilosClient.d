@@ -197,8 +197,8 @@ class PNetSilosClient(T): LocalSilosI!(T){
     }
     /// informs silos s that source has done the initial processing of point p0,
     /// and p0 is now known and collision free
-    void didLocalPublish(SKey s,Point p0,SKey source){
-        connection.didLocalPublish(s,p0,source);
+    void didLocalPublish(SKey s,Point p0,SKey source,int level){
+        connection.didLocalPublish(s,p0,source,level);
     }
     /// drops all calculation/storage connected with the given point, the point will be added with another key
     /// (called upon collisions)
@@ -368,13 +368,26 @@ class PNetSilosClient(T): LocalSilosI!(T){
         throw new Exception("addition of explorers not supported",__FILE__,__LINE__);
     }
     /// removes the given explorer
-    void rmExplorerNamed(char[]){
-        throw new Exception("removal of explorers not supported",__FILE__,__LINE__);
+    bool rmExplorerNamed(string){
+        return false; // throw??
     }
     /// notify observers, the operation should not raise (or the whole program stops)
     void notifyLocalObservers(void delegate(ExplorationObserverI!(T))n){
         // no local observers
     }
+    /// adds a component
+    void addComponent(SilosComponentI!(T)component){
+        throw new Exception("addition of components not supported",__FILE__,__LINE__); // change???
+    }
+    /// removes the component with the given name (stopping it)
+    bool rmComponentNamed(string name){
+        return false; // throw??
+    }
+    /// returns the current components
+    HashMap!(string,SilosComponentI!(T)) components(){
+        return null; // throw?
+    }
+    
     /// linear communicator (valid only inside the real silos, not in the clients)
     LinearComm paraEnv(){
         return null;
@@ -387,9 +400,9 @@ class PNetSilosClient(T): LocalSilosI!(T){
     ConstraintI!(T) constraints(){
         return _constraints;
     }
-    /// if the gradient is cheap to compute
-    bool cheapGrad(){
-        return properties["cheapGrad"]!=0;
+    /// how eagerly the gradient is calculated
+    GradEagerness gradEagerness(){
+        return cast(GradEagerness)cast(uint)properties["gradEagerness"];
     }
     /// local notification center
     NotificationCenter nCenter(){

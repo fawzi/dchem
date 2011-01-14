@@ -30,7 +30,7 @@ poorM:{
 
 MinE:{
     class:"dchem.MinEExplorer"
-    nEval:2
+    nEval:10
 }
 
 mullerB:{
@@ -64,12 +64,22 @@ initialPos:{
     class:dchem.AddRefPos
 }
 
+posELog:{
+    class:dchem.PosELogger,
+    baseFileName:"posELog",
+    flushEachLine:true
+}
+
+spLogger:{
+    class:dchem.TrackSpecialPoints
+}
+
 pnetSilos:{
     class:dchem.Silos,
     evaluator:{ class:Ref, name:limitedMB}
     evaluatorTask:{ class:Ref, name:workAsker}
-    explorers:[ { class:Ref, name:MinE },{ class:Ref, name:journal } ]
-    loaders:[{ class:Ref, name:initialPos }]
+    explorers:[ { class:Ref, name:MinE },{ class:Ref, name:journal },{ class:Ref, name:posELog } ]
+    loaders:[{ class:Ref, name:initialPos },{ class:Ref, name: spLogger }]
 }
 
 main:{class:Ref, name:pnetSilos}
