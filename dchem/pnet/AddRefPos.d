@@ -7,6 +7,7 @@ import dchem.pnet.PointEvalOp;
 import blip.serialization.Serialization;
 import blip.io.BasicIO;
 import blip.io.Console;
+import dchem.pnet.DirArray;
 
 /// adds the ref pos to the silos as point to evaluate
 class AddRefPosGen:SilosWorkerGen {
@@ -40,8 +41,10 @@ class AddRefPos(T):SilosWorkerI!(T) {
             auto newP=silos.newPointAt(pos.dynVars.x);
             assert(newP!is null);
             newP=silos.bcastPoint(newP);
+            newP.exploredDirs.atomicCAS(0,DirFlags.Explored,DirFlags.Free);
             EvalOp!(T) newOp=new PointEvalOp!(T)(newP.point,true);
-            silos.addEvalOp(SKeyVal.Master,newOp);
+            silos.registerPendingOp(newOp);
+            silos.addEvalOp(SKeyVal.Master,newOp,true);
         }
     }
 }

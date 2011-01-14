@@ -21,6 +21,7 @@ import blip.util.Convert;
 import blip.core.Traits;
 import blip.container.Cache;
 import blip.stdc.string: memcpy;
+import blip.math.Math: max;
 
 enum ParaFlags{
     FullPara,
@@ -1160,9 +1161,11 @@ char[] segArrayKLoopStr(int pFlags,char[] iterName, char[][]namesLocal,
     if (dataLoop) {
         visitorStr~=`
                 auto aStruct=`~namesLocal[0]~`.arrayStruct;
+                assert(aStruct.mKindDims[kIdx`~uniq~`-`~namesLocal[0]~`.kRange.kStart]!=0||(aStruct.kindStarts[kIdx`~uniq~`-aStruct.kRange.kStart+1]-aStruct.kindStarts[kIdx`~uniq~`-aStruct.kRange.kStart])==0);
+                
                 newK`~uniq~`.end=cast(ParticleIdx)
                     ((aStruct.kindStarts[kIdx`~uniq~`-aStruct.kRange.kStart+1]-aStruct.kindStarts[kIdx`~uniq~`-aStruct.kRange.kStart])/
-                        (aStruct.mKindDims[kIdx`~uniq~`-`~namesLocal[0]~`.kRange.kStart]));`;
+                        max(1,aStruct.mKindDims[kIdx`~uniq~`-`~namesLocal[0]~`.kRange.kStart]));`;
     } else {
         visitorStr~=`
                 newK`~uniq~`.end=

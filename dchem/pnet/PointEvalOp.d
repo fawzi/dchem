@@ -56,9 +56,11 @@ class PointEvalOp(T):EvalOp!(T){
                 silos.updateEvalStatus(owner,id,null,Status.Failure);
                 silos.evaluationFailed(SKeyVal.All,point);
             }
+        } else {
+            silos.logMsg(delegate void(CharSink s){
+                dumper(s)("doOp called on EvalOp ")(id)(" which has already run status ")(status);
+            });
         }
-        updateStatus(Status.Success);
-        silos.updateEvalStatus(owner,id,null,Status.Success);
     }
     /// tries to stop the operation early
     void stopOp(){ }

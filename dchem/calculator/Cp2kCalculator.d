@@ -152,6 +152,7 @@ class Cp2kServer:InputElement{
     setupCmd: the command executed on activate (might start the clients, in it "[port]" is replaced with the port of the server)
     maxLife: the maximum life of a connection in minutes (525600 = one year)`));
     mixin myFieldMixin!();
+    mixin printOut!();
     
     SocketServer server;
     CharSink log;

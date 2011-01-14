@@ -262,6 +262,8 @@ class MultiConstraintGen: ConstraintGen{
     targetPrecision: the target precision that should be reached by the constraint loop
     constraints: the constraints to apply
     `));
+    mixin printOut!();
+    
     this(){}
     bool verify(CharSink s){
         auto log=dumper(s);

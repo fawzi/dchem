@@ -177,14 +177,15 @@ struct DirDistances(T){
     T xDist; /// internal (x space) distance
     T dualDist; /// distance in the dual space
     T cartesianDist; /// cartesianDistance (in the TS)
+    T minDirProj; /// projection along minDir (if you multiply this with the minDirScale you get the first order correction)
     T dualCos; /// cosinus with the direction in the dual space
     T cartesianCos; /// cosinus with the direction in the cartesian metric
     T dualDirDist; /// distance in the dual space from the perfect direction point
     T cartesianDirDist; /// distance in the cartesian metric from the perfect direction point
     /// all values are set
     bool full(){
-        return !(isNaN(dualDist)||isNaN(cartesianDist)||
-            isNaN(dualCos)||isNaN(cartesianCos)|| 
+        return !(isNaN(xDist)||isNaN(dualDist)||isNaN(cartesianDist)||
+            isNaN(minDirProj)||isNaN(dualCos)||isNaN(cartesianCos)|| 
             isNaN(dualDirDist)||isNaN(cartesianDirDist));
     }
     bool veryFar(LocalSilosI!(T) silos){
@@ -208,6 +209,7 @@ struct DirDistances(T){
         xDist: internal (x space) distance
         dualDist: distance in the dual space
         cartesianDist: cartesianDistance (in the TS)
+        minDirProj: projection along the minimum distance
         dualCos: cosinus with the direction in the dual space
         cartesianCos: cosinus with the direction in the cartesian metric
         dualDirDist: distance in the dual space from the perfect direction point
@@ -696,7 +698,7 @@ interface RemoteSilosOpI(T):Serializable{ // could be Serializable and SilosWork
 ///
 /// just like ExplorationObserverI all methods have SKey as first argument (see there for the rationale)
 interface PNetSilosI(T):ExplorationObserverI!(T){
-    /// updates a pending operation status, should remove the operation when finished
+    /// updates a pending operation status, should remove the operation when finished (the target should be the "owner" of the operation)
     void updateEvalStatus(SKey owner,char[] opId, ModifyEvalOp!(T) op,EvalOp!(T).Status newStat);
     /// this should be called by the master process sending it to SKey.All
     /// to receive a new operation to do
@@ -705,7 +707,7 @@ interface PNetSilosI(T):ExplorationObserverI!(T){
     /// returns an EmptyOp if there is no work
     EvalOp!(T) getNextOp(SKey);
     /// inserts an operation to execute into the server (target should be SKeyVal.Master)
-    void addEvalOp(SKey,EvalOp!(T));
+    void addEvalOp(SKey,EvalOp!(T),bool incrementNPending);
     /// called when an evaluation fails
     void evaluationFailed(SKey s,Point);
     /// should speculatively calculate the gradient? PNetSilos version calls addEnergyEvalLocal

@@ -41,6 +41,7 @@ class PNetJournalGen:ExplorationObserverGen{
     logOtherPos: if the positions of non local points should be logged
     logNeighInfo: if the updates of energies or gradients of the neighbors should be logged`));
     mixin myFieldMixin!();
+    mixin printOut!();
     bool verify(CharSink s){
         bool res=true;
         if (journalFormat!="sbin" && journalFormat!="json"){
@@ -88,7 +89,7 @@ class PNetJournal(T):ExplorationObserverI!(T){
         }
         static JournalEntry StartPoint(SKey sKey,Point p,PSysWriter!(T) pos,uint flags){
             JournalEntry res;
-            res.kind=Kind.PointGrad;
+            res.kind=Kind.StartPoint;
             res.sKey=sKey;
             res.flags=flags;
             res.pos=pos;

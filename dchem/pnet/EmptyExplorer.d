@@ -16,6 +16,7 @@ class EmptyExplorerDef:SilosWorkerGen{
     }
     mixin myFieldMixin!();
     mixin(serializeSome("dchem.EmptyExplorer",``));
+    mixin printOut!();
     bool verify(CharSink s){
         return true;
     }

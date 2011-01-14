@@ -87,6 +87,7 @@ class RemotePointEval(T):RemoteCCTask{
     CalculationContext ctx;
     LocalSilosI!(T) localSilos;
     mixin(serializeSome("dchem.minEE.RemotePointEval!("~T.stringof~")","point|silosCoreUrl"));
+    mixin printOut!();
     
     this(){}
     this(Point p,char[]oUrl){
@@ -221,6 +222,7 @@ class SilosGen:Sampler {
         minMoveInternal: minimum difference in the internal coords to accept a new direction (0.0)
         zeroLen: distance that is considered equivalent to 0 (1.0e-10)
     `));
+    mixin printOut!();
     this(){}
 
     bool verify(CharSink s){
@@ -363,6 +365,7 @@ class PointBcastProgress(T){
     }
     void reset(MainPointI!(T) p){
         pointToBCast=p;
+        waitingName=1;
         this.localContext=cast(PNetSilos!(T))cast(Object)p.localContext;
         assert(this.localContext!is null);
     }
@@ -439,26 +442,26 @@ class PointBcastProgress(T){
 class PendingEvals(T) {
     PNetSilos!(T) silos;
     HashMap!(char[],EvalOp!(T)) pendingOps;
-    long nPending;
-    WaitCondition waitPending;
     UniqueNumber!(ulong) nextLocalId;
     
     this(PNetSilos!(T) silos){
         this.silos=silos;
         this.pendingOps=new HashMap!(char[],EvalOp!(T))();
-        this.waitPending=new WaitCondition(&this.hasNoPendingOps);
         this.nextLocalId=UniqueNumber!(ulong)(1);
     }
-    bool hasNoPendingOps(){
-        return nPending==0;
+    size_t nPending(){
+        synchronized(this){
+            return pendingOps.length;
+        }
     }
-    
     void addPendingOp(EvalOp!(T) op){
         auto id=collectAppender(delegate void(CharSink s){
             dumper(s)(silos._key)("-")(nextLocalId.next());
         });
+        version (TrackPNet) silos.logMsg(delegate void(CharSink s){
+            dumper(s)("addPendingOp(")(op)(") with id:")(id);
+        });
         op.initMaster(id,silos,silos._key);
-        atomicAdd(nPending,1);
         synchronized(this){
             pendingOps[op.id]=op;
         }
@@ -478,10 +481,13 @@ class PendingEvals(T) {
                 op.modifyEvalOp(opAtt);
             }
             if (opAtt.updateStatus(newStat) && newStat==EvalOp!(T).Status.Failure){
-                silos.addEvalOp(SKeyVal.Master,opAtt);
+                silos.addEvalOp(SKeyVal.Master,opAtt,false);
                 resubmitted=true;
             }
         }
+        version (TrackPNet) silos.logMsg(delegate void(CharSink s){
+            dumper(s)("updateStatus(")(opId)(",")((op is null)?"*null*":"op")(",")(newStat)(")");
+        });
         switch (newStat){
             case EvalOp!(T).Status.ToDo:
                 assert(0);
@@ -489,18 +495,19 @@ class PendingEvals(T) {
                 break;
             case EvalOp!(T).Status.Failure:
             case EvalOp!(T).Status.Success:
-                if (opAtt && !resubmitted){
-                    synchronized(pendingOps){
-                        pendingOps.removeKey(opId);
+                if (!resubmitted){
+                    if (opAtt){
+                        synchronized(pendingOps){
+                            pendingOps.removeKey(opId);
+                        }
+                        if (silos.paraEnv.myRank!=0){
+                            silos.updateEvalStatus(SKeyVal.Master,opId,null,newStat);
+                        }
                     }
-                    atomicAdd(nPending,-1);
-                    if (silos.paraEnv.myRank!=0){
-                        silos.updateEvalStatus(SKeyVal.Master,opId,null,newStat);
+                    if (silos.paraEnv.myRank==0){
+                        atomicAdd(silos.nPendingOps,-1);
+                        silos.waitPendingEnd.checkCondition();
                     }
-                    silos.waitPendingEnd.checkCondition();
-                } else if (silos.paraEnv.myRank==0){
-                    atomicAdd(nPending,-1);
-                    silos.waitPendingEnd.checkCondition();
                 }
                 break;
             default:
@@ -515,6 +522,7 @@ class PNetSilos(T): LocalSilosI!(T){
     UniqueNumber!(ulong) nextLocalId;
     UniqueNumber!(ulong) nextPntNr;
     UniqueNumber!(uint)  nextTag;
+    long nPendingOps=0; /// global number of pending ops (on the master only)
     string nameId;
     SKey _key;
     bool hasKey(SKey k){ return _key==k||k==SKeyVal.Any||(k==SKeyVal.Master && paraEnv.myRank==0); }
@@ -550,7 +558,6 @@ class PNetSilos(T): LocalSilosI!(T){
     WaitCondition waitExplorers;
     WaitCondition waitPendingEnd;
     Deque!(EvalOp!(T)) localOps;
-    long nPendingOps;
     /// parallel enviroment of silos
     LinearComm silosParaEnv;
     /// observers
@@ -579,9 +586,9 @@ class PNetSilos(T): LocalSilosI!(T){
         char[512] buf;
         auto gArr=lGrowableArray(buf,0);
         auto s=dumper(&gArr.appendArr);
-        s("<MinEELog id=\"")(_key)("\" time=\"")(ev_time())("\">");
-        writer(s.call);
-        s("</MinEELog>\n");
+        s("<PNetSilosLog id=\"")(_key)("\" time=\"")(ev_time())("\" task=\"")(taskAtt.val)("\">\n  ");
+        indentWriter("  ",s.call,writer);
+        s("\n</PNetSilosLog>\n");
         log(gArr.data);
         gArr.deallocData;
     }
@@ -646,7 +653,7 @@ class PNetSilos(T): LocalSilosI!(T){
     bool isAtPendingEnd(){
         bool res=false,checkPending=false;
         synchronized(pendingEvals){
-            volatile bool hasOps=pendingEvals.hasNoPendingOps;
+            volatile bool hasOps= (paraEnv.myRank==0 && nPendingOps==0);
             if ((hasOps && runLevel>RunLevel.Running) || runLevel>RunLevel.WaitPending){
                 if (runLevel==RunLevel.WaitPending && paraEnv.myRank==0) {
                     checkPending=true;
@@ -658,6 +665,7 @@ class PNetSilos(T): LocalSilosI!(T){
         if (checkPending){
             waitPendingEnd.checkCondition();
         }
+        assert((!res)||pendingEvals.nPending==0);
         return res;
     }
     mixin(descSome("dchem.PNetSilos_"~T.stringof,`_key|runLevel|nextLocalId|nextPntNr|nameId`));
@@ -795,11 +803,15 @@ class PNetSilos(T): LocalSilosI!(T){
             pendingEvals.updateEvalStatus(opId,op,newStat);
         }
     }
-    void addEvalOp(SKey s,EvalOp!(T)op){
+    void addEvalOp(SKey s,EvalOp!(T)op,bool incrementNPending){
         if (hasKey(s)){
+            if (op.id.length==0){
+                throw new Exception("non registred operation in addEvalOp",__FILE__,__LINE__);
+            }
             localOps.pushBack(op);
+            if (incrementNPending) atomicAdd(nPendingOps,1);
         } else {
-            silosForKey(s).addEvalOp(s,op);
+            silosForKey(s).addEvalOp(s,op,incrementNPending);
         }
     }
     /// this should be called by the master process sending it to SKey.All
@@ -831,7 +843,7 @@ class PNetSilos(T): LocalSilosI!(T){
                 }
                 mpiBcastT(paraEnv,explName,0,tag);
                 logMsg(delegate void(CharSink s){
-                    dumper(s)("prepareNextOp choosenExplorer:")(explName)("\n");
+                    dumper(s)("prepareNextOp choosenExplorer:")(explName);
                 });
                 if (explName.length>0){
                     synchronized(explorers){
@@ -840,6 +852,9 @@ class PNetSilos(T): LocalSilosI!(T){
                     auto res=e.nextOp(&this.addBackExplorer,tag);
                     switch(res){
                     case ExplorerI!(T).ReturnFlag.NoOp:
+                        version(TrackPNet) logMsg(delegate void(CharSink s){
+                            dumper(s)("removing explorer");
+                        });
                         // remove explorer
                         activeExplorers.filterInPlace(/+scope+/ delegate bool(cstring s){
                             return s==explName;
@@ -848,16 +863,21 @@ class PNetSilos(T): LocalSilosI!(T){
                         explorers.removeKey(explName); // this forces explorers to return null only when there are no pending ops...
                         break loop;
                     case ExplorerI!(T).ReturnFlag.SkipOp:
+                        version(TrackPNet) logMsg(delegate void(CharSink s){
+                            dumper(s)("skipping explorer");
+                        });
                         if (paraEnv.myRank==0){
                             auto emptyOp=new WaitOp!(T)(input.noTaskWaitTime);
                             registerPendingOp(emptyOp);
-                            localOps.pushBack(emptyOp);
+                            addEvalOp(SKeyVal.Master,emptyOp,true);
                         }
                         break loop;
                     case ExplorerI!(T).ReturnFlag.LocalOp:
-                        assert(paraEnv.myRank!=0);
+                        version(TrackPNet) logMsg(delegate void(CharSink s){
+                            dumper(s)("added op");
+                        });
                         if (paraEnv.myRank==0){
-                            atomicAdd(pendingEvals.nPending,1);
+                            atomicAdd(nPendingOps,1);
                         }
                         break loop;
                     default:
@@ -1431,7 +1451,6 @@ class PNetSilos(T): LocalSilosI!(T){
         this.publishingPoints=new HashMap!(Point,PointBcastProgress!(T))();
         this.pendingEvals=new PendingEvals!(T)(this);
         this.localOps=new Deque!(EvalOp!(T))();
-        this.nPendingOps=0;
         this.localPoints=new DenseLocalPointArray!(MainPointI!(T))(this.localPointsKeys); /// local points (position,...)
         this._rand=new RandomSync();
         this._refPos=refPos;
@@ -1491,4 +1510,4 @@ class PNetSilos(T): LocalSilosI!(T){
     }
 }
 
-PNetSilos!(Real) dummyPNetSilos;
+private PNetSilos!(Real) dummyPNetSilos;

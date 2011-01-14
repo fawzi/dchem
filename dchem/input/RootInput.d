@@ -24,6 +24,8 @@ interface InputElement:Serializable{
     void myField(InputField);
     /// should check the input (called after full deserialization)
     bool verify(CharSink logger);
+    /// description (for debugging)
+    void desc(CharSink s);
 }
 
 /// a calculation method
@@ -186,6 +188,9 @@ class InputField:InputElement{
     }
     bool verify(CharSink log){
         return true;
+    }
+    void desc(CharSink s){
+        dumper(s)("InputField '")(myFieldName)("'");
     }
 }
 

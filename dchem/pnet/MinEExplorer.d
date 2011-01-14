@@ -23,6 +23,7 @@ class MinEExplorerDef:ExplorerGen{
     mixin myFieldMixin!();
     mixin(serializeSome("dchem.MinEExplorer",`
     nEval : number of evaluations to perform (long.max)`));
+    mixin printOut!();
     bool verify(CharSink s){
         return true;
     }
@@ -75,6 +76,11 @@ class MinEExplorer(T):EmptyExplorer!(T){
         this.toExploreMore=new MinHeapSync!(PointAndEnergy)();
         this.removedPoints=new HashSet!(Point);
         this.silos=silos;
+        this.leftEval=input.nEval;
+    }
+    
+    override string name(){
+        return "MinEExplorer_"~input.myFieldName;
     }
 
     /// adds energy for a local point and bCasts addEnergyEval
@@ -125,6 +131,12 @@ class MinEExplorer(T):EmptyExplorer!(T){
             return ReturnFlag.NoOp; // end this explorer
         }
         Point res;
+        PointAndEnergy[] pointToDrop;
+        scope(exit){
+            foreach(p;pointToDrop){
+                toExploreMore.push(p);
+            }
+        }
         while(true) {
             ubyte[512] buf;
             auto lMem=LocalMem(buf);
@@ -135,7 +147,8 @@ class MinEExplorer(T):EmptyExplorer!(T){
             for (int iter=0;iter<10;++iter){
                 while (toExploreMore.popNext(pe)){
                     synchronized(this){
-                        if (!removedPoints.contains(pe.point)) break;
+                        if ((!removedPoints.contains(pe.point)) && 
+                            (pointToDrop.length==0 || find(pointToDrop,pe)==pointToDrop.length)) break;
                     }
                 }
                 if (pe.point.isValid){
@@ -199,6 +212,13 @@ class MinEExplorer(T):EmptyExplorer!(T){
                 scope(exit) { lowestPoint.release(); }
                 if (! pDir.point.isValid){ // pe is already fully explored
                     res=Point(1);
+                } else if (pDir.dir==invalidDir){
+                    res=Point(2);
+                } else if (pDir.dir==0){
+                    res=pDir.point;
+                    newOp=new PointEvalOp!(T)(pDir.point,true);
+                    silos.registerPendingOp(newOp);
+                    silos.addEvalOp(SKeyVal.Master,newOp,false);
                 } else {
                     auto pSysNew=lowestPoint.createPosInDir(pDir.dir);
                     auto newP=silos.newPointAt(pSysNew.dynVars.x);
@@ -206,7 +226,8 @@ class MinEExplorer(T):EmptyExplorer!(T){
                         newP=silos.bcastPoint(newP);
                         res=newP.point;
                         newOp=new PointEvalOp!(T)(newP.point);
-                        silos.addEvalOp(SKeyVal.Master,newOp);
+                        silos.registerPendingOp(newOp);
+                        silos.addEvalOp(SKeyVal.Master,newOp,false);
                     } else {
                         newP.drop();
                         res=Point(1);
@@ -217,6 +238,13 @@ class MinEExplorer(T):EmptyExplorer!(T){
             mpiBcastT(paraEnv,res,nSilos);
             if (res.isValid){
                 return ReturnFlag.LocalOp;
+            } else if (res.data==2){
+                if (iMin==paraEnv.myRank){
+                    pointToDrop~=pe;
+                    PointAndEnergy pN;
+                    if (toExploreMore.popNext(pN) && pN.point != pe.point)
+                        toExploreMore.push(pN);
+                }
             } else if (iMin==paraEnv.myRank){
                 removedPoints.add(pe.point);
             }

@@ -12,7 +12,11 @@ import dchem.pnet.PNetSilosClient;
 import blip.io.EventWatcher: ev_tstamp,ev_time;
 import blip.io.Console;
 import blip.parallel.rpc.Rpc;
-version=TrackWorkAsker;
+import blip.stdc.stdlib: abort;
+
+version(TrackPNet){
+    version=TrackWorkAsker;
+}
 
 class WorkAskerGen:RemoteCCTask,Sampler,SilosConnectorI {
     string _connectionUrl;
@@ -226,6 +230,14 @@ class WorkAsker(T){
     }
     Status status;
     
+    void logMsg(void delegate(CharSink)writer){
+        silos.logMsg(delegate void(CharSink s){
+            dumper(s)("<WorkAskerLog T=")(T.stringof)(" field=\"")(input.myFieldName)("\" addr=")(cast(void*)this)(">\n  ");
+            indentWriter("  ",s,writer);
+            s("\n</WorkAskerLog>");
+        });
+    }
+    
     this(WorkAskerGen input,LocalCalculationContext ctx){
         this.input=input;
         auto silosGen=new PNetSilosClientGen(input.connectionUrl,input.ownerCacheSize);
@@ -237,9 +249,7 @@ class WorkAsker(T){
         status=Status.Configure;
     }
     void start(){
-        version(TrackWorkAsker){
-            sout(input.myFieldName~" starting work asker\n");
-        }
+        logMsg(delegate void(CharSink s){ s("starting work asker"); });
         assert(status<=Status.Running);
         bool noWorkLeft=false;
         scope(exit){
@@ -250,11 +260,7 @@ class WorkAsker(T){
         try{
             synchronized(this){
                 if (status!=Status.Configure){
-                    version(TrackWorkAsker) {
-                        sinkTogether(sout,delegate void(CharSink s){
-                            dumper(s)("failed start of ")(this)("\n");
-                        });
-                    }
+                    logMsg(delegate void(CharSink s){ dumper(s)("failed start"); });
                     if (status==Status.Running){
                         throw new Exception("run called on already running WorkAsker",__FILE__,__LINE__);
                     }
@@ -263,8 +269,8 @@ class WorkAsker(T){
                 status=Status.Running;
             }
             version(TrackWorkAsker) {
-                sinkTogether(sout,delegate void(CharSink s){
-                    dumper(s)("started ")(this)("\n");
+                logMsg(delegate void(CharSink s){
+                    dumper(s)("started ")(this);
                 });
             }
             while(leftEvals>0 && timeEnd>ev_time() && status==Status.Running){
@@ -272,8 +278,8 @@ class WorkAsker(T){
                 if (newOp!is null){
                     newOp.initOp(ctx,silos);
                     version(TrackWorkAsker) {
-                        sinkTogether(sout,delegate void(CharSink s){
-                            dumper(s)(this)(" should eval ")(newOp)("\n");
+                        logMsg(delegate void(CharSink s){
+                            dumper(s)("should eval ")(newOp);
                         });
                     }
                     --leftEvals;
@@ -284,13 +290,14 @@ class WorkAsker(T){
                 }
             }
         } catch(Exception e){
-            sinkTogether(sout,delegate void(CharSink s){
-                dumper(s)("Exception in WorkAsker ")(this)(":")(e);
+            logMsg(delegate void(CharSink s){
+                dumper(s)("Exception in WorkAsker:")(e);
             });
+            abort();
         }
         version(TrackWorkAsker) {
-            sinkTogether(sout,delegate void(CharSink s){
-                dumper(s)("finished ")(this)("\n");
+            logMsg(delegate void(CharSink s){
+                dumper(s)("finished");
             });
         }
     }

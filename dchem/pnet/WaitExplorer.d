@@ -18,6 +18,7 @@ class WaitExplorerDef:SilosWorkerGen{
     mixin myFieldMixin!();
     mixin(serializeSome("dchem.WaitExplorer",`
     time : minutes to wait (10)`));
+    mixin printOut!();
     bool verify(CharSink s){
         bool res=true;
         if (time<=0) {
@@ -42,6 +43,10 @@ class WaitExplorer(T):EmptyExplorer!(T){
     ev_tstamp endTime;
     GenericWatcher timeWatcher;
     WaitExplorerDef input;
+    
+    override string name(){
+        return "WaitExplorer_"~input.myFieldName;
+    }
     
     /// called when the time is up
     void timeIsUp(bool t){

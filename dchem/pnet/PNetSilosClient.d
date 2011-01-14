@@ -129,7 +129,7 @@ class PNetSilosClient(T): LocalSilosI!(T){
         this.connection=connection;
         if (connection is null){
             logMsg(delegate void(CharSink s){
-                dumper(s)("connectionUrl:")(input.connectionUrl)("\n");
+                dumper(s)("connectionUrl:")(input.connectionUrl);
             });
             this.connection=ProtocolHandler.proxyForUrlT!(PNetSilosI!(T))(input.connectionUrl);
         }
@@ -155,8 +155,8 @@ class PNetSilosClient(T): LocalSilosI!(T){
         connection.prepareNextOp(s,tag);
     }
     /// inserts an operation to execute into the server (target should be SKeyVal.Master)
-    void addEvalOp(SKey s,EvalOp!(T)op){
-        connection.addEvalOp(s,op);
+    void addEvalOp(SKey s,EvalOp!(T)op,bool incrementNPending){
+        connection.addEvalOp(s,op,incrementNPending);
     }
     /// stops a silos
     /// at the moment there is no support for dynamic adding/removal of silos, (worth adding???)
@@ -303,15 +303,19 @@ class PNetSilosClient(T): LocalSilosI!(T){
     /// writes out a log message (at once)
     void logMsg(void delegate(void delegate(char[]))writer){
         sinkTogether(log,delegate void(CharSink s){
-            dumper(s)("<PNetSilosClient_")(input.myFieldName)("@")(cast(void*)this)
-                (" time=")(ev_time())(">")(writer)("</PNetSilosClient_")(input.myFieldName)(">\n");
+            dumper(s)("<PNetSilosClientLog field=\"")(input.myFieldName)("\" addr=")(cast(void*)this)
+                (" time=")(ev_time())(" task=\"")(taskAtt.val)("\" >\n  ");
+            indentWriter("  ",s,writer);
+            dumper(s)("\n</PNetSilosClientLog>\n");
         });
     }
     /// writes out a log message
     void logMsg1(char[]msg){
         sinkTogether(log,delegate void(CharSink s){
-            dumper(s)("<PNetSilosClient_")(input.myFieldName)("@")(cast(void*)this)
-                (" time=")(ev_time())(">")(msg)("</PNetSilosClient_")(input.myFieldName)(">\n");
+            dumper(s)("<PNetSilosClientLog field=\"")(input.myFieldName)("\" addr=")(cast(void*)this)
+                (" time=")(ev_time())(" task=\"")(taskAtt.val)("\" >\n  ");
+            sinkIndented("  ",s,msg);
+            dumper(s)("\n</PNetSilosClientLog>\n");
         });
     }
     /// owner of the given point (just a utility method)
@@ -414,7 +418,7 @@ class PNetSilosClient(T): LocalSilosI!(T){
     /// the time t is used to decide if a cached version can be used
     MainPointI!(T)createLocalPoint(Point p,ev_tstamp t){
         version(TrackPNet) logMsg(delegate void(CharSink s){
-            dumper(s)("creating new pocal point ")(p);
+            dumper(s)("creating new local point ")(p);
         });
         CachedPoint!(T) cachedP;
         CachedPoint!(T) * pC;
@@ -434,10 +438,9 @@ class PNetSilosClient(T): LocalSilosI!(T){
         cachedP.mainPoint=pPool.getObj();
         cachedP.mainPoint.pos.checkX();
         cachedP.mainPoint._point=p;
-        cachedP.mainPoint._gFlags|=GFlags.LocalCopy;
-
         cachedP.lastSync=ev_time();
         cachedP.mainPoint[]=mainPoint(ownerOfPoint(p),p);
+        cachedP.mainPoint._gFlags|=GFlags.LocalCopy;
         synchronized(localCache){
             localCache[p]=cachedP;
         }

@@ -20,7 +20,7 @@ import blip.core.Traits: ctfe_i2a;
 import blip.sync.Atomic;
 import blip.util.TemplateFu: nArgs;
 import blip.io.BasicIO;
-
+import blip.container.GrowableArray;
 enum{
     XType=0,
     DxType=1,
@@ -218,7 +218,16 @@ char[] dynPVectorOp(char[][]namesLocal,char[] op,bool cell=true,bool nonEq=false
                 }
             }
             res~=`))) {
-                throw new Exception("non equivalent DynPVector in `~pp~`",__FILE__,__LINE__);
+                auto msg=collectAppender(delegate void(CharSink sink){
+                    auto s=dumper(sink);
+                    s("non equivalent DynPVector in `~pp~`");`;
+            foreach (i,n; namesLocal){
+                res~=`
+                    s("`~n~`:")(`~n~`)("\n");`;
+            }
+            res~=`
+                });
+                throw new Exception(msg,__FILE__,__LINE__);
             }
         }`;
         } else {
@@ -419,6 +428,7 @@ struct DynPVector(T,int group){
     }
 
     void opIndexAssign(T val,size_t idx){
+        size_t idxOrig=idx;
         if (pos!is null){
             assert(pos.contiguous,"not implemented for non contiguous arrays");
             auto len=3*pos.dataLength;
@@ -463,7 +473,9 @@ struct DynPVector(T,int group){
             }
             idx-=9;
         }
-        throw new Exception("index out of bounds",__FILE__,__LINE__);
+        throw new Exception(collectAppender(delegate void(CharSink s){
+                dumper(s)(idxOrig)(" index out of bounds ")(0)("..")(length);
+            }),__FILE__,__LINE__);
     }
     
     size_t length(){

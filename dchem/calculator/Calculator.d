@@ -35,6 +35,7 @@ class ContextLimiter:InputElement{
     mixin myFieldMixin!();
     mixin(serializeSome("dchem.ContextLimiter",`maxActiveContexts : maximum number of active contexts (non binding)
     maxContexts : maximum number of live (i.e. not yet given back) contexts`));
+    mixin printOut!();
     
     bool lessThanMaxContexts(){
         bool res;
@@ -146,6 +147,7 @@ class ContextLimiterClient:Method{
     mixin myFieldMixin!();
     mixin(serializeSome("dchem.ContextLimiterClient",`contextLimiter : the limiter that constrain this method
     method : the method that is constrained when accessed through this`));
+    mixin printOut!();
 
     final ContextLimiter cl(){
         return cast(ContextLimiter)cast(Object)contextLimiter.content;

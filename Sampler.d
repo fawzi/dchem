@@ -29,11 +29,8 @@ struct SamplerRunner{
 }
 
 int main(char[][]args){
-    /+scope(exit){
-        noToutWatcher.sleepTask(1.0);
-        exit(1);
-    }+/
     ProtocolHandler.defaultProtocol.startServer(false); // starting the rpc server...
+    sout("local rpc server started with url ")(ProtocolHandler.defaultProtocol.handlerUrl)("\n");
     if (args.length!=2){
         sout("Expected a single argument (inputfile)\n");
         exit(1);
@@ -61,6 +58,7 @@ int main(char[][]args){
             closure.paraEnv=mpiWorld;
             closure.log=sout.call;
             Task("mainSampler",&closure.run).autorelease.executeNow();
+            sout("mainSampler finished!\n");
         }
     }
     noToutWatcher.stopLoop();

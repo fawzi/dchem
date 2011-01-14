@@ -8,13 +8,6 @@ startConfig:{
         [0,0,8.45]]
 }
 
-singleP:{
-    class:dchem.SinglePoint,
-    calcE:1,
-    calcF:1,
-    method:{ class:Ref, name:poorM}
-}
-
 poorM:{
     class:"dchem.PoorManExecuter",
     templateDir:"templates/cp2k1",
@@ -26,11 +19,6 @@ poorM:{
     executeDefaultE:"sh calcE.sh",
     executeDefaultEF:"sh calcE.sh"
     startConfig:{ class:Ref name:startConfig}
-}
-
-MinE:{
-    class:"dchem.MinEExplorer"
-    nEval:2
 }
 
 mullerB:{
@@ -52,26 +40,10 @@ limitedMB:{
 
 workAsker:{
     class:dchem.WorkAsker,
+    connectionUrl:"stcp://icaro-2.local:50000/obj/silos"
     evaluator:{ class:Ref, name:limitedMB}
 }
 
-journal:{
-    class:dchem.PNetJournal
-    journalFormat:json
-}
-
-initialPos:{
-    class:dchem.AddRefPos
-}
-
-pnetSilos:{
-    class:dchem.Silos,
-    evaluator:{ class:Ref, name:limitedMB}
-    evaluatorTask:{ class:Ref, name:workAsker}
-    explorers:[ { class:Ref, name:MinE },{ class:Ref, name:journal } ]
-    loaders:[{ class:Ref, name:initialPos }]
-}
-
-main:{class:Ref, name:pnetSilos}
+main:{class:Ref, name:workAsker}
 
 }
