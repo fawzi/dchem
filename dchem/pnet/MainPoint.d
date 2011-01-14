@@ -736,7 +736,7 @@ class MainPoint(T):MainPointI!(T){
                             });
                         }
                     } else {
-                        auto actualDirFlags=exploredDirs.atomicCAS(iMax,DirFlags.Explored,DirFlags.Free);
+                        auto actualDirFlags=exploredDirs.atomicCAS(dirMax,DirFlags.Explored,DirFlags.Free);
                         if (actualDirFlags == DirFlags.Free){
                             logMsg(delegate void(CharSink s){
                                 dumper(s)("exploration in direction ")(dir)
@@ -798,6 +798,12 @@ class MainPoint(T):MainPointI!(T){
             if ((!hadGradient) && hasFrameOfRef){
                 gradChanged=true;
             } else {
+                auto nd=ndirs;
+                foreach(n;neighs){
+                    if (0<n.dir && n.dir<nd){
+                        exploredDirs.atomicCAS(n.dir,DirFlags.Explored,DirFlags.Free);
+                    }
+                }
                 neighbors.appendArr(neighs); // duplicates are stored contiguously
             }
         }
@@ -1003,7 +1009,7 @@ class MainPoint(T):MainPointI!(T){
                         dDist1.cartesianDirDist=dOpt2C;
                         
                         dirDist(dDist1);
-                        auto actualDirFlags=exploredDirs.atomicCAS(iMax,DirFlags.Explored,DirFlags.Free);
+                        auto actualDirFlags=exploredDirs.atomicCAS(dirMax,DirFlags.Explored,DirFlags.Free);
                         log((CharSink s){ dumper(s)("added direction"); });
                     }
                 }
