@@ -4,9 +4,8 @@ import blip.narray.NArray;
 import blip.io.Console;
 import Float=tango.text.convert.Float;
 import dchem.input.ReadIn;
-import tango.io.stream.DataFile;
 import blip.text.TextParser;
-import blip.io.StreamConverters;
+import blip.io.FileStream;
 
 
 int main(char[][]args){
@@ -52,7 +51,7 @@ int main(char[][]args){
     rotateVV(w1,w2,m);
     serr("res=")(x0.dataPrinter())("+")(m.dataPrinter())("*(x-")(x0.dataPrinter())(")\n");
     if (args.length==14){
-        auto file=new TextParser!(char)(toReaderT!(char)((new DataFileInput(args[13])).input));
+        auto file=new TextParser!(char)(infileStr(args[13]));
         file.newlineIsSpace=false;
         auto sys=readXYZFrame(file);
         sout(sys.particles.length)("\n\n");

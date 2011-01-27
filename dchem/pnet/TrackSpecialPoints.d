@@ -9,9 +9,7 @@ import blip.io.BasicIO;
 import blip.io.Console;
 import blip.io.BasicStreams;
 import dchem.pnet.DirArray;
-import blip.io.StreamConverters;
-import tango.io.device.File;
-import tango.io.device.Conduit;
+import blip.io.FileStream;
 import blip.container.Set;
 import blip.container.GrowableArray;
 import blip.util.NotificationCenter;
@@ -23,10 +21,12 @@ import blip.core.stacktrace.StackTrace;
 class TrackSpecialPointsGen:SilosWorkerGen{
     string logfileBaseName="specialPoints";
     bool flushEachLine=false;
+    bool logAllGFlagsChanges=false;
     
     mixin(serializeSome("dchem.TrackSpecialPoints",`
     logfileBaseName: base path used for the file where the special points are logged, if emty no log is written (defaults to log)
-    flushEachLine: if each line should be flushed`));
+    flushEachLine: if each line should be flushed
+    logAllGFlagsChanges: if all gFlags changes should be logged (default is false)`));
     mixin printOut!();
     mixin myFieldMixin!();
     
@@ -60,8 +60,7 @@ class TrackSpecialPoints(T):SilosComponentI!(T){
     void workOn(LocalSilosI!(T)silos){
         this.silos=silos;
         if (input.logfileBaseName.length>0){
-            auto f=new File(input.logfileBaseName~"-"~silos.name~".spLog",File.WriteAppending);
-            this.stream=strStreamSyncT!(char)(f);
+            this.stream=outfileStrSync(input.logfileBaseName~"-"~silos.name~".spLog",WriteMode.WriteAppend);
         }
         myCallback=silos.nCenter.registerCallback("localPointChangedGFlags",
             &flagsChanged,Callback.Flags.ReceiveAll);
@@ -81,14 +80,17 @@ class TrackSpecialPoints(T):SilosComponentI!(T){
         auto flagChange=oldF.get!(GFlagsChange*)();
         auto oldProb=specialPointForGFlags(flagChange.oldGFlags);
         auto newProb=specialPointForGFlags(flagChange.newGFlags);
+        bool logged=false;
         if (oldProb != newProb){
             switch(oldProb){
             case Prob.Unlikely,Prob.Possible:
                 if (newProb>=Prob.Likely){
+                    logged=true;
                     addSpecialPoint(*flagChange);
                 }
                 break;
             case Prob.Likely,Prob.Confirmed:
+                logged=true;
                 if (newProb<Prob.Likely){
                     rmSpecialPoint(*flagChange);
                 } else {
@@ -104,6 +106,16 @@ class TrackSpecialPoints(T):SilosComponentI!(T){
             default:
                 assert(0,"unexpected probability");
             }
+        } else if (oldProb>=Prob.Likely){
+            auto oldType=pointTypeForGFlags(flagChange.oldGFlags);
+            auto newType=pointTypeForGFlags(flagChange.newGFlags);
+            if (oldType!=newType){
+                logged=true;
+                specialPointTypeChange(*flagChange);
+            }
+        }
+        if ((!logged) && input.logAllGFlagsChanges){
+            logChange("gch",*flagChange);
         }
     }
     
@@ -111,7 +123,7 @@ class TrackSpecialPoints(T):SilosComponentI!(T){
         if (stream!is null){
             sinkTogether(&stream.rawWriteStrC,delegate void(CharSink s){
                 auto newT=pointTypeForGFlags(flagChange.newGFlags);
-                dumper(s)(change)("\t ")(flagChange.point.data)("\t ")(pointTypeStr(newT))("\t ")(newT)("\t ")(specialPointForGFlags(flagChange.newGFlags))("\t ")(flagChange.newGFlags)("\n");
+                dumper(s)(change)("\t ")(flagChange.point.data)("\t ")(pointTypeStr(newT))("\t ")(newT)("\t ")(specialPointForGFlags(flagChange.newGFlags))("\t ")(flagChange.oldGFlags)("\t ")(flagChange.newGFlags)("\n");
             });
             if (input.flushEachLine) stream.flush();
         }

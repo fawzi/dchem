@@ -10,9 +10,7 @@ import blip.container.HashSet;
 import dchem.input.WriteOut;
 import blip.container.GrowableArray;
 import blip.io.BasicIO;
-import blip.io.StreamConverters;
-import tango.io.device.File;
-import tango.io.device.Conduit;
+import blip.io.FileStream;
 import dchem.input.RootInput;
 import blip.io.EventWatcher:ev_time;
 import dchem.pnet.EmptyObserver;
@@ -94,8 +92,7 @@ class PosELogger(T):EmptyObserver!(T){
         this.input=c;
         this.silos=silos;
         this.serialLock=new RLock();
-        OutputStream stream=new File(input.baseFileName~"-"~silos.name~".peLog",File.WriteAppending);
-        this.outStream=strStreamT!(char)(stream);
+        this.outStream=outfileStr(input.baseFileName~"-"~silos.name~".peLog",WriteMode.WriteAppend);
     }
     
     // ExplorationObserverI(T)
@@ -103,18 +100,28 @@ class PosELogger(T):EmptyObserver!(T){
     }
     /// adds energy for a local point and bCasts addEnergyEval
     void addEnergyEvalLocal(SKey key,Point p,Real energy){
-        this.serialLock.lock();
-        scope(exit){ this.serialLock.unlock(); }
-        auto s=dumper(&outStream.rawWriteStr);
-        s(key)("\t ")(p.data);
-        MainPointI!(T) mp=silos.mainPointL(p);
-        foreach(x;mp.pos.dynVars.x.sLoop){
-            s("\t ")(x,input.posFormat);
+        try{
+            this.serialLock.lock();
+            scope(exit){ this.serialLock.unlock(); }
+            auto s=dumper(&outStream.rawWriteStr);
+            s(key)("\t ")(p.data);
+            MainPointI!(T) mp=silos.mainPointL(p);
+            foreach(x;mp.pos.dynVars.x.sLoop){
+                s("\t ")(x,input.posFormat);
+            }
+            s("\t ")(energy,input.eFormat);
+            s("\n");
+            if (input.flushEachLine) outStream.flush();
+        } catch (Exception e){
+            silos.logMsg(delegate void(CharSink s){
+                dumper(s)("Warning: Exception while trying to log position and energy from ")(name)(":")(e);
+            });
         }
-        s("\t ")(energy,input.eFormat);
-        s("\n");
-        if (input.flushEachLine) outStream.flush();
+    }
+    /// increases the runLevel on all silos, i.e. you should call it only with SKeyVal.All
+    /// (at the moment there is no support for dynamic adding/removal of silos)
+    void increaseRunLevel(SKey s,RunLevel rLevel){
+        outStream.flush();
+        if (rLevel>RunLevel.Stopping) outStream.close();
     }
 }
-
-
