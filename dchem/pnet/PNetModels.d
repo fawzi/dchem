@@ -115,7 +115,7 @@ struct PointAndDir{
     }
     mixin(serializeSome("dchem.PointAndDir","data"));// split in Point and dir???
     void desc(CharSink s){
-        dumper(s)("Point")(data,"x");
+        dumper(s)("Point")(data);
     }
     struct ExpandedPointAndDir{
         PointAndDir pDir;
@@ -161,6 +161,27 @@ struct PointAndEnergy{
     }
 }
 
+/// structure to describe the attractor of a point
+struct Attractor{
+    Point minimum; /// the minimum of this attractor
+    Point throughPoint; /// point close to this that goes toward the minimum
+    Real energyThroughPoint; /// energy of the throughPoint
+    ulong id; /// a number to be able to identify subsequent updates
+    ulong idThroughPoint; /// the id of throughpoint (to have the correct result even with out of order updates)
+    mixin(serializeSome("dchem.Attractor","minimum|throughPoint|energyThroughPoint|id|idThroughPoint"));
+    mixin printOut!();
+}
+
+/// structure to send energy of a point and its attractor
+struct PointEMin{
+    Point point; /// the current point
+    Real energy; /// energy of the current point
+    Point minimum; /// the minimum of this attractor
+    ulong id; /// a number to be able to identify subsequent updates
+    mixin(serializeSome("dchem.PointEMin","point|energy|minimum|id"));
+    mixin printOut!();
+    
+}
 /// structure to encode a main point efficienly (useful to transfer it o another context)
 struct DriedPoint(T){
     Point point;
@@ -168,11 +189,12 @@ struct DriedPoint(T){
     DynPVectorWriter!(T,DualDxType) minDir;
     FlagsArray exploredDirs;
     LocalGrowableArray!(PointAndDir) neighbors;
+    Attractor attractor;
     T minDirScale;
     T explorationSize;
     uint gFlags;
     
-mixin(serializeSome("dchem.DriedPoint!("~T.stringof~")","point|pos|minDir|exploredDirs|neighbors|minDirScale|explorationSize|gFlags"));
+mixin(serializeSome("dchem.DriedPoint!("~T.stringof~")","point|pos|minDir|exploredDirs|neighbors|attractor|minDirScale|explorationSize|gFlags"));
     mixin printOut!();
 }
 
@@ -186,6 +208,7 @@ struct DirDistances(T){
     T cartesianCos; /// cosinus with the direction in the cartesian metric
     T dualDirDist; /// distance in the dual space from the perfect direction point
     T cartesianDirDist; /// distance in the cartesian metric from the perfect direction point
+    Real energy; /// the energy of the point
     /// all values are set
     bool full(){
         return !(isNaN(xDist)||isNaN(dualDist)||isNaN(cartesianDist)||
@@ -218,6 +241,7 @@ struct DirDistances(T){
         cartesianCos: cosinus with the direction in the cartesian metric
         dualDirDist: distance in the dual space from the perfect direction point
         cartesianDirDist: distance in the cartesian metric from the perfect direction point
+        energy: the energy of the point
     `));
     mixin printOut!();
 }
@@ -265,12 +289,13 @@ enum GFlags{
     CorrNeighValsDecrease=(1<<17),      /// some neighbors are smaller
     CorrNeighValsSame=(2<<17),          /// some neighbors have the same energy
     CorrNeighValsIncrease=(4<<17),      /// some neighbors are larger
-    AttractorBorder=(3<<20),        /// codifies the current attractor status
+    AttractorBorder=(7<<20),        /// codifies the current attractor status
     AttractorBorderForces=(1<<20),  /// we are at the border going along the forces
     AttractorBorderGradient=(2<<20),/// we are at the border going along the gradients
-    PointBcastStatus=(3<<22),       /// status of the bcast process
-    PointBcasted=(1<<22),           /// the point was broadcasted around (dropping is a global op)
-    PointNeighBcasted=(2<<22),      /// all the neighbors to points created before this have been broadcasted
+    AttractorBorderOther=(4<<20),   /// we are at the border in another direction
+    PointBcastStatus=(3<<23),       /// status of the bcast process
+    PointBcasted=(1<<23),           /// the point was broadcasted around (dropping is a global op)
+    PointNeighBcasted=(2<<23),      /// all the neighbors to points created before this have been broadcasted
 }
 
 // *** topology, functions of gFlags
@@ -280,7 +305,7 @@ Prob minimumForGFlags(uint gFlags){
     /// the next one accepts all elements of a flat potential as minima, which while logially correct overcrowds the special points
     /// add requirement that AlongForcesDecrease is 0 ???
     if ((gFlags&GFlags.AlongForcesIncrease)!=0) return (((gFlags&GFlags.FullyEvaluated)!=0)?Prob.Confirmed:Prob.Likely);
-    if ((gFlags&GFlags.NeighValsIncrease)!=0) return Prob.Possible;
+    if ((gFlags&GFlags.NeighValsIncrease)!=0) return (((gFlags&GFlags.FullyEvaluated)!=0)?Prob.Likely:Prob.Possible);
     return Prob.Unlikely;
 }
 /// probability of having a critical point close by for the given gFlags
@@ -358,7 +383,7 @@ interface MainPointI(T){
     /// identification of this point
     Point point();
     /// attractor of this point (attractors are identified by their minima)
-    Point attractor();
+    Attractor attractor();
     /// position of the point (energy, derivatives,... might be invalid, only real positions have to be valid)
     ParticleSys!(T) pos();
     /// direction of the minimum in the dual space with norm 1 wrt. euclidean norm
@@ -429,6 +454,8 @@ interface MainPointI(T){
     DynPVector!(T,DualDxType) createDualDir(uint dir);
     /// energy of the current point
     Real energy();
+    /// energy and minimum of the current point
+    PointEMin pointEMin();
     /// calculates the position exploring from here in the given direction
     /// returns null if the position is *really* too close
     ParticleSys!(T) createPosInDir(uint dir);
@@ -451,13 +478,14 @@ interface MainPointI(T){
     /// notifies a GFlags change from the given gFlags
     void notifyGFlagChange(uint oldGFlags);
     /// the energy of a neighbor was calculated
-    void localNeighEnergy(PointAndDir[] neigh,DirDistances!(T)[],Real e);
+    void localNeighEnergy(PointAndDir[] neigh,DirDistances!(T)[],PointEMin eAndMin);
     /// adds an energy evaluation for the given point (that should be a neighbor of this point)
-    void addEnergyEvalOther(Point p,Real e);
+    /// minimum should be the minimum reachable from this point
+    void addEnergyEvalOther(PointEMin eAndMin);
     /// the gradient of a neighbor was calculated (and possibly also the energy for the first time)
-    void localNeighGrad(PointAndDir[] neigh,DirDistances!(T)[],LazyMPLoader!(T)mainPoint,Real e);
+    void localNeighGrad(PointAndDir[] neigh,DirDistances!(T)[],LazyMPLoader!(T)mainPoint,PointEMin e);
     /// adds an energy evaluation for the given point (that should be a neighbor of this point)
-    void addGradEvalOther(LazyMPLoader!(T)p,Real e);
+    void addGradEvalOther(LazyMPLoader!(T)p,PointEMin e);
     /// if the gradient should be calculated, if returns true, it assumes that the gradient is then in progress
     bool shouldCalculateGradient();
     /// sets the energy
@@ -623,10 +651,10 @@ interface ExplorationObserverI(T){
     
     /// a neighbor point has calculated its energy (and not the gradient)
     /// neighbors should be restricted to s
-    void neighborHasEnergy(SKey s,Point p,Point[] neighbors,Real energy);
+    void neighborHasEnergy(SKey s,Point[] neighbors,PointEMin energy);
     /// the neighbor point p has calculated its gradient (and energy)
     /// neighbors should be restricted to silos
-    void neighborHasGradient(SKey s,LazyMPLoader!(T)p, Point[] neighbors, Real energy);
+    void neighborHasGradient(SKey s,LazyMPLoader!(T)p, Point[] neighbors, PointEMin energy);
     
     /// finished exploring the given point (remove it from the active points)
     void finishedExploringPoint(SKey s,Point,SKey owner);
@@ -755,10 +783,10 @@ interface PNetSilosI(T):ExplorationObserverI!(T){
     /// load (usage) of the silos s in some arbitrary units
     Real load(SKey s);
     
-    /// energy for the local points (NAN if not yet known)
-    Real[] energyForPointsLocal(SKey s,Point[],Real[]);
-    /// energy for the points (NAN if not yet known)
-    Real[] energyForPoints(SKey s,Point[],Real[]);
+    /// energy for the local points and their minimum (NAN if not yet known)
+    PointEMin[] energyForPointsLocal(SKey s,Point[],PointEMin[]);
+    /// energy for the points and their minimum (NAN if not yet known)
+    PointEMin[] energyForPoints(SKey s,Point[],PointEMin[]);
     /// returns a snapshot of the given point (asking first silos s)
     DriedPoint!(T)mainPoint(SKey s,Point);
     /// returns a snapshot of the given point that is local to the silos s
@@ -891,9 +919,11 @@ interface LocalSilosI(T): PNetSilosI!(T) {
     /// creates a new point located at newPos in this silos, the point is not yet broadcasted
     /// not all silos might support creation of local points, use nextFreeSilos to get a silos
     /// thas supports it, use executeLocally to create, setup & publish a point...
-    MainPointI!(T) newPointAt(DynPVector!(T,XType) newPos);
+    MainPointI!(T) newPointAt(DynPVector!(T,XType) newPos,Point);
     /// local point mainpoint (the real reference point)
     MainPointI!(T) mainPointL(Point);
+    /// loop on all local points
+    int opApply(int delegate(ref Point,ref MainPointI!(T) el)loopBody);
     /// publishes the local point given.
     /// Returns the pubblished point which might be different fron the argument if a collision did happen.
     MainPointI!(T) bcastPoint(MainPointI!(T));

@@ -49,10 +49,10 @@ class PoorManContext:ExecuterContext{
         auto externalOrder=pSys.sysStruct.externalOrder;
         pSys.checkMddx();
         auto f=pSys.dynVars.mddx.pos;
-        foreach (idx;externalOrder.lSortedPIndex.sLoop){
+        foreach (idx;externalOrder.gSortedLocalPIndex.sLoop){
             Vector!(T,3) pos;
             p(pos.x)(pos.y)(pos.z);
-            f[LocalPIndex(idx),0]=pos;
+            f[idx,0]=pos;
         }
         auto tok=p.nextToken();
         if (tok.length>0){

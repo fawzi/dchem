@@ -182,13 +182,13 @@ class PNetSilosClient(T): LocalSilosI!(T){
     
     /// a neighbor point has calculated its energy (and not the gradient)
     /// neighbors should be restricted to s
-    void neighborHasEnergy(SKey s,Point p,Point[] neighbors,Real energy){
-        connection.neighborHasEnergy(s,p,neighbors,energy);
+    void neighborHasEnergy(SKey s,Point[] neighbors,PointEMin eAndMin){
+        connection.neighborHasEnergy(s,neighbors,eAndMin);
     }
     /// the neighbor point p has calculated its gradient (and energy)
     /// neighbors should be restricted to silos
-    void neighborHasGradient(SKey s,LazyMPLoader!(T)p, Point[] neighbors, Real energy){
-        connection.neighborHasGradient(s,p,neighbors,energy);
+    void neighborHasGradient(SKey s,LazyMPLoader!(T)p, Point[] neighbors, PointEMin eAndMin){
+        connection.neighborHasGradient(s,p,neighbors,eAndMin);
     }
     
     /// finished exploring the given point (remove it from the active points)
@@ -239,12 +239,12 @@ class PNetSilosClient(T): LocalSilosI!(T){
         return connection.load(s);
     }
     
-    /// energy for the local points (NAN if not yet known)
-    Real[] energyForPointsLocal(SKey s,Point[] pts,Real[] ens){
+    /// energy for the local points and the minimum they reach (NAN if not yet known)
+    PointEMin[] energyForPointsLocal(SKey s,Point[] pts,PointEMin[] ens){
         return connection.energyForPointsLocal(s,pts,ens);
     }
-    /// energy for the points (NAN if not yet known)
-    Real[] energyForPoints(SKey s,Point[] pts,Real[] ens){
+    /// energy for the points and the minimum they reach (NAN if not yet known)
+    PointEMin[] energyForPoints(SKey s,Point[] pts,PointEMin[] ens){
         return connection.energyForPoints(s,pts,ens);
     }
     /// returns a snapshot of the given point (asking first silos s)
@@ -415,7 +415,7 @@ class PNetSilosClient(T): LocalSilosI!(T){
     /// creates a new point located at newPos in this silos, the point is not yet broadcasted
     /// not all silos might support creation of local points, use nextFreeSilos to get a silos
     /// thas supports it, use executeLocally to create, setup & publish a point...
-    MainPointI!(T) newPointAt(DynPVector!(T,XType) newPos){
+    MainPointI!(T) newPointAt(DynPVector!(T,XType) newPos,Point proposedPoint){
         throw new Exception("point creation not supported",__FILE__,__LINE__);
     }
     /// local point mainpoint (the real reference point)
@@ -482,4 +482,6 @@ class PNetSilosClient(T): LocalSilosI!(T){
     char[] silosCoreUrl(){
         return input.connectionUrl;
     }
+    
+    int opApply(int delegate(ref Point,ref MainPointI!(T) el)loopBody){ return 0; }
 }

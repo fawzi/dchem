@@ -26,10 +26,10 @@ class EmptyObserver(T): ExplorationObserverI!(T) {
     
     /// a neighbor point has calculated its energy (and not the gradient)
     /// neighbors should be restricted to s
-    void neighborHasEnergy(SKey s,Point p,Point[] neighbors,Real energy){}
+    void neighborHasEnergy(SKey s,Point[] neighbors,PointEMin energy){}
     /// the neighbor point p has calculated its gradient (and energy)
     /// neighbors should be restricted to silos
-    void neighborHasGradient(SKey s,LazyMPLoader!(T)p, Point[] neighbors, Real energy){}
+    void neighborHasGradient(SKey s,LazyMPLoader!(T)p, Point[] neighbors, PointEMin energy){}
     
     /// finished exploring the given point (remove it from the active points)
     void finishedExploringPoint(SKey s,Point,SKey owner){}

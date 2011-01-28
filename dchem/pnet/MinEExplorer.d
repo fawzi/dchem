@@ -221,7 +221,7 @@ class MinEExplorer(T):EmptyExplorer!(T){
                     silos.addEvalOp(SKeyVal.Master,newOp,false);
                 } else {
                     auto pSysNew=lowestPoint.createPosInDir(pDir.dir);
-                    auto newP=silos.newPointAt(pSysNew.dynVars.x);
+                    auto newP=silos.newPointAt(pSysNew.dynVars.x,Point(0));
                     if(lowestPoint.acceptNewDirection(newP.point,pDir.dir)){
                         newP=silos.bcastPoint(newP);
                         res=newP.point;

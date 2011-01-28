@@ -120,11 +120,15 @@ ParticleSys!(T) readIn2PSys(T)(ReadSystem rIn,
     auto gSortedLocalPIndex=BulkArray!(LocalPIndex)(kindStarts[levels[0].kEnd]);
     auto lSortedPIndex=BulkArray!(PIndex)(kindStarts[levels[0].kEnd]);
     foreach(p;rIn.particles){
-        gSortedLocalPIndex[kindStarts[cast(size_t)p.pIndex.kind]+cast(size_t)p.pIndex.particle]=LocalPIndex(cast(ulong)p.externalIdx);
-        lSortedPIndex[p.externalIdx]=p.pIndex;
+        lSortedPIndex[kindStarts[cast(size_t)p.pIndex.kind]+cast(size_t)p.pIndex.particle]=PIndex(cast(ulong)p.externalIdx);
+        gSortedLocalPIndex[p.externalIdx]=LocalPIndex(p.pIndex);
     }
-    auto externalOrder=new SubMapping("externalOrder",sortedPIndex[0..kindStarts[levels[0].kEnd]],
-        gSortedLocalPIndex,lSortedPIndex,kindStarts[0..1+levels[0].kEnd],KindRange(levels[0].kStart,levels[0].kEnd),
+    auto sortedPIndex2=BulkArray!(PIndex)(kindStarts[levels[0].kEnd]);
+    foreach (i,ref v;sortedPIndex2){
+        v=PIndex(0,i);
+    }
+    auto externalOrder=new SubMapping("externalOrder",sortedPIndex2,
+        gSortedLocalPIndex,lSortedPIndex,kindStarts[0..1+levels[0].kEnd],levels[0],
         MappingKind.Gapless);
     
     // particleStruct, superParticle
@@ -286,7 +290,7 @@ ParticleSys!(T) artificialPSys(T)(size_t nPos, size_t nOrient,size_t nDof,
     auto lSortedPIndex=BulkArray!(PIndex)(0);
 
     auto externalOrder=new SubMapping("externalOrder",sortedPIndex[0..kindStarts[levels[0].kEnd]],
-        gSortedLocalPIndex,lSortedPIndex,kindStarts[0..1+levels[0].kEnd],KindRange(levels[0].kStart,levels[0].kEnd),
+        gSortedLocalPIndex,lSortedPIndex,kindStarts[0..1+levels[0].kEnd],levels[0],
         MappingKind.Gapless);
     
     // particleStruct, superParticle

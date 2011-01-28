@@ -38,7 +38,7 @@ class AddRefPos(T):SilosWorkerI!(T) {
         if (silos.paraEnv.myRank==0){
             ParticleSys!(T) pos=silos.refPos();
             assert(pos!is null);
-            auto newP=silos.newPointAt(pos.dynVars.x);
+            auto newP=silos.newPointAt(pos.dynVars.x,Point(0));
             assert(newP!is null);
             newP=silos.bcastPoint(newP);
             newP.exploredDirs.atomicCAS(0,DirFlags.Explored,DirFlags.Free);

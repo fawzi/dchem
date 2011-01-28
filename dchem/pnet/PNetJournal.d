@@ -10,11 +10,10 @@ import blip.container.HashSet;
 import dchem.input.WriteOut;
 import blip.container.GrowableArray;
 import blip.io.BasicIO;
-import blip.io.StreamConverters;
-import tango.io.device.File;
-import tango.io.device.Conduit;
+import blip.io.FileStream;
 import dchem.input.RootInput;
 import blip.io.EventWatcher:ev_time;
+import blip.parallel.mpi.Mpi;
 
 // object that keeps the journal of the computations done
 class PNetJournalGen:ExplorationObserverGen{
@@ -24,7 +23,7 @@ class PNetJournalGen:ExplorationObserverGen{
     bool logOtherStart;
     bool logOtherPos;
     bool logNeighInfo;
-    int maxJournalIds=10;
+    bool flushEachEntry=false;
 
     this(){}
     ExplorationObserverI!(Real) observerReal(LocalSilosI!(Real) silos){
@@ -39,7 +38,8 @@ class PNetJournalGen:ExplorationObserverGen{
     logOtherEnergies: if the energies of non local points should be logged
     logOtherStart: if the start of non local points should be logged
     logOtherPos: if the positions of non local points should be logged
-    logNeighInfo: if the updates of energies or gradients of the neighbors should be logged`));
+    logNeighInfo: if the updates of energies or gradients of the neighbors should be logged
+    flushEachEntry: if each entry should be immediately flushed (false)`));
     mixin myFieldMixin!();
     mixin printOut!();
     bool verify(CharSink s){
@@ -66,7 +66,7 @@ class PNetJournal(T):ExplorationObserverI!(T){
     
     static struct JournalEntry{
         enum Kind:int{
-            PointGrad, StartPoint,FinishedPoint,PublishCollision,EvalE,NeighborHasEnergy,NeighborHasGradient
+            None,PointGrad, StartPoint,FinishedPoint,PublishCollision,EvalE,NeighborHasEnergy,NeighborHasGradient
         }
         Kind kind;
         uint flags;
@@ -112,22 +112,24 @@ class PNetJournal(T):ExplorationObserverI!(T){
             res.energy=energy;
             return res;
         }
-        static JournalEntry NeighborHasEnergy(SKey s,Point p,Point[] neighbors,Real energy){
+        static JournalEntry NeighborHasEnergy(SKey s,Point[] neighbors,PointEMin energy){
             JournalEntry res;
             res.kind=Kind.NeighborHasEnergy;
-            res.point=p;
-            res.energy=energy;
-            res.neighs=neighbors;
+            res.point=energy.point;
+            res.energy=energy.energy;
+            res.neighs=neighbors~energy.minimum;
+            res.flags=energy.id;
             return res;
         }
-        static JournalEntry NeighborHasGradient(SKey s,LazyMPLoader!(T)p, Point[] neighbors, Real energy,LocalSilosI!(T) localSilos){
+        static JournalEntry NeighborHasGradient(SKey s,LazyMPLoader!(T)p, Point[] neighbors, PointEMin energy,LocalSilosI!(T) localSilos){
             JournalEntry res;
             res.kind=Kind.NeighborHasGradient;
             res.point=p.point;
             auto mp=p.mainPoint(localSilos);
             res.pos=pSysWriter(mp.pos);
-            res.energy=energy;
-            res.neighs=neighbors;
+            res.energy=energy.energy;
+            res.neighs=neighbors~energy.minimum;
+            res.flags=energy.id;
             return res;
         }
     
@@ -168,50 +170,41 @@ class PNetJournal(T):ExplorationObserverI!(T){
         this.serialLock=new RLock();
         char[128] buf;
         auto arr=lGrowableArray(buf,0);
-        OutputStream stream;
         Exception lastE;
-        /+for (int i=0;i<input.maxJournalIds;++i){
-            const File.Style WriteUnique = {File.Access.Write, File.Open.New, File.Share.Read};
-            arr(input.journalDir);
-            if (input.journalDir.length>0 && input.journalDir[$-1]!='/') arr("/");
-            arr(input.myFieldName);
-            arr("-");
-            writeOut(&arr.appendArr,i);
-            arr(".log");
-            try{
-                stream=new File(arr.data,WriteUnique);
-                this.journalPath=arr.takeData();
-                lastE=null;
-                break;
-            } catch (Exception e){
-                arr.clearData();
-                lastE=e;
-            } // should ignore only already present files... improve?
-        }+/
-        stream=new File(input.fileBasePath~"-"~silos.name~"."~input.journalFormat~"Log",File.WriteAppending);
         if (lastE!is null){
             throw new Exception("exception trying to open journal file",__FILE__,__LINE__,lastE);
         }
         if (input.journalFormat=="json"){
-            auto charSink=strDumper(stream);
-            jSerial=new JsonSerializer!(char)(charSink);
+            auto stream=outfileStr(input.fileBasePath~"-"~silos.name~"."~input.journalFormat~"Log",WriteMode.WriteAppend);
+            jSerial=new JsonSerializer!(char)(stream);
         } else if (input.journalFormat=="sbin"){
-            auto binSink=binaryDumper(stream);
-            jSerial=new SBinSerializer(binSink);
+            auto stream=outfileBin(input.fileBasePath~"-"~silos.name~"."~input.journalFormat~"Log",WriteMode.WriteAppend);
+            jSerial=new SBinSerializer(stream);
+        } else {
+            assert(0);
         }
+        jSerial(jVersion);
         jSerial("journal start @ ");
         jSerial(ev_time());
+        jSerial(T.stringof);
+        if (input.flushEachEntry) jSerial.flush();
     }
     
     // ExplorationObserverI(T)
     /// informs that a silos did a shutdown with the given speed (0, waits for pending points and calls finishers
     /// less than 0: does not stop, larger than 0 stops immediately (no finishers))
-    void increaseRunLevel(SKey s,RunLevel rLevel){}
+    void increaseRunLevel(SKey s,RunLevel rLevel){
+        this.serialLock.lock();
+        scope(exit){ this.serialLock.unlock(); }
+        jSerial.flush();
+        if (rLevel>RunLevel.Stopping) jSerial.close();
+    }
     /// adds energy for a local point and bCasts addEnergyEval
     void addEnergyEvalLocal(SKey s,Point p,Real energy){
         this.serialLock.lock();
         scope(exit){ this.serialLock.unlock(); }
         jSerial(JournalEntry.EvalE(p,energy));
+        if (input.flushEachEntry) jSerial.flush();
     }
     /// adds gradient value to a point that should be owned. Energy if not NAN replaces the previous value
     /// sets inProgress to false
@@ -219,6 +212,7 @@ class PNetJournal(T):ExplorationObserverI!(T){
         this.serialLock.lock();
         scope(exit){ this.serialLock.unlock(); }
         jSerial(JournalEntry.PointGrad(p,pSys));
+        if (input.flushEachEntry) jSerial.flush();
     }
     /// communicates that the given point is being expored
     /// flags: communicate doubleEval?
@@ -229,6 +223,7 @@ class PNetJournal(T):ExplorationObserverI!(T){
             scope(exit){ this.serialLock.unlock(); }
             jSerial(JournalEntry.StartPoint(owner,point,
                 ((input.logOtherPos || silos.hasKey(owner))?pos:dummy),flags));
+            if (input.flushEachEntry) jSerial.flush();
         }
     }
     /// finished exploring the given local point (remove it from the active points), bcasts finishedExploringPoint
@@ -236,6 +231,7 @@ class PNetJournal(T):ExplorationObserverI!(T){
         this.serialLock.lock();
         scope(exit){ this.serialLock.unlock(); }
         jSerial(JournalEntry.FinishedPoint(p,owner));
+        if (input.flushEachEntry) jSerial.flush();
     }
     /// finished exploring the given point (remove it from the active points)
     void finishedExploringPoint(SKey s,Point p,SKey owner){
@@ -243,6 +239,7 @@ class PNetJournal(T):ExplorationObserverI!(T){
             this.serialLock.lock();
             scope(exit){ this.serialLock.unlock(); }
             jSerial(JournalEntry.FinishedPoint(p,owner));
+            if (input.flushEachEntry) jSerial.flush();
         }
     }
     /// informs silos s that source has done the initial processing of point p0,
@@ -256,27 +253,243 @@ class PNetJournal(T):ExplorationObserverI!(T){
             this.serialLock.lock();
             scope(exit){ this.serialLock.unlock(); }
             jSerial(JournalEntry.PublishCollision(p));
+            if (input.flushEachEntry) jSerial.flush();
         }
     }
     
     /// a neighbor point has calculated its energy (and not the gradient)
     /// neighbors should be restricted to s
-    void neighborHasEnergy(SKey s,Point p,Point[] neighbors,Real energy){
+    void neighborHasEnergy(SKey s,Point[] neighbors,PointEMin energy){
         if (input.logNeighInfo){
             this.serialLock.lock();
             scope(exit){ this.serialLock.unlock(); }
-            jSerial(JournalEntry.NeighborHasEnergy(s,p,neighbors,energy));
+            jSerial(JournalEntry.NeighborHasEnergy(s,neighbors,energy));
+            if (input.flushEachEntry) jSerial.flush();
         }
     }
     /// the neighbor point p has calculated its gradient (and energy)
     /// neighbors should be restricted to silos
-    void neighborHasGradient(SKey s,LazyMPLoader!(T)p, Point[] neighbors, Real energy){
+    void neighborHasGradient(SKey s,LazyMPLoader!(T)p, Point[] neighbors, PointEMin energy){
         if (input.logNeighInfo){
             this.serialLock.lock();
             scope(exit){ this.serialLock.unlock(); }
             jSerial(JournalEntry.NeighborHasGradient(s,p,neighbors,energy,silos));
+            if (input.flushEachEntry) jSerial.flush();
         }
     }
 }
 
+// object that loads some journals
+class PNetJournalLoaderGen:SilosWorkerGen{
+    char[][] filePaths=[];
+    char[] journalFormat="sbin";
+    char[] journalAccuracy="";
+    bool parallelLoad=true;
 
+    this(){}
+    SilosWorkerI!(Real) silosWorkerReal(){
+        return new PNetJournalLoader!(Real)(this);
+    }
+    SilosWorkerI!(LowP) silosWorkerLowP(){
+        return new PNetJournalLoader!(LowP)(this);
+    }
+    mixin(serializeSome("dchem.PNetJournalLoader",`
+    filePaths: files to load
+    journalFormat: to format of the journal: 'sbin' or 'json'
+    journalAccuracy: Real or LowP, by default the current accuracy of the silos
+    parallelLoad: if when there are several files they should be loaded in parallel (true)`));
+    mixin myFieldMixin!();
+    mixin printOut!();
+    bool verify(CharSink s){
+        bool res=true;
+        if (journalFormat!="sbin" && journalFormat!="json"){
+            res=false;
+            dumper(s)("invalid journalFormat '")(journalFormat)("', expected json or sbin in field '")(myFieldName)("'\n");
+        }
+        return res;
+    }
+}
+
+/// actual journal loader worker
+class PNetJournalLoader(T):SilosWorkerI!(T){
+    PNetJournalLoaderGen input;
+    LocalSilosI!(T) silos;
+    
+    this(PNetJournalLoaderGen input){
+        this.input=input;
+    }
+    void workOn(LocalSilosI!(T)silos){
+        switch(input.journalAccuracy){
+        case("Real"):
+            loadWithPrecision!(Real)(1);
+            break;
+        case("LowP"):
+            loadWithPrecision!(LowP)(1);
+            break;
+        case(""):
+            loadWithPrecision!(T)(1);
+            break;
+        default:
+            assert(0);
+        }
+    }
+
+    void loadWithPrecision(V)(int tag){
+        alias PNetJournal!(V).JournalEntry.Kind Kind;
+        auto paraEnv=silos.paraEnv();
+        Point[Point] remappedPoints;
+        Unserializer[] jUnserials;
+        PNetJournal!(V).JournalEntry[] entries;
+        char[][] paths;
+        { // start all files
+            size_t i=paraEnv.myRank;
+            if ((!input.parallelLoad)&&paraEnv.myRank!=0) i=input.filePaths.length;
+            while(i<input.filePaths.length){
+                try{
+                    auto f=infile(input.filePaths[i]);
+                    Unserializer jUnserial;
+                    if (input.journalFormat=="json"){
+                        auto reader=infileStr(input.filePaths[i]);
+                        jUnserial=new JsonUnserializer!(char)(reader);
+                    } else if (input.journalFormat=="sbin"){
+                        auto reader=infileBin(input.filePaths[i]);
+                        jUnserial=new SBinUnserializer(reader);
+                    } else {
+                        assert(0);
+                    }
+                    char[] vers;
+                    jUnserial(vers);
+                    if (vers!=PNetJournal!(V).jVersion){
+                        throw new Exception(collectAppender(delegate void(CharSink s){
+                            dumper(s)("different version string for journal loaded from file ")(input.filePaths[i])(":")(vers);
+                        }),__FILE__,__LINE__);
+                    }
+                    char[] startStr;
+                    jUnserial(startStr);
+                    ev_tstamp tm;
+                    jUnserial(tm);
+                    char[] accuracy;
+                    jUnserial(accuracy);
+                    if (accuracy!=V.stringof){
+                        throw new Exception("unexpected accuracy:"~accuracy~" vs "~V.stringof,__FILE__,__LINE__);
+                    }
+                    PNetJournal!(V).JournalEntry jEntry;
+                    jUnserial(jEntry);
+                    jUnserials~=jUnserial;
+                    entries~=jEntry;
+                    paths~=input.filePaths[i];
+                } catch (Exception e){
+                    silos.logMsg(delegate void(CharSink s){
+                        dumper(s)("exception loading file ")(input.filePaths[i])(", trying to ignore:")(e);
+                    });
+                }
+                if (input.parallelLoad) {
+                    i+=paraEnv.dim();
+                } else {
+                    i+=1;
+                }
+            }
+        }
+pointLoop:while(1){
+            Point minPoint=Point(0);
+            size_t idxMinPoint=jUnserials.length;
+            for (size_t i=0;i<jUnserials.length;++i){ // jUnserials.length might change during loop!!!
+noPointStart:   while(1){ // proceed until next point
+                    auto entry=&(entries[i]);
+                    Point localP=entry.point;
+                    auto lp=localP in remappedPoints;
+                    if (lp!is null){
+                        localP=*lp;
+                    }
+                    switch(entry.kind){
+                        case Kind.StartPoint:
+                            if (minPoint.data==0 || minPoint.data>entry.point.data){
+                                minPoint=entry.point;
+                                idxMinPoint=i;
+                            }
+                            break noPointStart;
+                        case Kind.PointGrad:
+                            static if (is(V==T)){
+                                silos.addGradEvalLocal(silos.ownerOfPoint(localP),localP,entry.pos);
+                            } else {
+                                assert(0,"not implemented");
+                            }
+                            break;
+                        case Kind.PublishCollision:
+                            /// no point with StartPoint should have a collision, so we should be able to ignore it
+                            break;
+                        case Kind.EvalE:
+                            silos.addEnergyEvalLocal(silos.ownerOfPoint(localP),localP,entry.energy);
+                            break;
+                        default:
+                    }
+                    try{
+                        jUnserials[i](*entry);
+                    } catch (Exception e){
+                        silos.logMsg(delegate void(CharSink s){
+                            dumper(s)("stopping loading file ")(input.filePaths[i])(" due to:")(e);
+                        });
+                        entries[i]=entries[$-1];
+                        jUnserials[i]=jUnserials[$-1];
+                        paths[i]=paths[$-1];
+                        entries=entries[0..$-1];
+                        jUnserials=jUnserials[0..$-1];
+                        paths=paths[0..$-1];
+                        if (i==jUnserials.length) break noPointStart;
+                    }
+                }
+            }
+            auto points=new Point[](paraEnv.dim);
+            points[paraEnv.myRank]=minPoint;
+            if (input.parallelLoad){
+                mpiAllGatherT(paraEnv,minPoint,points,tag);
+            }
+            Point pAtt=Point(0);
+            size_t rankAtt=paraEnv.dim();
+            foreach (iDim,p;points){
+                if (p.data<pAtt.data||(pAtt.data==0&&p.data!=0)){
+                    pAtt=p;
+                    rankAtt=iDim;
+                }
+            }
+            if (rankAtt==-1) break pointLoop;
+            auto nSilos=silos.nextSilosRank(tag);
+            PSysWriter!(V) pos;
+            if (rankAtt!=nSilos){
+                if (paraEnv.myRank==rankAtt){
+                    auto sender=paraEnv[nSilos].sendTag(tag);
+                    sender(entries[idxMinPoint].pos);
+                    sender.close();
+                }
+                if (minPoint!=pAtt){
+                    auto rcvr=paraEnv[rankAtt].recvTag(tag);
+                    rcvr(pos);
+                    rcvr.close();
+                }
+            } else {
+                pos=entries[idxMinPoint].pos;
+            }
+            if (rankAtt==nSilos){
+                auto posN=silos.refPos.dup();
+                static if (is(V==T)){
+                    posN[]=pos;
+                } else {
+                    assert(0,"not implemented");
+                }
+                auto newP=silos.newPointAt(posN.dynVars.x,pAtt);
+                if (!isNullT(posN.dynVars.dx)){
+                    silos.addGradEvalLocal(silos.ownerOfPoint(newP.point),newP.point,pSysWriter(posN));
+                }
+                minPoint=newP.point;
+                posN.release();
+            }
+            mpiBcastT(paraEnv,minPoint,nSilos,tag);
+            if (minPoint!=pAtt){
+                remappedPoints[pAtt]=minPoint;
+            }
+            if (rankAtt==paraEnv.myRank){
+                entries[idxMinPoint].kind=Kind.None;
+            }
+        }
+    }
+}

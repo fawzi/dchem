@@ -590,7 +590,7 @@ class SysStruct: CopiableObjectI,Serializable
 {
     char[] name; /// name of the structure
     SubMapping fullSystem; /// LocalIndex is this system struct
-    SubMapping externalOrder; /// LocalIndex is the external one
+    SubMapping externalOrder; /// PIndex is the external one, LocalIndex maps to the PIndex of the current system
     KindRange[] levels; /// disjoint KindRange at each level
     SegmentedArrayStruct particlesStruct;
     SegmentedArray!(PIndex) particles; // make it non explicit? it would spare quite some memory...
@@ -648,7 +648,7 @@ class SysStruct: CopiableObjectI,Serializable
     mixin(serializeSome("dchem.sys.SysStruct",
         `name: the name of the system
         fullSystem: sub mapping to the whole system
-        externalOrder: order of the external files
+        externalOrder: order of the particles in the external files
         levels: kind ranges of the various levels
         particles: particle indexes
         superParticle: super particle, i.e. molecule for example

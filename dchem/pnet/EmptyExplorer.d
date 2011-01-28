@@ -49,9 +49,9 @@ class EmptyExplorer(T):ExplorerI!(T),SilosWorkerI!(T){
     void publishPoint(SKey s,SKey owner,Point point,PSysWriter!(T) pos,T pSize,uint flags){ }
     
     /// a neighbor point has calculated its energy (and not the gradient)
-    void neighborHasEnergy(SKey s,Point p,Point[] neighbors,Real energy){ }
+    void neighborHasEnergy(SKey s,Point[] neighbors,PointEMin energy){ }
     /// a neighbor point has calculated its gradient (and energy)
-    void neighborHasGradient(SKey s,LazyMPLoader!(T) p,Point[] neighbors, Real energy){ }
+    void neighborHasGradient(SKey s,LazyMPLoader!(T) p,Point[] neighbors, PointEMin energy){ }
     
     /// finished exploring the given local point (remove it from the active points), bcasts finishedExploringPoint
     void finishedExploringPoint(SKey s,Point,SKey owner){ }

@@ -23,10 +23,10 @@ void writeXyz(T)(CharSink sink,SysStruct sysStruct,SegmentedArray!(Vector!(T,3))
         if (c=='\n' || c=='\r') throw new Exception("comments should have no newline",__FILE__,__LINE__);
     }
     s(comments)("\n");
-    foreach(p;sysStruct.externalOrder.lSortedPIndex){
+    foreach(p;sysStruct.externalOrder.gSortedLocalPIndex){
         auto k=sysStruct.kinds[cast(size_t)p.kind];
         s(k.name)(" ");
-        auto posAtt=pos[p,0];
+        auto posAtt=pos[PIndex(p),0];
         s(posAtt.x*angstrom)(" ")(posAtt.y*angstrom)(" ")(posAtt.z*angstrom)("\n");
     }
 }
@@ -35,10 +35,10 @@ void writeXyz(T)(CharSink sink,SysStruct sysStruct,SegmentedArray!(Vector!(T,3))
 void writeTurboCoord(T)(CharSink sink,SysStruct sysStruct,SegmentedArray!(Vector!(T,3))pos){
     auto s=dumper(sink);
     s("$coord\n");
-    foreach(p;sysStruct.externalOrder.lSortedPIndex){
+    foreach(p;sysStruct.externalOrder.gSortedLocalPIndex){
         auto k=sysStruct.kinds[cast(size_t)p.kind];
         s(k.name)(" ");
-        auto posAtt=pos[p,0];
+        auto posAtt=pos[PIndex(p),0];
         s(posAtt.x)(" ")(posAtt.y)(" ")(posAtt.z)(" ")(k.symbol)("\n");
     }
     s("$end\n");

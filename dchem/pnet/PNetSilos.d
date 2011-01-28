@@ -436,7 +436,7 @@ class PointBcastProgress(T){
         }
         PointBcastProgress nextPP;
         if (addNew){
-            auto np=localContext.newPointAt(pointToBCast.pos.dynVars.x);
+            auto np=localContext.newPointAt(pointToBCast.pos.dynVars.x,Point(0));
             np[]=dP;
             nextPP=PointBcastProgress(np);
             nextPP.publish();
@@ -581,7 +581,7 @@ class PendingEvals(T) {
     }
 }
 
-class PNetSilos(T): LocalSilosI!(T){
+final class PNetSilos(T): LocalSilosI!(T){
     RunLevel runLevel;
     SilosGen input;
     UniqueNumber!(ulong) nextLocalId;
@@ -593,7 +593,10 @@ class PNetSilos(T): LocalSilosI!(T){
     bool hasKey(SKey k){ return _key==k||k==SKeyVal.Any||(k==SKeyVal.Master && paraEnv.myRank==0); }
     HashMap!(SKey,PNetSilosI!(T)) silos; // contains self
     MinHeapSync!(LoadStats) loads; 
-    BatchedGrowableArray!(Point,batchSize) localPointsKeys; // indexes for local owned points
+    BatchedGrowableArray!(Point,batchSize) _localPointsKeys; // indexes for local owned points
+    BatchedGrowableArray!(Point,batchSize) localPointsKeys(){
+        return _localPointsKeys;
+    }
     HashMap!(Point,SKey) owner;
     HashMap!(Point,CachedPoint!(T)) localCache;
     HashMap!(Point,PointBcastProgress!(T)) publishingPoints;
@@ -1131,32 +1134,32 @@ class PNetSilos(T): LocalSilosI!(T){
     
     /// a neighbor point has calculated its energy (and not the gradient)
     /// neighbors should be restricted to silos
-    void neighborHasEnergy(SKey s,Point p,Point[] neighbors,Real energy){
+    void neighborHasEnergy(SKey s,Point[] neighbors,PointEMin eAndMin){
         if (hasKey(s)){
             foreach (nP;neighbors){
                 auto mp=localPoints[nP];
-                mp.addEnergyEvalOther(p,energy);
+                mp.addEnergyEvalOther(eAndMin);
             }
             notifyLocalObservers(delegate void(ExplorationObserverI!(T)obs){
-                obs.neighborHasEnergy(s,p,neighbors,energy);
+                obs.neighborHasEnergy(s,neighbors,eAndMin);
             });
         } else {
-            silosForKey(s).neighborHasEnergy(s,p,neighbors,energy);
+            silosForKey(s).neighborHasEnergy(s,neighbors,eAndMin);
         }
     }
     /// the neighbor point p has calculated its gradient (and energy)
     /// neighbors might be restricted to silos or not
-    void neighborHasGradient(SKey s,LazyMPLoader!(T)p, Point[] neighbors, Real energy){
+    void neighborHasGradient(SKey s,LazyMPLoader!(T)p, Point[] neighbors, PointEMin eAndMin){
         if (hasKey(s)){
             foreach (nP;neighbors){
                 auto mp=localPoints[nP];
-                mp.addGradEvalOther(p,energy);
+                mp.addGradEvalOther(p,eAndMin);
             }
             notifyLocalObservers(delegate void(ExplorationObserverI!(T)obs){
-                obs.neighborHasGradient(s,p,neighbors,energy);
+                obs.neighborHasGradient(s,p,neighbors,eAndMin);
             });
         } else {
-            silosForKey(s).neighborHasGradient(s,p,neighbors,energy);
+            silosForKey(s).neighborHasGradient(s,p,neighbors,eAndMin);
         }
     }
     
@@ -1262,13 +1265,13 @@ class PNetSilos(T): LocalSilosI!(T){
     }
     
     /// energy for the local points (NAN if not yet known)
-    Real[] energyForPointsLocal(SKey s,Point[] points,Real[] ens){
+    PointEMin[] energyForPointsLocal(SKey s,Point[] points,PointEMin[] ens){
         if (hasKey(s)){
             if (ens.length<points.length)
                 ens.length=points.length;
             foreach(i,p;points){
                 auto mp=localPoints[p];
-                ens[i]=mp.energy;
+                ens[i]=mp.pointEMin;
             }
             return ens;
         } else {
@@ -1276,7 +1279,7 @@ class PNetSilos(T): LocalSilosI!(T){
         }
     }
     /// energy for the points (NAN if not yet known)
-    Real[] energyForPoints(SKey s,Point[]points,Real[] ens){
+    PointEMin[] energyForPoints(SKey s,Point[]points,PointEMin[] ens){
         if (hasKey(s)){
             if (ens.length<points.length)
                 ens.length=points.length;
@@ -1286,10 +1289,10 @@ class PNetSilos(T): LocalSilosI!(T){
             Real[128] buf;
             auto lMem=LocalMem(buf);
             foreach (iter;pO){
-                auto enLoc=lMem.allocArr!(Real)(iter.localUb-iter.localLb);
-                enLoc=energyForPointsLocal(iter.owner,iter.points,enLoc);
+                auto enLoc=lMem.allocArr!(PointEMin)(iter.localUb-iter.localLb);
+                auto enLoc2=energyForPointsLocal(iter.owner,iter.points,enLoc);
                 foreach(i,j;iter.idx){
-                    ens[j]=enLoc[i];
+                    ens[j]=enLoc2[i];
                 }
                 lMem.deallocArr(enLoc);
             }
@@ -1342,7 +1345,7 @@ class PNetSilos(T): LocalSilosI!(T){
     /// creates a new point located at newPos in this silos, the point is not yet broadcasted
     /// not all silos might support creation of local points, use nextFreeSilos to get a silos
     /// thas supports it, use a RemoteSilosOpI and executeLocally to create, setup & bcast it 
-    MainPointI!(T) newPointAt(DynPVector!(T,XType) newPos){
+    MainPointI!(T) newPointAt(DynPVector!(T,XType) newPos,Point proposedPoint){
         MainPoint!(T) newP=pPool.getObj();
         refPos.checkX();
         auto p2=refPos.dup(PSDupLevel.EmptyDyn);
@@ -1352,7 +1355,17 @@ class PNetSilos(T): LocalSilosI!(T){
         synchronized(localPoints){ // don't allow null mainpoints...
             Point np;
             synchronized(owner){ // generate a point with a small propability of collisions
-                while(1){
+                bool setPoint=false;
+                if (proposedPoint.isValid){
+                    synchronized(localPointsKeys){
+                        if (localPointsKeys.length==0 || proposedPoint.data>localPointsKeys[localPointsKeys.length-1].data){
+                            localPointsKeys.appendEl(proposedPoint);
+                            np=proposedPoint;
+                            setPoint=true;
+                        }
+                    }
+                }
+                while(!setPoint){
                     ushort r;
                     rand()(r);
                     np=Point(((nextPntNr.next())<<12)|cast(ulong)(r&0xFFF));
@@ -1560,7 +1573,7 @@ class PNetSilos(T): LocalSilosI!(T){
         this.silos[this._key]=this;
         this.silosParaEnv=mpiWorld;
         this.loads=new MinHeapSync!(LoadStats)();
-        this.localPointsKeys=new BatchedGrowableArray!(Point,batchSize)();
+        this._localPointsKeys=new BatchedGrowableArray!(Point,batchSize)();
         this.owner=new HashMap!(Point,SKey)();
         this.localCache=new HashMap!(Point,CachedPoint!(T))();
         this.publishingPoints=new HashMap!(Point,PointBcastProgress!(T))();
@@ -1624,6 +1637,12 @@ class PNetSilos(T): LocalSilosI!(T){
             finishers.append(sw);
         }
     }
+    
+    /// loops on all the local points
+    int opApply(int delegate(ref Point,ref MainPointI!(T) el)loopBody){
+        return localPoints.opApply(loopBody);
+    }
+    
 }
 
 private PNetSilos!(Real) dummyPNetSilos;
