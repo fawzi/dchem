@@ -30,7 +30,7 @@ poorM:{
 
 MinE:{
     class:"dchem.MinEExplorer"
-    nEval:10
+    nEval:100
 }
 
 mullerB:{
@@ -72,6 +72,7 @@ posELog:{
 
 spLogger:{
     class:dchem.TrackSpecialPoints
+    logAllGFlagsChanges:1
 }
 
 pnetSilos:{
