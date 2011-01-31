@@ -35,11 +35,11 @@ class GoUpExplorerDef:ExplorerGen{
         return explorerLowP(silos);
     }
     ExplorerI!(Real) explorerReal(LocalSilosI!(Real) silos){
-        auto res=new MinEExplorer!(Real)(this,silos);
+        auto res=new GoUpExplorer!(Real)(this,silos);
         return res;
     }
     ExplorerI!(LowP) explorerLowP(LocalSilosI!(LowP) silos){
-        auto res=new MinEExplorer!(LowP)(this,silos);
+        auto res=new GoUpExplorer!(LowP)(this,silos);
         return res;
     }
 }
@@ -70,8 +70,8 @@ class GoUpExplorer(T):EmptyExplorer!(T){
     long leftEval;
     long availEval;
     
-    MinEExplorerDef input;
-    this(MinEExplorerDef input,LocalSilosI!(T)silos){
+    GoUpExplorerDef input;
+    this(GoUpExplorerDef input,LocalSilosI!(T)silos){
         this.input=input;
         this.toExploreMore=new MinHeapSync!(PointAndEnergy)();
         this.removedPoints=new HashSet!(Point);

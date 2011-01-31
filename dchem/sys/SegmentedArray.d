@@ -206,7 +206,8 @@ class SegArrMemMap(T):PoolI!(SegmentedArray!(T)){
     }
     Flags flags=Flags.None;
     this(){}
-    this(SegmentedArrayStruct arrayStruct,KindRange kRange=KindRange.all,size_t allocSize=0,size_t alignBytes=0,PoolI!(ChunkGuard) poolChunks=null, PoolI!(SegmentedArray!(T)) poolSegmented=null){
+    this(SegmentedArrayStruct arrayStruct,KindRange kRange=KindRange.all,size_t allocSize=0,size_t alignBytes=0,
+        PoolI!(ChunkGuard) poolChunks=null, PoolI!(SegmentedArray!(T)) poolSegmented=null){
         this.arrayStruct=arrayStruct;
         arrayStruct.freeze();
         this.kRange=kRange.intersect(arrayStruct.kRange);
@@ -611,6 +612,28 @@ final class SegmentedArray(T){
             *ptrI(p,i)=val;
         }
     }
+    /// array of elements for a (global) particle p
+    /// not as efficient as it could be, if you know that submapping is gapless for the
+    /// kinds included cast to LocalPIndex and use either getMaybeInRange or opIndex
+    void opIndexAssign(T val,PIndex p,index_type i){
+        if ((arrayStruct.flags&SegmentedArrayStruct.Flags.Direct)!=0){
+            auto kindIdx=p.kind();
+            auto pos=p.particle();
+            assert(kindIdx in kRange,"kind out of range");
+            assert(pos < arrayMap.arrayStruct.nParticles(kindIdx),"particle index out of range");
+            auto startPtr=cast(T*)(basePtr+kindOffsets[kindIdx-kRange.kStart]+pos*kindByteIncrements[kindIdx-kRange.kStart]);
+            assert(i>=0&&i<mKindDims[kindIdx-kRange.kStart],"in particle index i out of bounds");
+            startPtr[i]=val;
+        } else {
+            LocalPIndex l=arrayStruct.submapping[p];
+            auto kindIdx=l.kind();
+            assert(kindIdx in kRange,"kind out of range");
+            assert(l.particle() < arrayMap.arrayStruct.nParticles(kindIdx),"particle index out of range, internal error");
+            auto startPtr=cast(T*)(basePtr+kindOffsets[kindIdx-kRange.kStart]+l.particle()*kindByteIncrements[kindIdx-kRange.kStart]);
+            assert(i>=0&&i<mKindDims[kindIdx-kRange.kStart],"in particle index i out of bounds");
+            startPtr[i]=val;
+        }
+    }
     /// address of element i of a (global) particle p
     /// not as efficient as it could be, if you know that submapping is gapless for the
     /// kinds included cast to LocalPIndex and use either getMaybeInRange or opIndex
@@ -801,30 +824,34 @@ final class SegmentedArray(T){
                 return result;
             }
         } else {
-            int opApply(int delegate(ref LocalPIndex lIdx,ref T)loopBody){
+            int opApply(int delegate(ref LocalPIndex lIdx,ref T[])loopBody){
                 int result=0;
                 mixin(segArrayMonoLoop(pFlags,"iterContext",["array"],
-                "int delegate(ref LocalPIndex,ref T) dlg; int* finalRes;","",
+                "int delegate(ref LocalPIndex,ref T[]) dlg; int* finalRes;","",
                 "mainContext.dlg=loopBody;mainContext.finalRes=&result;","visitKind=visitKind&&(newK.pIndexPtrStart !is null);","",
-                ["if ((*finalRes)!=0) return;","if (auto res=dlg(localPIndex,*arrayPtr)){ *finalRes=res; return; }","",
+                ["if ((*finalRes)!=0) return;","auto myArr=arrayPtr[0..1];if (auto res=dlg(localPIndex,myArr)){ *finalRes=res; return; }","",
             
                 "if ((*finalRes)!=0) return;",`
-                for (size_t ii=0;ii<arrayMKindDims;++ii){
+                auto myArr=arrayPtr[0..arrayMKindDims];
+                if (auto res=dlg(localPIndex,myArr)){ *finalRes=res; return; }
+                /+for (size_t ii=0;ii<arrayMKindDims;++ii){
                     if (auto res=dlg(localPIndex,arrayPtr[ii])){ *finalRes=res; return; }
-                }`,""]));
+                }+/`,""]));
                 return result;
             }
         }
-        int opApply(int delegate(ref PIndex pIdx,ref LocalPIndex lIdx,ref T)loopBody){
+        int opApply(int delegate(ref PIndex pIdx,ref LocalPIndex lIdx,ref T[])loopBody){
             int result=0;
             mixin(segArrayMonoLoop(pFlags,"iterContext",["array"],
-            "int delegate(ref PIndex, ref LocalPIndex, ref T) dlg; int* finalRes;","",
+            "int delegate(ref PIndex, ref LocalPIndex, ref T[]) dlg; int* finalRes;","",
             "mainContext.dlg=loopBody;mainContext.finalRes=&result;","visitKind=visitKind&&(newK.pIndexPtrStart !is null);","",
-            ["if ((*finalRes)!=0) return;","if (auto returnV=dlg(*pIndexPtr,localPIndex,*arrayPtr)){ *finalRes=returnV; return; }","",
+            ["if ((*finalRes)!=0) return;","auto myArr=arrayPtr[0..1]; if (auto returnV=dlg(*pIndexPtr,localPIndex,myArr)){ *finalRes=returnV; return; }","",
             "if ((*finalRes)!=0) return;",`
-            for (size_t ii=0;ii<arrayMKindDims;++ii){
+            auto myArr=arrayPtr[0..arrayMKindDims];
+            if (auto returnV=dlg(*pIndexPtr,localPIndex,myArr)){ *finalRes=returnV; return; }
+            /+for (size_t ii=0;ii<arrayMKindDims;++ii){
                 if (auto returnV=dlg(*pIndexPtr,localPIndex,arrayPtr[ii])){ *finalRes=returnV; return; }
-            }`,""]));
+            }+/`,""]));
            return result;
         }
         int opApply(int delegate(ref size_t i,ref PIndex pIdx,ref LocalPIndex lIdx,ref T)loopBody){

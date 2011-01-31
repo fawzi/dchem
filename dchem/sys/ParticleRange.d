@@ -28,16 +28,20 @@ class ParticleRange:InputField{
     long indexEnd=long.min;
     char[] kindName;
     int kIdx=int.max;
+    long refKind=-1;
+    char[] refKindName;
     
     mixin(serializeSome("dchem.PRange",`
-    particles: list of particles in internal notation (kind,)
+    particles: list of particles in internal notation (kind,idx)
     particleStart: first particle of a range that continues until particleEnd
     particleEnd: last particle of a range that starts at particleStart
     indexes: list of (external) indexes (starting at 0)
     indexStart: first (external) index of a range that ends at extIndexEnd
-    indexEnd: last external (index) of a range that starts at extIndexStart
-    kindName: name of the kind of particles that should be selected, if given alone selects all particles, otherwise sets the context for the other indexes (in that case it should be a molecule or chain name)
-    kIdx: index of the kind of particles that should be selected, if given alone selects all particles, otherwise sets the context for the other indexes (in that case it should be a molecule or chain name)
+    indexEnd: last (external) index of a range that starts at extIndexStart
+    kIdx: index of the kind of particles that should be selected, if given alone selects all particles, otherwise sets the context for the other indexes
+    kindName: name of the kind of particles that should be selected, if given alone selects all particles
+    refKind: the level of the reference (by default -1, i.e. system level)
+    refKindName: the name of the level of the reference (overrides refKind)
     `));
     mixin printOut!();
     mixin myFieldMixin!();
@@ -104,17 +108,17 @@ class ParticleRange:InputField{
         return res;
     }
     
-    static struct ElLooper(T){
+    static struct ElLooper{
         size_t posRefAtt;
         BulkArray!(PIndex) refParticles;
-        ParticleSys!(T) pSys;
+        SysStruct sysStruct;
         long[] particleIndexes;
         BulkArray!(PIndex) realIndexes;
         /// visit the next reference particle (might invalidate the particleIndexes)
         bool next(ref BulkArray!(PIndex)a){
             if (posRefAtt<refParticles.length){
                 if (particleIndexes){
-                    auto subP=pSys.sysStruct.subParticles[refParticles[posRefAtt]];
+                    auto subP=sysStruct.subParticles[refParticles[posRefAtt]];
                     foreach(i,v;particleIndexes){
                         realIndexes[i]=subP[cast(size_t)v];
                     }
@@ -128,33 +132,58 @@ class ParticleRange:InputField{
         mixin opApplyFromNext!(BulkArray!(PIndex));
     }
     
-    ElLooper!(T) loopOn(T)(ParticleSys!(T)pSys){
-        ElLooper!(T) res;
-        res.pSys=pSys;
+    ElLooper loopOn(SysStruct sysStruct){
+        ElLooper res;
+        res.sysStruct=sysStruct;
         res.posRefAtt=0;
-        if (referenceLevel==-1){
-            res.refParticles=pSys.sysStruct.particles[pSys.sysStruct.levels[$-1].kStart];
-            if (indexes.length!=0){
-                auto extO=pSys.sysStruct.externalOrder;
-                res.realIndexes=BulkArray!(PIndex)(indexes.length);
-                foreach(i,p;indexes){
-                    res.realIndexes[i]=PIndex(extO[LocalPIndex(cast(KindIdx)0,cast(ParticleIdx)p)]);
+        auto referenceK=refKind;
+        if (refKindName.length>0){
+            bool found=false;
+            foreach(pKind;sysStruct.particleKinds[sysStruct.levels[0]].sLoop){
+                if (pKind.name==refKindName){
+                    found=true;
+                    referenceK=pKind.pKind;
+                    break;
                 }
-            } else if (particleKind.length>0){
+            }
+            if (!found) throw new Exception("could not find refKindName '"~refKindName~"' in field "~myFieldName,
+                __FILE__,__LINE__);
+        }
+        if (referenceK==-1 || referenceK==sysStruct.levels.length-1){
+            res.refParticles=sysStruct.particles[sysStruct.levels[$-1].kStart];
+            if (indexes.length!=0|| indexStart<indexEnd){
+                auto extO=sysStruct.externalOrder;
+                auto len=indexes.length;
+                if (indexStart<indexEnd){
+                    len+=cast(size_t)indexEnd-indexStart;
+                }
+                res.realIndexes=BulkArray!(PIndex)(len);
+                foreach(i,p;indexes){
+                    res.realIndexes[i]=PIndex(extO[PIndex(cast(KindIdx)0,cast(ParticleIdx)p)]);
+                }
+                size_t ii=indexes.length;
+                for (long i=indexStart;i<indexEnd;++i){
+                    res.realIndexes[ii++]=PIndex(extO[PIndex(cast(KindIdx)0,cast(ParticleIdx)i)]);
+                }
+                assert(kindName.length==0);
+                if (kindName.length>0){
+                    throw new Exception("kindName supported only without indexes",__FILE__,__LINE__);
+                }
+            } else if (kindName.length>0){
                 bool found=false;
-                foreach(pKind;pSys.sysStruct.particleKinds[pSys.sysStruct.levels[0]].sLoop){
-                    if (pKind.name==particleKind){
+                foreach(pKind;sysStruct.particleKinds[sysStruct.levels[0]].sLoop){
+                    if (pKind.name==kindName){
                         found=true;
-                        res.realIndexes=pSys.sysStruct.particles[pKind.pKind];
+                        res.realIndexes=sysStruct.particles[pKind.pKind];
                         break;
                     }
                 }
                 if (!found){
                     throw new Exception(collectAppender(delegate void(CharSink sink){
                         auto s=dumper(sink);
-                        s("could not find partikle kind named '")(particleKind)("', known particle kinds: ");
+                        s("could not find partikle kind named '")(kindName)("', known particle kinds: ");
                         bool first=true;
-                        foreach(pKind;pSys.sysStruct.particleKinds[pSys.sysStruct.levels[0]].sLoop){
+                        foreach(pKind;sysStruct.particleKinds[sysStruct.levels[0]].sLoop){
                             if (first) s(", ");
                             first=false;
                             s("'")(pKind.name)("'");
@@ -163,48 +192,31 @@ class ParticleRange:InputField{
                 }
             }
         } else {
-            if (referenceLevel<1||referenceLevel>=pSys.sysStruct.levels.length){
-                throw new Exception("referenceLevel out of bounds",__FILE__,__LINE__);
+            if (referenceK<1||referenceK>=sysStruct.levels.length){
+                throw new Exception("referenceK out of bounds",__FILE__,__LINE__);
             }
-            if (particlesLevel+1!=referenceLevel){
-                throw new Exception("only system or references that are just one level above are implemented",__FILE__,__LINE__);
+            res.refParticles=sysStruct.particles[cast(KindIdx)referenceK];
+            if (indexes.length>0){
+                res.particleIndexes=indexes;
             }
-            KindIdx kRef;
-            foreach(pKind;pSys.sysStruct.particleKinds[pSys.sysStruct.levels[referenceLevel]].sLoop){
-                if (pKind.name==referencePKind){
-                    kRef=pKind.pKind;
-                    break;
+            if (indexStart<indexEnd){
+                auto nRange=cast(size_t)(indexEnd-indexStart);
+                res.particleIndexes.length=res.particleIndexes.length+nRange;
+                foreach (i,ref v;res.particleIndexes[res.particleIndexes.length-nRange..$]){
+                    v=indexStart+i;
                 }
             }
-            if (kRef==KindIdx.init){
-                throw new Exception(collectAppender(delegate void(CharSink sink){
-                    auto s=dumper(sink);
-                    s("could not find particle kind named '")(referencePKind)("', known particle kinds at level ")
-                        (referenceLevel)(":");
-                    bool nonFirst=false;
-                    foreach(pKind;pSys.sysStruct.particleKinds[pSys.sysStruct.levels[referenceLevel]].sLoop){
-                        if (nonFirst) s(", ");
-                        nonFirst=true;
-                        s("'")(pKind.name)("'");
-                    }
-                }),__FILE__,__LINE__);
-            }
-            res.refParticles=pSys.sysStruct.particles[kRef];
-            
-            if (particleIndexes.length!=0){
-                res.particleIndexes=particleIndexes;
-                res.realIndexes=BulkArray!(PIndex)(particleIndexes.length);
-            } else if (particleKind.length>0){
-                throw new Exception("particleKind supported only for global (system) references",__FILE__,__LINE__);
+            res.realIndexes=BulkArray!(PIndex)(res.particleIndexes.length);
+            if (kindName.length>0){
+                throw new Exception("kindName supported only for global (system) references",__FILE__,__LINE__);
             }
         }
-
         return res;
     }
     
-    PSubsetLooper looperForPSys(T)(ParticleSys!(T)pSys){
-        auto lNew=new ElLooper!(T);
-        *lNew=loopOn(pSys);
+    PSubsetLooper looperForSysStruct(SysStruct sysStruct){
+        auto lNew=new ElLooper;
+        *lNew=loopOn(sysStruct);
         return &lNew.next;
     }
 }

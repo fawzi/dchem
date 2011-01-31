@@ -28,9 +28,16 @@ void testFlagsArrayFindFree(FlagsArray d,size_t s){
     if (d.length==0){
         start=0;
         refV=0;
+    } else if (d.length==1){
+        start=0;
+        if (d[0]==0){
+            refV=0;
+        } else {
+            refV=1;
+        }
     } else {
-        start=start%d.length;
         size_t endL=d.length-1;
+        start=start%endL;
         if (endL==start) endL=d.length;
         for (size_t i=0;i<d.length;++i){
             if (d[(i+start)%endL]==0){
@@ -40,7 +47,7 @@ void testFlagsArrayFindFree(FlagsArray d,size_t s){
         }
     }
     if (refV==d.length && d.length>0 && d[d.length-1]==0) refV=d.length-1;
-    auto findF=d.findFreeAndSet(start);
+    auto findF=d.findFreeAndSet(start,0,true);
     assert(findF==refV,collectAppender(delegate void(CharSink s){
         dumper(s)("findFree gave a different result than expected:")(findF)(" vs ")(refV)
             (" for ")(d)(" starting at ")(start);

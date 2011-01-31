@@ -24,10 +24,10 @@ class PrintAttractorsGen:SilosWorkerGen{
     bool printEnergy=true;
     this(){}
     SilosWorkerI!(Real) silosWorkerReal(){
-        return new PrintAttractors!(Real)(this,silos);
+        return new PrintAttractors!(Real)(this);
     }
     SilosWorkerI!(LowP) silosWorkerLowP(){
-        return new PrintAttractors!(LowP)(this,silos);
+        return new PrintAttractors!(LowP)(this);
     }
     mixin(serializeSome("dchem.PrintAttractors",`
     baseFileName: base filename used for the logs
@@ -90,7 +90,7 @@ class PrintAttractors(T):SilosWorkerI!(T){
     }
     
     /// creates a new journal logger
-    this(PosELoggerGen c){
+    this(PrintAttractorsGen c){
         this.input=c;
         this.serialLock=new RLock();
     }
@@ -108,8 +108,7 @@ class PrintAttractors(T):SilosWorkerI!(T){
                 attractor=mp.attractor;
             }
             s(p.data)("\t ")(attractor.throughPoint.data)("\t ")(attractor.minimum.data);
-            MainPointI!(T) mp=silos.mainPointL(p);
-            if (input.printEnergy) s("\t ")(energy,input.eFormat);
+            if (input.printEnergy) s("\t ")(mp.energy,input.eFormat);
             if (input.printPos){
                 foreach(x;mp.pos.dynVars.x.sLoop){
                     s("\t ")(x,input.posFormat);
@@ -117,6 +116,6 @@ class PrintAttractors(T):SilosWorkerI!(T){
             }
             s("\n");
         }
-        if (input.flushEachLine) outStream.flush();
+        outStream.flush();
     }
 }

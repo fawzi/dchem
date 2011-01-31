@@ -105,15 +105,17 @@ void testLoop(RandomSegmentedArrayStruct!() aStruct,SizeLikeNumber!(3,1) s){
     size_t iterRef=sarr.length;
     size_t ii=0;
     ii=0;
-    foreach(i,ref v;sarr.sLoop){
-        v=i;
+    foreach(i, vArr;sarr.sLoop){
+        vArr[]=i;
         ++ii;
     }
     assert(ii==iterRef,"incorrect number of iterations in pLoop");
 
-    foreach(i,v;sarr.sLoop){
-        assert(v==i||(sarr.arrayStruct.kindDim(i.kind)==0 && v.kind==i.kind),"invalid value in sLoop");
-        assert(sarr[i,0]==v,"invalid indexing in sLoop");
+    foreach(i,vArr;sarr.sLoop){
+        foreach (ref v;vArr){
+            assert(v==i||(sarr.arrayStruct.kindDim(i.kind)==0 && v.kind==i.kind),"invalid value in sLoop");
+            assert(sarr[i,0]==v,"invalid indexing in sLoop");
+        }
     }
 
     foreach(i,pk,lk,v;sarr.sLoop){
@@ -122,9 +124,11 @@ void testLoop(RandomSegmentedArrayStruct!() aStruct,SizeLikeNumber!(3,1) s){
         assert(sarr.arrayStruct.submapping[lk]==pk,"incorrect pk value");
     }
 
-    foreach(pk,lk,v;sarr.sLoop){
-        assert(lk==v||(sarr.arrayStruct.kindDim(lk.kind)==0 && v.kind==lk.kind),"value in sLoop");
-        assert(sarr.arrayStruct.submapping[lk]==pk,"incorrect pk value");
+    foreach(pk,lk,vArr;sarr.sLoop){
+        foreach(v;vArr){
+            assert(lk==v||(sarr.arrayStruct.kindDim(lk.kind)==0 && v.kind==lk.kind),"value in sLoop");
+            assert(sarr.arrayStruct.submapping[lk]==pk,"incorrect pk value");
+        }
     }
 
     foreach(ref v;sarr.sLoop){
@@ -136,20 +140,25 @@ void testLoop(RandomSegmentedArrayStruct!() aStruct,SizeLikeNumber!(3,1) s){
         v+=1;
     }
 
-    foreach(i,v;sarr.sLoop){
-        assert(v.data==i.data+1||(sarr.arrayStruct.kindDim(i.kind)==0 && v.kind==i.kind),"invalid value in sLoop");
+    foreach(i,vArr;sarr.sLoop){
+        foreach(v;vArr)
+            assert(v.data==i.data+1||(sarr.arrayStruct.kindDim(i.kind)==0 && v.kind==i.kind),"invalid value in sLoop");
     }
     
-    foreach(i,v;sarr.sLoop){
-        sarr[i,0]=LocalPIndex(sarr[i,0].data-1);
-        assert(sarr[i,0]==LocalPIndex(v.data-1),"element set failed");
-        sarr[i,0]=v;
+    foreach(i,vArr;sarr.sLoop){
+        foreach(v;vArr){
+            sarr[i,0]=LocalPIndex(sarr[i,0].data-1);
+            assert(sarr[i,0]==LocalPIndex(v.data-1),"element set failed");
+            sarr[i,0]=v;
+        }
     }
     
     ii=0;
-    foreach(i,v;sarr.pLoop(s.val)){
-        assert(v.data==i.data+1||(sarr.arrayStruct.kindDim(i.kind)==0 && v.kind==i.kind),"incorrect value in pLoop");
-        atomicAdd!(size_t)(ii,1);
+    foreach(i,vArr;sarr.pLoop(s.val)){
+        foreach(v;vArr){
+            assert(v.data==i.data+1||(sarr.arrayStruct.kindDim(i.kind)==0 && v.kind==i.kind),"incorrect value in pLoop");
+            atomicAdd!(size_t)(ii,1);
+        }
     }
     assert(ii==iterRef,"incorrect number of iterations in pLoop");
 
@@ -161,9 +170,11 @@ void testLoop(RandomSegmentedArrayStruct!() aStruct,SizeLikeNumber!(3,1) s){
     assert(ii==iterRef,"incorrect number of iterations in pLoop");
 
     ii=0;
-    foreach(pk,lk,v;sarr.pLoop(s.val)){
-        assert(lk.data+1==v.data||(sarr.arrayStruct.kindDim(lk.kind)==0 && v.kind==lk.kind),"incorrect value in pLoop");
-        atomicAdd!(size_t)(ii,1);
+    foreach(pk,lk,vArr;sarr.pLoop(s.val)){
+        foreach(v;vArr){
+            assert(lk.data+1==v.data||(sarr.arrayStruct.kindDim(lk.kind)==0 && v.kind==lk.kind),"incorrect value in pLoop");
+            atomicAdd!(size_t)(ii,1);
+        }
     }
     assert(ii==iterRef,"incorrect number of iterations in pLoop");
 
@@ -174,8 +185,9 @@ void testLoop(RandomSegmentedArrayStruct!() aStruct,SizeLikeNumber!(3,1) s){
     }
     assert(ii==iterRef,"incorrect number of iterations in pLoop");
 
-    foreach(i,v;sarr.pLoop(s.val)){
-        assert(i.data+2==v.data||(sarr.arrayStruct.kindDim(i.kind)==0 && v.kind==i.kind),"incorrect value in pLoop");
+    foreach(i,vArr;sarr.pLoop(s.val)){
+        foreach(v;vArr)
+            assert(i.data+2==v.data||(sarr.arrayStruct.kindDim(i.kind)==0 && v.kind==i.kind),"incorrect value in pLoop");
     }
 }
 

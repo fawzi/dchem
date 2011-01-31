@@ -5,12 +5,25 @@ import dchem.Common;
 import blip.serialization.Serialization;
 import dchem.sys.ParticleSys;
 import dchem.sys.PIndexes;
+import dchem.sys.SubMapping;
+import dchem.sys.SegmentedArray;
 import blip.BasicModels;
 import blip.container.BulkArray;
 import blip.io.BasicIO;
 import blip.container.GrowableArray;
 import dchem.input.RootInput;
 import dchem.sys.DynVars;
+import dchem.calculator.CalculatorModels;
+import dchem.calculator.Calculator;
+import blip.parallel.mpi.Mpi;
+import blip.parallel.smp.Wait;
+import blip.util.NotificationCenter;
+import dchem.sys.Constraints;
+import dchem.calculator.ProcContext;
+import blip.container.HashMap;
+import blip.container.Set;
+import blip.sync.Atomic;
+import blip.core.Variant;
 
 /// selection mapping of a particle
 struct ParticleDynvarsSelect{
@@ -26,8 +39,8 @@ struct ParticleDynvarsSelect{
     }
     uint selection;
     ulong[] dofIdxs;
-    size_t posDofs,posDDos;
-    mixin(serializeSome("dchem.ParticleDynvarsSelect",`selection|dofIdxs|posDofs`));
+    index_type posDofs,posDDofs;
+    mixin(serializeSome("dchem.ParticleDynvarsSelect",`selection|dofIdxs|posDofs|posDDofs`));
     mixin printOut!();
 }
 
@@ -36,7 +49,6 @@ struct SubsetSelection{
     bool x=true,y=true,z=true;
     bool orient=true;
     bool dof=true;
-    ulong[] dofRanges;
     ulong[] dofIdxs;
     
     InputField[] particleRanges;
@@ -85,12 +97,12 @@ struct SubsetSelection{
                     scope visited=new bool[](ndof);
                     visited[]=false;
                     foreach(d;dofIdxs){
-                        assert(d>=0&&d<np);
+                        assert(d>=0&&d<ndof);
                         assert(!visited[d]);
                         visited[d]=true;
                     }
                 }
-                pSelect.selection|=Sel.dofIdxs
+                pSelect.selection|=Sel.dofIdxs;
                 if (oldPKind.posEls.derivMap!=ParticleKind.DerivMap.SimpleMap){
                     new Exception("SubsetSelection doesn't know how to handle complex map of dofs with selection in particle "
                         ~oldPKind.name,__FILE__,__LINE__);
@@ -101,7 +113,7 @@ struct SubsetSelection{
         {
             auto np=oldPKind.posEls.nElements;
             auto dnp=oldPKind.posEls.nDelements;
-            if ((x&&y&&z)||(pSelect.selections&Sel.xyz)==0)){
+            if ((x&&y&&z)||(pSelect.selection&Sel.xyz)==0){
                 if (oldPKind.posEls.derivMap!=ParticleKind.DerivMap.SimpleMap){
                     new Exception("SubsetSelection doesn't know how to handle complex map in pos in particle "
                         ~oldPKind.name,__FILE__,__LINE__);
@@ -111,8 +123,7 @@ struct SubsetSelection{
                         ~oldPKind.name,__FILE__,__LINE__);
                 }
             }
-            size_t elIdx,delIdx
-            switch (pSelect.selections&Sel.xyz){
+            switch (pSelect.selection&Sel.xyz){
                 case Sel.xyz:
                     p.posEls=oldPKind.posEls;
                     break;
@@ -120,22 +131,22 @@ struct SubsetSelection{
                     p.dofEls.addElements(2*np,2*np,false,pSelect.posDofs,pSelect.posDDofs);
                     break;
                 case Sel.x,Sel.y,Sel.z:
-                    p.dofEls.addElements(2*np,2*np,false,pSelect.posDofs,pSelect.posDDofs);
+                    p.dofEls.addElements(np,np,false,pSelect.posDofs,pSelect.posDDofs);
                     break;
                 case 0:
-                    break
+                    break;
                 default:
                     assert(0);
             }
         }
-        
     }
+    
 }
 
 /// returns a calculator that uses a subset of another calculator
 class SubsetCalculator: Method{
     SubsetSelection[] selections;
-    InputField calculator;
+    InputField method;
     bool trimUnspecifiedSuperParticles=true;
     bool singleSys=true;
     
@@ -144,19 +155,20 @@ class SubsetCalculator: Method{
     SubMapping subSysMap; /// map particles in the whole system (PIndex) to/from this (LocalPIndex) (if singleSys is true)
     BulkArray!(ParticleDynvarsSelect) dynVarMap; /// mapping of the dynVarMap for each (local) kind (if singleSys is true)
     RLock gLock;
+    CharSink log;
     
     this(){
         gLock=new RLock();
     }
     
     Method subMethod(){
-        auto m=cast(Method)calculator;
+        auto m=cast(Method)method;
         assert(m!is null);
         return m;
     }
     mixin(serializeSome("dchem.SubsetCalculator",`
     selections: the selected degrees of freedom
-    calculator: the calculator to subset
+    method: the method to subset
     trimUnspecifiedSuperParticles: if unspecified superparticle should have their degrees of freedom removed (true)
     singleSys: if there is a single system for all the contexts, and thus the mapping and new sysStruct can be cached (true)`));
     mixin printOut!();
@@ -166,17 +178,21 @@ class SubsetCalculator: Method{
     /// it might be called several times, but should always have the same arguments
     void setup(LinearComm pEnv, CharSink log){
         subMethod.setup(pEnv,log);
+        this.log=log;
     }
     /// gets a calculator to perform calculations with this method, if possible reusing the given history
     /// if wait is true waits until a context is available
     CalculationContext getCalculator(bool wait,ubyte[]history){
+        auto ctxId=collectAppender(delegate void(CharSink s){
+            dumper(s)("SubC")(ProcContext.instance.id)("-")(ProcContext.instance.localId.next());
+        });
         auto cCtx=subMethod.getCalculator(wait,history);
         auto prec=cCtx.activePrecision;
         switch(prec){
             case Precision.Real:
-                return new SubsetContext!(Real)(this,cCtx);
+                return new SubsetContext!(Real)(ctxId,this,cCtx);
             case Precision.LowP:
-                return new SubsetContext!(LowP)(this,cCtx);
+                return new SubsetContext!(LowP)(ctxId,this,cCtx);
             default:
                 assert(0,"unexpected precision");
         }
@@ -192,14 +208,14 @@ class SubsetCalculator: Method{
     
     bool verify(CharSink s){
         bool res=true;
-        foreach (s;selections){
-            res=res&&s.verify(s,myFieldName);
+        foreach (sel;selections){
+            res=res&&sel.verify(s,myFieldName);
         }
-        if (calculator is null){
-            dumper(s)("calculator should not be null in field ")(myFieldName);
+        if (method is null){
+            dumper(s)("method should not be null in field ")(myFieldName);
             res=false;
-        } else if ((cast(Calculator)p)is null){
-            dumper(s)("calculator should be a Calculator in field ")(myFieldName);
+        } else if ((cast(Method)method)is null){
+            dumper(s)("method should be a Method in field ")(myFieldName);
             res=false;
         }
         return res;
@@ -208,7 +224,7 @@ class SubsetCalculator: Method{
 
 class SubsetContext(T):CalcContext{
     SubsetCalculator input;
-    CalculationContext subContext;
+    LocalCalculationContext subContext;
     SysStruct sysStruct; /// structure of this subsetted system
     SubMapping subSysMap; /// map particles in the whole system (PIndex) to/from this (LocalPIndex)
     BulkArray!(ParticleDynvarsSelect) dynVarMap; /// mapping of the dynVarMap for each (local) kind
@@ -224,22 +240,24 @@ class SubsetContext(T):CalcContext{
             res.pKindNew=pKindNew;
             return res;
         }
-        mixin(serializeSome("schem.SubsetContext.PK","isub|pKind|id|firstPK"));
+        mixin(serializeSome("schem.SubsetContext.PK","isub|pKind|pKindNew"));
         mixin printOut!();
     }
     static struct PKV{
         PK pk;
         PIndex[] subP;
         size_t nParticles;
-        mixin(serializeSome("schem.SubsetContext.PK","pk|subP"));
+        mixin(serializeSome("schem.SubsetContext.PK","pk|subP|nParticles"));
         mixin printOut!();
     }
     
-    this(SubsetCalculator input,CalculationContext subContext,NotificationCenter nCenter=null){
+    this(char[] contextId,SubsetCalculator input,CalculationContext subContext,NotificationCenter nCenter=null){
+        super(contextId,input.log,nCenter);
         this.input=input;
-        this.subContext=subContext;
+        this.subContext=cast(LocalCalculationContext)subContext;
+        assert(this.subContext is null,"invalid subContext, should be a LocalCalculationContext");
         
-        auto fullSysStruct=subContext.sysStruct;
+        auto fullSysStruct=this.subContext.sysStruct;
         
         if (input.singleSys){
             input.gLock.lock();
@@ -260,55 +278,284 @@ class SubsetContext(T):CalcContext{
                 assert(fullSysStruct==input.fullSysStruct,"full struct mismatch");
             }
         } else {
-            calcSysStruct();
+            calcSysStruct(fullSysStruct);
         }
-        
+        switch(this.subContext.activePrecision()){
+        case(Precision.Real):
+            allocPSys!(Real)(this.subContext.pSysReal,nCenter);
+            break;
+        case(Precision.LowP):
+            allocPSys!(LowP)(this.subContext.pSysLowP,nCenter);
+            break;
+        default:
+            assert(false);
+        }
+    }
+    
+    void allocPSys(V)(ParticleSys!(V) pSysFull,NotificationCenter nCenter=null){
         if (nCenter is null) nCenter=new NotificationCenter();
 
         // particleSystem
-        auto pSys=new ParticleSys!(T)(0,,sysStruct,nCenter);
+        auto pSys=new ParticleSys!(V)(0,pSysFull.name~"subSys",sysStruct,nCenter);
         pSys.pKindsInitialSetup(); // first setup of particle kinds
         pSys.sysStructChanged();
 
         pSys.checkX();
-        Matrix!(T,3,3) h;
-        for (int i=0;i<3;++i){
-            for (int j=0;j<3;++j){
-                h[i,j]=scalar!(T)(rIn.cell[i][j]);
-            }
-        }
-        pSys.dynVars.x.cell=subContext.ref;
-
-        auto posV=pSys.dynVars.x.pos;
-        foreach (p;rIn.particles){
-            posV[LocalPIndex(p.pIndex),0]=Vector!(T,3)(p.pos[0],p.pos[1],p.pos[2]);
-        }
+        pSys.dynVars.x.cell=pSysFull.dynVars.x.cell.dup();
+        fullToLocal!(V,XType,V,XType)(pSysFull.dynVars.x,pSys.dynVars.x);
 
         pSys.cellChanged();
         pSys.positionsChanged();
+    }
+    
+    void fullToLocal(T,int g1,U,int g2)(DynPVector!(T,g1)full,DynPVector!(U,g2)local){
+        static assert(is(T==U),"different types not "~T.stringof~" "~U.stringof~" supported()");
+        static assert(g1==g2,"group has to be the same "~T.stringof~" "~U.stringof);
+        static assert(g1==XType||g1==DxType||g1==DualDxType,"unexpected group");
+        alias ParticleDynvarsSelect.Selection Sel;
+        foreach(k;local.pos.kRange.pLoop){
+            ParticleDynvarsSelect *ps=&(dynVarMap[cast(size_t)k]);
+            if ((ps.selection&Sel.xyz)==Sel.xyz){
+                foreach(pk,lk,ref lVal;local.pos[KindRange(k,cast(KindIdx)(k+1))].pLoop){
+                    lVal[]=full.pos[subSysMap[LocalPIndex(pk)]];
+                }
+            }
+        }
+        foreach(k;local.orient.kRange.pLoop){
+            ParticleDynvarsSelect *ps=&(dynVarMap[cast(size_t)k]);
+            if ((ps.selection&Sel.orient)!=0){
+                foreach(pk,lk,ref lVal;local.orient[KindRange(k,cast(KindIdx)(k+1))].pLoop){
+                    lVal[]=full.orient[subSysMap[LocalPIndex(pk)]];
+                }
+            }
+        }
+        foreach(k;local.dof.kRange.pLoop){
+            ParticleDynvarsSelect *ps=&(dynVarMap[cast(size_t)k]);
+            if ((ps.selection&Sel.dof)!=0){
+                if ((ps.selection&Sel.dofIdxs)!=0){
+                    if (ps.dofIdxs.length>0){
+                        foreach(pk,lk,ref lVal;local.dof[KindRange(k,cast(KindIdx)(k+1))].pLoop){
+                            auto fVal=full.dof[subSysMap[LocalPIndex(pk)]];
+                            foreach(i,j;ps.dofIdxs){
+                                lVal[i]=fVal[j];
+                            }
+                        }
+                    }
+                } else {
+                    foreach(pk,lk,ref lVal;local.dof[KindRange(k,cast(KindIdx)(k+1))].pLoop){
+                        auto fDof=full.dof[subSysMap[LocalPIndex(pk)]];
+                        lVal[0..fDof.length]=fDof;
+                    }
+                }
+            }
+            static if (g1==XType){
+                auto posDof=ps.posDofs;
+            } else {
+                auto posDof=ps.posDDofs;
+            }
+            switch(ps.selection&Sel.xyz){
+            case Sel.x:
+                foreach(pk,lk,ref lVal;local.dof[KindRange(k,cast(KindIdx)(k+1))].pLoop){
+                    auto fVal=full.pos[subSysMap[LocalPIndex(pk)]];
+                    auto nPos=fVal.length;
+                    for(size_t iPos=0;iPos<nPos;iPos++){
+                        lVal[posDof+iPos]=fVal[iPos].x;
+                    }
+                }
+                break;
+            case Sel.y:
+                foreach(pk,lk,ref lVal;local.dof[KindRange(k,cast(KindIdx)(k+1))].pLoop){
+                    auto fVal=full.pos[subSysMap[LocalPIndex(pk)]];
+                    auto nPos=fVal.length;
+                    for(size_t iPos=0;iPos<nPos;iPos++){
+                        lVal[posDof+iPos]=fVal[iPos].y;
+                    }
+                }
+                break;
+            case Sel.z:
+                foreach(pk,lk,ref lVal;local.dof[KindRange(k,cast(KindIdx)(k+1))].pLoop){
+                    auto fVal=full.pos[subSysMap[LocalPIndex(pk)]];
+                    auto nPos=fVal.length;
+                    for(size_t iPos=0;iPos<nPos;iPos++){
+                        lVal[posDof+iPos]=fVal[iPos].z;
+                    }
+                }
+                break;
+            case (Sel.y|Sel.z):
+                foreach(pk,lk,ref lVal;local.dof[KindRange(k,cast(KindIdx)(k+1))].pLoop){
+                    auto fVal=full.pos[subSysMap[LocalPIndex(pk)]];
+                    auto nPos=fVal.length;
+                    for(size_t iPos=0;iPos<nPos;iPos++){
+                        lVal[posDof+2*iPos]=fVal[iPos].y;
+                        lVal[posDof+2*iPos+1]=fVal[iPos].z;
+                    }
+                }
+                break;
+            case (Sel.x|Sel.z):
+                foreach(pk,lk,ref lVal;local.dof[KindRange(k,cast(KindIdx)(k+1))].pLoop){
+                    auto fVal=full.pos[subSysMap[LocalPIndex(pk)]];
+                    auto nPos=fVal.length;
+                    for(size_t iPos=0;iPos<nPos;iPos++){
+                        lVal[posDof+2*iPos]=fVal[iPos].x;
+                        lVal[posDof+2*iPos+1]=fVal[iPos].z;
+                    }
+                }
+                break;
+            case (Sel.x|Sel.y):
+                foreach(pk,lk,ref lVal;local.dof[KindRange(k,cast(KindIdx)(k+1))].pLoop){
+                    auto fVal=full.pos[subSysMap[LocalPIndex(pk)]];
+                    auto nPos=fVal.length;
+                    for(size_t iPos=0;iPos<nPos;iPos++){
+                        lVal[posDof+2*iPos]=fVal[iPos].x;
+                        lVal[posDof+2*iPos+1]=fVal[iPos].y;
+                    }
+                }
+                break;
+            case Sel.xyz:
+                break;
+            default:
+                assert(0);
+            }
+        }
+    }
 
+    void localToFull(T,int g1,U,int g2)(DynPVector!(T,g1)local,DynPVector!(U,g2)full){
+        static assert(is(T==U),"different types not "~T.stringof~" "~U.stringof~" supported()");
+        static assert(g1==g2,"group has to be the same "~T.stringof~" "~U.stringof);
+        static assert(g1==XType||g1==DxType||g1==DualDxType,"unexpected group");
+        alias ParticleDynvarsSelect.Selection Sel;
+        foreach(k;local.pos.kRange.pLoop){
+            ParticleDynvarsSelect *ps=&(dynVarMap[cast(size_t)k]);
+            if ((ps.selection&Sel.xyz)==Sel.xyz){
+                foreach(pk,lk,ref lVal;local.pos[KindRange(k,cast(KindIdx)(k+1))].pLoop){
+                    full.pos[subSysMap[LocalPIndex(pk)]][]=lVal;
+                }
+            }
+        }
+        foreach(k;local.orient.kRange.pLoop){
+            ParticleDynvarsSelect *ps=&(dynVarMap[cast(size_t)k]);
+            if ((ps.selection&Sel.orient)!=0){
+                foreach(pk,lk,ref lVal;local.orient[KindRange(k,cast(KindIdx)(k+1))].pLoop){
+                    full.orient[subSysMap[LocalPIndex(pk)]][]=lVal;
+                }
+            }
+        }
+        foreach(k;local.dof.kRange.pLoop){
+            ParticleDynvarsSelect *ps=&(dynVarMap[cast(size_t)k]);
+            if ((ps.selection&Sel.dof)!=0){
+                if ((ps.selection&Sel.dofIdxs)!=0){
+                    if (ps.dofIdxs.length>0){
+                        foreach(pk,lk,ref lVal;local.dof[KindRange(k,cast(KindIdx)(k+1))].pLoop){
+                            auto fVal=full.dof[subSysMap[LocalPIndex(pk)]];
+                            foreach(i,j;ps.dofIdxs){
+                                fVal[j]=lVal[i];
+                            }
+                        }
+                    }
+                } else {
+                    foreach(pk,lk,ref lVal;local.dof[KindRange(k,cast(KindIdx)(k+1))].pLoop){
+                        auto fDof=full.dof[subSysMap[LocalPIndex(pk)]];
+                        fDof[]=lVal[0..fDof.length];
+                    }
+                }
+            }
+            static if (g1==XType){
+                auto posDof=ps.posDofs;
+            } else {
+                auto posDof=ps.posDDofs;
+            }
+            switch(ps.selection&Sel.xyz){
+            case Sel.x:
+                foreach(pk,lk,ref lVal;local.dof[KindRange(k,cast(KindIdx)(k+1))].pLoop){
+                    auto fVal=full.pos[subSysMap[LocalPIndex(pk)]];
+                    auto nPos=fVal.length;
+                    for(size_t iPos=0;iPos<nPos;iPos++){
+                        fVal[iPos].x=lVal[posDof+iPos];
+                    }
+                }
+                break;
+            case Sel.y:
+                foreach(pk,lk,ref lVal;local.dof[KindRange(k,cast(KindIdx)(k+1))].pLoop){
+                    auto fVal=full.pos[subSysMap[LocalPIndex(pk)]];
+                    auto nPos=fVal.length;
+                    for(size_t iPos=0;iPos<nPos;iPos++){
+                        fVal[iPos].y=lVal[posDof+iPos];
+                    }
+                }
+                break;
+            case Sel.z:
+                foreach(pk,lk,ref lVal;local.dof[KindRange(k,cast(KindIdx)(k+1))].pLoop){
+                    auto fVal=full.pos[subSysMap[LocalPIndex(pk)]];
+                    auto nPos=fVal.length;
+                    for(size_t iPos=0;iPos<nPos;iPos++){
+                        fVal[iPos].z=lVal[posDof+iPos];
+                    }
+                }
+                break;
+            case (Sel.y|Sel.z):
+                foreach(pk,lk,ref lVal;local.dof[KindRange(k,cast(KindIdx)(k+1))].pLoop){
+                    auto fVal=full.pos[subSysMap[LocalPIndex(pk)]];
+                    auto nPos=fVal.length;
+                    for(size_t iPos=0;iPos<nPos;iPos++){
+                        fVal[iPos].y=lVal[posDof+2*iPos];
+                        fVal[iPos].z=lVal[posDof+2*iPos+1];
+                    }
+                }
+                break;
+            case (Sel.x|Sel.z):
+                foreach(pk,lk,ref lVal;local.dof[KindRange(k,cast(KindIdx)(k+1))].pLoop){
+                    auto fVal=full.pos[subSysMap[LocalPIndex(pk)]];
+                    auto nPos=fVal.length;
+                    for(size_t iPos=0;iPos<nPos;iPos++){
+                        fVal[iPos].x=lVal[posDof+2*iPos];
+                        fVal[iPos].z=lVal[posDof+2*iPos+1];
+                    }
+                }
+                break;
+            case (Sel.x|Sel.y):
+                foreach(pk,lk,ref lVal;local.dof[KindRange(k,cast(KindIdx)(k+1))].pLoop){
+                    auto fVal=full.pos[subSysMap[LocalPIndex(pk)]];
+                    auto nPos=fVal.length;
+                    for(size_t iPos=0;iPos<nPos;iPos++){
+                        fVal[iPos].x=lVal[posDof+2*iPos];
+                        fVal[iPos].y=lVal[posDof+2*iPos+1];
+                    }
+                }
+                break;
+            case Sel.xyz:
+                break;
+            default:
+                assert(0);
+            }
+        }
     }
     
     /// calculates sysStruct, subSysMap, and dynVarMap using the given subSys as full system
     void calcSysStruct(SysStruct subSys){
-        auto pKinds=new SegmentedArray!(PK)(subSys.particlesStruct);
+        auto pKinds=new SegmentedArray!(PK)(new SegArrMemMap!(PK)(subSys.particlesStruct));
         pKinds[]=PK.init;
         foreach(isub,subset;input.selections){
-            foreach(pIdx;subset){
-                if (pKinds[pIdx]!=PK.init){
-                    throw new Exception(collectAppender(delegate void(CharSink s){
-                        dumper(s)("double use of ")(pIdx)(" from subset ")(pKinds[pIdx].isub)
-                            (" and ")(isub);
-                    }),__FILE__,__LINE__);
+            foreach(pRangeF;subset.particleRanges){
+                auto pRange=cast(ParticleRange)pRangeF;
+                assert(pRange);
+                foreach(pIdxs;pRange.loopOn(subSys)){
+                    foreach(pIdx;pIdxs){
+                        if (pKinds[pIdx,0]!=PK.init){
+                            throw new Exception(collectAppender(delegate void(CharSink s){
+                                dumper(s)("double use of ")(pIdx)(" from subset ")(pKinds[pIdx,0].isub)
+                                    (" and ")(isub);
+                            }),__FILE__,__LINE__);
+                        }
+                        pKinds[pIdx,0]=PK(isub,pIdx.kind);
+                    }
                 }
-                pKinds[pIdx]=PK(isub,pIdx.kind);
             }
         }
         auto sLevels=subSys.levels;
         KindIdx nextK=0;
         auto newKinds=new HashMap!(PK,PKV[])();
         size_t nParticles;
-        foreach(pIdx,lIdx,ref pk;pKinds[sLevels[0]]){
+        foreach(inPIdx,pIdx,lIdx,ref pk;pKinds[sLevels[0]].sLoop){
             if (pk.pKind!=KindIdx.init){
                 ++nParticles;
                 auto nK=pk in newKinds;
@@ -330,25 +577,25 @@ class SubsetContext(T):CalcContext{
         levels[0].kEnd=nextK;
         for (int ilevel=1;ilevel<sLevels.length;++ilevel){
             levels[ilevel].kStart=nextK;
-            foreach(pIdx,lIdx,ref pk;pKinds[sLevels[0]]){
+            foreach(inPIdx,pIdx,lIdx,ref pk;pKinds[sLevels[0]].sLoop){
                 auto subNow=subSys.subParticles[pIdx];
                 bool hasSome=false;
-                foreach (pIdx;subNow){
-                    if (pKinds[pIdx].pKind!=KindIdx.init){
+                foreach (subPIdx;subNow){
+                    if (pKinds[subPIdx,0].pKind!=KindIdx.init){
                         hasSome=true;
                         break;
                     }
                 }
                 if (!hasSome) continue;
                 ++nParticles;
-                if (pk.pKind==KindIdx.init) pk.pKind=pIdx;
+                if (pk.pKind==KindIdx.init) pk.pKind=pIdx.kind;
                 auto nK=pk in newKinds;
                 if (nK !is null){
                     bool same=false;
                     foreach(ref pkv;*nK){
                         same=true;
-                        foreach(iSub,subPk,pkv.subP){
-                            if (pKinds[subPk]!=pKinds[subNow[iSub]]){
+                        foreach(iSub,subPk;pkv.subP){
+                            if (pKinds[subPk,0]!=pKinds[subNow[iSub],0]){
                                 same=false;
                                 break;
                             }
@@ -384,7 +631,7 @@ class SubsetContext(T):CalcContext{
         scope pkvLookup= new PKV[](cast(size_t)nextK);
         foreach(pk,pkvs;newKinds){ // worth building a lokup table?
             foreach(pkv;pkvs){
-                pkvLookup[cast(size_t)pkv.pKindNew]=pkv;
+                pkvLookup[cast(size_t)pkv.pk.pKindNew]=pkv;
             }
         }
         
@@ -418,7 +665,7 @@ class SubsetContext(T):CalcContext{
             auto gSortedLocalPIndex=BulkArray!(LocalPIndex)(nParticles);
             auto lSortedPIndex=BulkArray!(PIndex)(nParticles);
             auto nParts=new size_t[](cast(size_t)nextK);
-            foreach(pIdx,lIdx,pk;pKinds[sLevels[0]]){
+            foreach(inPIdx,pIdx,lIdx,pk;pKinds[sLevels[0]].sLoop){
                 auto newK=pk.pKindNew;
                 if (newK!=KindIdx.init){
                     sortedPIndex2[iPIdx]=pIdx;
@@ -443,7 +690,7 @@ class SubsetContext(T):CalcContext{
             auto lSortedPIndex=BulkArray!(PIndex)(kindStarts[levels[0].kEnd]);
             auto nParts=new size_t[](cast(size_t)nextK);
             size_t iPIdx=0;
-            foreach(pIdx,lIdx,pk;pKinds[sLevels[0]]){
+            foreach(inPIdx,pIdx,lIdx,ref pk;pKinds[sLevels[0]].sLoop){
                 auto newK=pk.pKindNew;
                 if (newK!=KindIdx.init){
                     size_t idx=nParts[cast(size_t)newK]++;
@@ -469,8 +716,8 @@ class SubsetContext(T):CalcContext{
         auto pMapKSizeT=new SegArrMemMap!(size_t)(particlesStruct,KindRange(levels[0].kEnd,levels[$-1].kEnd));
         scope nSub=pMapKSizeT.newArray();
         nSub[]=0;
-        foreach(pIdx,lIdx,ref superP;pMapIdx){
-            superP=PIndex(subSysMap[subSys.superParticle[subSysMap[lIdx]]]); // probably it would be better to loop on subSys.superParticle...
+        foreach(inPIdx,pIdx,lIdx,ref superP;superParticle.sLoop){
+            superP=PIndex(subSysMap[subSys.superParticle[subSysMap[lIdx],0]]); // probably it would be better to loop on subSys.superParticle...
             *(nSub.ptrI(superP,0)) += 1;
         }
 
@@ -478,7 +725,7 @@ class SubsetContext(T):CalcContext{
         auto kindsData=BulkArray!(ParticleKind)(cast(size_t)nextK);
         dynVarMap=BulkArray!(ParticleDynvarsSelect)(cast(size_t)nextK);
         SubsetSelection defaultSelection;
-        if (trimUnspecifiedSuperParticles){
+        if (input.trimUnspecifiedSuperParticles){
             defaultSelection.x=false;
             defaultSelection.y=false;
             defaultSelection.z=false;
@@ -488,21 +735,20 @@ class SubsetContext(T):CalcContext{
         auto names=new Set!(string)();
         foreach(pkv; pkvLookup){
             SubsetSelection *selection;
-            if (pkv.isub==size_t.max){
+            if (pkv.pk.isub==size_t.max){
                 selection=&defaultSelection;
             } else {
-                selection=&(selections[pkv.isub]);
+                selection=&(input.selections[pkv.pk.isub]);
             }
-            ParticleKind oldPKind=subSys.kinds[cast(size_t)pkv.pKind];
+            ParticleKind oldPKind=subSys.kinds[cast(size_t)pkv.pk.pKind];
             string newName=oldPKind.name;
             {
                 string baseName=newName;
                 char[128] buf;
                 auto arr=lGrowableArray(buf,0,GASharing.Local);
                 for (size_t iName=0;true;++iName){
-                    auto n=newName in names;
-                    if (n is null){
-                        newName=newName.dup
+                    if (!names.contains(newName)){
+                        newName=newName.dup;
                         names.add(newName);
                         break;
                     }
@@ -511,9 +757,9 @@ class SubsetContext(T):CalcContext{
                     newName=arr.data;
                 }
             }
-            auto p=selection.newParticleKind(oldPKind,pkv.pKindNew,oldPKind.level,newName,
-                *dynVarMap.ptrI(cast(size_t)pkv.pKindNew);
-            kindsData[cast(size_t)pkv.pKindNew]=p;
+            auto p=selection.newParticleKind(oldPKind,pkv.pk.pKindNew,oldPKind.level,newName,
+                *dynVarMap.ptrI(cast(size_t)pkv.pk.pKindNew));
+            kindsData[cast(size_t)pkv.pk.pKindNew]=p;
         }
         auto kindDims2=new index_type[](kindDims.length);
         kindDims2[]=0;
@@ -524,7 +770,7 @@ class SubsetContext(T):CalcContext{
         /// subparticles
         index_type[] nSubparticles=new index_type[](cast(size_t)levels[3].kEnd);
         nSubparticles[]=index_type.max;
-        foreach(lIdx,val;nSub.pLoop){
+        foreach(inP,pIdx,lIdx,val;nSub.pLoop){
             auto kind=cast(size_t)lIdx.kind;
             auto nP=nSubparticles[kind];
             if (nP==index_type.max){
@@ -555,14 +801,14 @@ class SubsetContext(T):CalcContext{
         auto subPMapPIndex=new SegArrMemMap!(PIndex)(subParticlesStruct);
         auto subParticleIdxs=subPMapPIndex.newArray();
         nSub[]=0;
-        foreach(lIdx,superP;superParticle[KindRange(levels[0].kStart,levels[2].kEnd)].sLoop){ // sequential, we need to guarantee a deterministic result
+        foreach(inP,pIdx,lIdx,superP;superParticle[KindRange(levels[0].kStart,levels[2].kEnd)].sLoop){ // sequential, we need to guarantee a deterministic result
             nSub.dtype* idxAtt;
             idxAtt=nSub.ptrI(superP,0);
             *(subParticleIdxs.ptrI(superP,*idxAtt))=PIndex(lIdx);
             ++(*idxAtt);
         }
         Exception e;
-        foreach(lIdx,nPart;nSub.pLoop){
+        foreach(inP,pIdx,lIdx,nPart;nSub.pLoop){
             if (nSubparticles[cast(size_t)lIdx.kind]!=cast(index_type)nPart){
                 e=new Exception(collectAppender(delegate void(CharSink sink){
                     dumper(sink)("internal error inconsistent number of subparticles:")
@@ -576,7 +822,7 @@ class SubsetContext(T):CalcContext{
         nSub.giveBack();
 
         // sysStruct
-        sysStruct=new SysStruct(rIn.name, fullSystem, externalOrder, levels,
+        sysStruct=new SysStruct(subSys.name~"SubsetC", fullSystem, externalOrder, levels,
              particlesStruct, particles, superParticle, subParticlesStruct,
              subParticleIdxs, kindsStruct, particleKinds);
     }
@@ -595,21 +841,8 @@ class SubsetContext(T):CalcContext{
         }
         return null;
     }
-    /+char[] contextId(){ return subContext.contextId; }
+    char[] contextId(){ return subContext.contextId; }
     Precision activePrecision() { return subContext.activePrecision; }
-    ParticleSys!(Real) refPSysReal() {
-        if (_pSysReal is null && subContext.activePrecision==Precision.Real){
-            auto nSys=
-        }
-        return _pSysReal;
-    }
-    ParticleSys!(LowP) refPSysLowP() { return _pSysLowP; }
-    ParticleSys!(Real) pSysReal() { return _pSysReal; }
-    ParticleSys!(LowP) pSysLowP() { return _pSysLowP; }
-    PSysWriter!(Real) pSysWriterReal(){ return pSysWriter(_pSysReal); }
-    PSysWriter!(LowP) pSysWriterLowP() { return pSysWriter(_pSysLowP); }
-    void pSysWriterRealSet(PSysWriter!(Real)p) { assert(_pSysReal!is null); _pSysReal[]=p; }
-    void pSysWriterLowPSet(PSysWriter!(LowP)p) { assert(_pSysLowP!is null); _pSysLowP[]=p; }
     ConstraintGen constraintGen(){
         auto cReal=constraintsReal();
         if (cReal!is null){
@@ -622,76 +855,43 @@ class SubsetContext(T):CalcContext{
         return null;
     }
     
-    NotificationCenter nCenter()  { return _nCenter; }
-    HistoryManager!(LowP) posHistory() { return _posHistory; }
-    ChangeLevel changeLevel() { return _changeLevel; }
-    void changeLevelSet(ChangeLevel c) { _changeLevel=c; }
-    Real potentialEnergy(){
-        mixin(withPSys("return pSys.dynVars.potentialEnergy;"));
-    }
-    void posSet(SegmentedArray!(Vector!(Real,3)) newPos){
-        mixin(withPSys("pSys.dynVars.x.pos[]=newPos;"));
-    }
-    SegmentedArray!(Vector!(Real,3)) pos(){
-        if (pSysReal!is null) {
-            return pSysReal.dynVars.x.pos;
-        } else if (pSysLowP!is null) {
-            if (posArr is null){
-                posArr=pSysLowP.dynVars.x.pos.dupT!(Vector!(Real,3))();
-            } else {
-                pSysLowP.dynVars.x.pos.dupTo(posArr);
-            }
-            return posArr;
-        } else {
-            throw new Exception("missing particle sys in context "~contextId,__FILE__,__LINE__);
-        }
-    }
-    void dposSet(SegmentedArray!(Vector!(Real,3)) newDpos){
-        mixin(withPSys("pSys.dynVars.dx.pos[]=newDpos;"));
-    }
-    SegmentedArray!(Vector!(Real,3)) dpos(){
-        if (pSysReal!is null) {
-            return pSysReal.dynVars.dx.pos;
-        } else if (pSysLowP!is null) {
-            if (posArr is null){
-                posArr=pSysLowP.dynVars.dx.pos.dupT!(Vector!(Real,3))();
-            } else {
-                pSysLowP.dynVars.dx.pos.dupTo(posArr);
-            }
-            return posArr;
-        } else {
-            throw new Exception("missing particle sys in context "~contextId,__FILE__,__LINE__);
-        }
-    }
-    void mddposSet(SegmentedArray!(Vector!(Real,3)) newMddpos){
-        mixin(withPSys("pSys.dynVars.mddx.pos[]=newMddpos;"));
-    }
-    SegmentedArray!(Vector!(Real,3)) mddpos(){
-        if (pSysReal!is null) {
-            return pSysReal.dynVars.mddx.pos;
-        } else if (pSysLowP!is null) {
-            if (posArr is null){
-                posArr=pSysLowP.dynVars.mddx.pos.dupT!(Vector!(Real,3))();
-            } else {
-                pSysLowP.dynVars.mddx.pos.dupTo(posArr);
-            }
-            return posArr;
-        } else {
-            throw new Exception("missing particle sys in context "~contextId,__FILE__,__LINE__);
-        }
-    }
-    SysStruct sysStruct(){
-        SysStruct res;
-        mixin(withPSys("res=pSys.sysStruct;"));
-        return res;
-    }
+    void changeLevelSet(ChangeLevel c) { _changeLevel=c; subContext.changeLevelSet(c); }
+    
     void changedDynVars(ChangeLevel changeLevel,Real diff){
         if (changeLevel<_changeLevel) _changeLevel=changeLevel;
         if (diff>maxChange) maxChange=diff;
+        subContext.changedDynVars(changeLevel,diff);
     }
     
     void updateEF(bool updateE=true,bool updateF=true){
-        throw new Exception("to implement in subclasses",__FILE__,__LINE__);
+        switch(activePrecision){
+            case Precision.Real:
+            localToFull(pSysReal.dynVars.x,subContext.pSysReal.dynVars.x);
+            break;
+            case Precision.LowP:
+            localToFull(pSysLowP.dynVars.x,subContext.pSysLowP.dynVars.x);
+            break;
+            default:
+            assert(0);
+        }
+        subContext.updateEF(updateE,updateF);
+        if (updateE){
+            mixin(withPSys(`pSys.dynVars.potentialEnergy=subContext.potentialEnergy;`));
+        }
+        if (updateF){
+            switch(activePrecision){
+                case Precision.Real:
+                pSysReal.dynVars.checkMddx;
+                fullToLocal(subContext.pSysReal.dynVars.mddx,pSysReal.dynVars.mddx);
+                break;
+                case Precision.LowP:
+                pSysLowP.dynVars.checkMddx;
+                fullToLocal(subContext.pSysLowP.dynVars.mddx,pSysLowP.dynVars.mddx);
+                break;
+                default:
+                assert(0);
+            }
+        }
         // maxChange=0.0; changeLevel=ChangeLevel.SmoothPosChange;
     }
     
@@ -700,47 +900,33 @@ class SubsetContext(T):CalcContext{
     /// called automatically after creation, but before any energy evaluation
     /// should be called before working again with a deactivated calculator
     void activate(){
+        subContext.activate();
         nCenter.notify("willActivateContext",Variant(this));
     }
     /// call this to possibly get rid of all caches (i.e. before a pause in the calculation)
     void deactivate(){
+        subContext.deactivate();
         nCenter.notify("willDeactivateContext",Variant(this));
     }
     /// call this to remove the context (after all calculations with this are finished)
     void giveBack(){
+        subContext.giveBack();
         nCenter.notify("willGiveBackContext",Variant(this));
     }
     /// tries to stop a calculation in progress. Recovery after this is not possible
     /// giveBack should still be called
-    void stop(){}
+    void stop(){
+        subContext.stop();
+    }
     /// the method of this calculator (this might be different from the method that was used to create this
     /// as that might have been wrapped)
     Method method(){
-        assert(0,"to implement in subclasses");
+        return subContext.method;
     }
     /// stores the history somewhere and returns an id to possibly recover that history at a later point
     /// this is just an optimization, it does not have to do anything. If implemented then
     /// method.getCalculator, .dropHistory and .clearHistory have to be implemented accordingly
-    ubyte[]storeHistory(){ return []; }
-    /// exposes (publish/vends) this object to the world
-    void publish(){
-    }
-    mixin(rpcMixin("dchem.CalcContext", "CalculationContext",calcCtxMethodsStr));
-    DefaultVendor vendor;
-    /// url to access this from other processes (only as CalculationContext)
-    char[] exportedUrl(){
-        return vendor.proxyObjUrl();
-    }
-    this(char[] contextId,CharSink log){
-        this._contextId=contextId;
-        this._logger=log;
-        _nCenter=new NotificationCenter();
-        // register to the world...
-        vendor=new DefaultVendor(this);
-        assert(ProtocolHandler.defaultProtocol!is null,"defaultProtocol");
-        assert(ProtocolHandler.defaultProtocol.publisher!is null,"publisher");
-        ProtocolHandler.defaultProtocol.publisher.publishObject(vendor,"CalcContext"~contextId,true,Publisher.Flags.Public);
-    }+/
+    ubyte[]storeHistory(){ return subContext.storeHistory(); }
 }
 
 

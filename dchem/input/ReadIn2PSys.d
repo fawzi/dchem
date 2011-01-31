@@ -180,7 +180,7 @@ ParticleSys!(T) readIn2PSys(T)(ReadSystem rIn,
     /// subparticles
     index_type[] nSubparticles=new index_type[](cast(size_t)levels[3].kEnd);
     nSubparticles[]=index_type.max;
-    foreach(lIdx,val;nSub.pLoop){
+    foreach(inP,pIdx,lIdx,val;nSub.pLoop){
         auto kind=cast(size_t)lIdx.kind;
         auto nP=nSubparticles[kind];
         if (nP==index_type.max){
@@ -211,14 +211,14 @@ ParticleSys!(T) readIn2PSys(T)(ReadSystem rIn,
     auto subPMapPIndex=new SegArrMemMap!(PIndex)(subParticlesStruct);
     auto subParticleIdxs=subPMapPIndex.newArray();
     nSub[]=0;
-    foreach(lIdx,superP;superParticle[KindRange(levels[0].kStart,levels[2].kEnd)].sLoop){ // sequential, we need to guarantee a deterministic result
+    foreach(inP,pIdx,lIdx,superP;superParticle[KindRange(levels[0].kStart,levels[2].kEnd)].sLoop){ // sequential, we need to guarantee a deterministic result
         nSub.dtype* idxAtt;
         idxAtt=nSub.ptrI(superP,0);
         *(subParticleIdxs.ptrI(superP,*idxAtt))=PIndex(lIdx);
         ++(*idxAtt);
     }
     Exception e;
-    foreach(lIdx,nPart;nSub.pLoop){
+    foreach(inP,pIdx,lIdx,nPart;nSub.pLoop){
         if (nSubparticles[cast(size_t)lIdx.kind]!=cast(index_type)nPart){
             e=new Exception(collectAppender(delegate void(CharSink sink){
                 dumper(sink)("internal error inconsistent number of subparticles:")
@@ -341,14 +341,14 @@ ParticleSys!(T) artificialPSys(T)(size_t nPos, size_t nOrient,size_t nDof,
     auto pMapSizeT=new SegArrMemMap!(size_t)(particlesStruct,KindRange(levels[0].kEnd,levels[$-1].kEnd));
     scope nSub=pMapSizeT.newArray();
     nSub[]=0;
-    foreach(lIdx,superP;superParticle[KindRange(levels[0].kStart,levels[$-2].kEnd)].sLoop){ // sequential, we need to guarantee a deterministic result
+    foreach(inP,pIdx,lIdx,superP;superParticle[KindRange(levels[0].kStart,levels[$-2].kEnd)].sLoop){ // sequential, we need to guarantee a deterministic result
         nSub.dtype* idxAtt;
         idxAtt=nSub.ptrI(superP,0);
         *(subParticleIdxs.ptrI(superP,*idxAtt))=PIndex(lIdx);
         ++(*idxAtt);
     }
     Exception e;
-    foreach(lIdx,nPart;nSub.pLoop){
+    foreach(inP,pIdx,lIdx,nPart;nSub.pLoop){
         if (nSubparticles[cast(size_t)lIdx.kind]!=cast(index_type)nPart){
             e=new Exception(collectAppender(delegate void(CharSink sink){
                 dumper(sink)("internal error inconsistent number of subparticles:")

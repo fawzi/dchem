@@ -362,10 +362,12 @@ class CalcContext:LocalCalculationContext{
     char[] exportedUrl(){
         return vendor.proxyObjUrl();
     }
-    this(char[] contextId,CharSink log){
+    this(char[] contextId,CharSink log,NotificationCenter nCenter=null){
         this._contextId=contextId;
         this._logger=log;
-        _nCenter=new NotificationCenter();
+        this._nCenter=nCenter;
+        if (nCenter is null)
+            this._nCenter=new NotificationCenter();
         // register to the world...
         vendor=new DefaultVendor(this);
         assert(ProtocolHandler.defaultProtocol!is null,"defaultProtocol");
