@@ -467,8 +467,8 @@ struct DynPVector(T,int group){
         if (cell!is null){
             if (idx<9){
                 cell=cell.dup(); // eccessive copying??? introduce ref counting and avoid copying if unique?
-                cell.hInvOk=false;
                 cell.h.cell[idx]=val;
+                cell.hChanged();
                 return;
             }
             idx-=9;
