@@ -246,7 +246,7 @@ struct DynPVectorWriter(T,int group){
     SegArrWriter!(T) pos;
     SegArrWriter!(T) orient;
     SegArrWriter!(T) dof;
-    int[3] cellPeriod;
+    int cellPeriod;
     mixin(serializeSome("dchem.DynPVectorWriter!("~T.stringof~")","cell|cellX0|cellPeriod|pos|orient|dof"));
     mixin printOut!();
     /// true if this represents a null DynPVector
@@ -265,7 +265,7 @@ struct DynPVectorWriter(T,int group){
         if (v.cell!is null) {
             res.cell=v.cell.h.cell;
             res.cellX0=v.cell.x0.cell;
-            res.cellPeriod[]=v.cell.periodic;
+            res.cellPeriod=v.cell.periodicFlags;
         }
         res.pos=SegArrWriter!(T)(v.pos);
         res.orient=SegArrWriter!(T)(v.orient);

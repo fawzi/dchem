@@ -126,7 +126,7 @@ void nConfigDistKind(T)(T[]c1,T[]c2,T[]dist){
 }
 
 // distances between the atoms of two configurations in the orthorombic periodic case
-void oConfigDistKind(T)(T[3]h_diag,int[3]periodic,T[]c1,T[]c2,T[]dist){
+void oConfigDistKind(T)(T[3]h_diag,int periodic,T[]c1,T[]c2,T[]dist){
     assert(c1.length==c2.length,"the two configurations should have equal length");
     assert(c1.length%3==0,"the configurations should have a length that is a multiple of 3");
     assert(c1.length/3==dist.length,"the distances should be one third of the positions");
@@ -199,7 +199,7 @@ private char[] allGConfigDLoopMixin(){
 
 // distances between the atoms of two configurations in the general case (first image convention)
 // not that in some peculiar cases this is different from the closest image
-void gConfigDistKind(T)(T[9]h,T[9]hInv,int[3]periodic,T[]c1,T[]c2,T[]dist){
+void gConfigDistKind(T)(T[9]h,T[9]hInv,int periodic,T[]c1,T[]c2,T[]dist){
     assert(c1.length==c2.length,"the two configurations should have equal length");
     assert(c1.length%3==0,"the configurations should have a length that is a multiple of 3");
     assert(c1.length/3==dist.length,"the distances should be one third of the positions");
@@ -208,7 +208,7 @@ void gConfigDistKind(T)(T[9]h,T[9]hInv,int[3]periodic,T[]c1,T[]c2,T[]dist){
 }
 
 // distances between the atoms of two configurations, automatically chooses the optimal solution
-void configDistKind(T)(T[9]h,T[9]hInv,int[3]periodic,T[]c1,T[]c2,T[]dist){
+void configDistKind(T)(T[9]h,T[9]hInv,int periodic,T[]c1,T[]c2,T[]dist){
     assert(c1.length==c2.length,"the two configurations should have equal length");
     assert(c1.length%3==0,"the configurations should have a length that is a multiple of 3");
     assert(c1.length/3==dist.length,"the distances should be one third of the positions");
@@ -293,7 +293,7 @@ void nOneToNDistKind(T)(T[]c1,T[]c2,T[]dist){
 }
 
 // distances between the atoms of two configurations in the orthorombic periodic case
-void oOneToNDistKind(T)(T[3]h_diag,int[3]periodic,T[]c1,T[]c2,out T[]dist){
+void oOneToNDistKind(T)(T[3]h_diag,int periodic,T[]c1,T[]c2,out T[]dist){
     assert(c1.length==3,"c1 should have 3 components");
     assert(c2.length%3==0,"c2 should have a length that is a multiple of 3");
     assert(c2.length/3==dist.length,"the distances should be one third of the positions");
@@ -365,7 +365,7 @@ private char[] allGOneToNLoopMixin(){
 }
 
 // distances between one atom and a set of others in the non orthorombic periodic case
-void gOneToNDistKind(T)(T[9]h,T[9]hInv,int[3]periodic,T[]c1,T[]c2,out T[]dist){
+void gOneToNDistKind(T)(T[9]h,T[9]hInv,int periodic,T[]c1,T[]c2,out T[]dist){
     assert(c1.length==3,"c1 should have 3 components");
     assert(c2.length%3==0,"c2 should have a length that is a multiple of 3");
     assert(c2.length/3==dist.length,"the distances should be one third of the positions");
@@ -374,7 +374,7 @@ void gOneToNDistKind(T)(T[9]h,T[9]hInv,int[3]periodic,T[]c1,T[]c2,out T[]dist){
 }
 
 // distances between one atom and a set of others automatically choosing the optimal method
-void oneToNDistKind(T)(T[9]h,T[9]hInv,int[3]periodic,T[]c1,T[]c2,out T[]dist){
+void oneToNDistKind(T)(T[9]h,T[9]hInv,int periodic,T[]c1,T[]c2,out T[]dist){
     assert(c1.length==3,"c1 should have 3 components");
     assert(c2.length%3==0,"c2 should have a length that is a multiple of 3");
     assert(c2.length/3==dist.length,"the distances should be one third of the positions");
@@ -393,10 +393,12 @@ void oneToNDistKind(T)(T[9]h,T[9]hInv,int[3]periodic,T[]c1,T[]c2,out T[]dist){
     }
 }
 
-private {
-    // allocate something for testing purposes
-    alias configDist!(Real,Vector!(Real,3),Vector!(Real,3),Real) dummyA;
-    alias configDistKind!(Real,Vector!(Real,3),Vector!(Real,3),Real) dummyB;
-    alias configDistKind!(Real) dummyC;
-    alias oneToNDistKind!(Real) dummyD;
+version(InstantiateSome){
+    private {
+        // allocate something for testing purposes
+        alias configDist!(Real,Vector!(Real,3),Vector!(Real,3),Real) dummyA;
+        alias configDistKind!(Real,Vector!(Real,3),Vector!(Real,3),Real) dummyB;
+        alias configDistKind!(Real) dummyC;
+        alias oneToNDistKind!(Real) dummyD;
+    }
 }

@@ -21,9 +21,9 @@ class RandomOrthoCell(T){
         h[2,2]=r.uniformR2!(T)(1.5,15.0);
         auto x0=emptyR(3);
         randomizeNArray(r.normalD(cast(T)2),x0);
-        int[3] periodic;
+        int periodic=0;
         for (int idim=0;idim<3;++idim){
-          periodic[idim]=(r.uniform!(bool)?1:0);
+          periodic|=(r.uniform!(bool)?(1<<idim):0);
         }
         auto res=new typeof(this)();
         res.cell=new Cell!(T)(h,periodic,x0);
@@ -68,9 +68,9 @@ class RandomNormCell(T){
         RandomCellParams!(T) rParam;
         simpleRandom(rParam);
         param=rParam.param;
-        int[3] periodic;
+        int periodic=0;
         for (int idim=0;idim<3;++idim){
-          periodic[idim]=(r.uniform!(bool)()?1:0);
+          periodic|=(r.uniform!(bool)()?(1<<idim):0);
         }
         auto x0=emptyR(3);
         randomizeNArray(r.normalD(cast(T)2.0),x0);
@@ -97,9 +97,9 @@ class RandomCell(T){
         auto h=cellParamNArr2h(param);
         scope hNA=m2NAC(h);
         auto h2=rotateVEi(dir,0,hNA);
-        int[3] periodic;
+        int periodic=0;
         for (int idim=0;idim<3;++idim){
-            periodic[idim]=(r.uniform!(bool)()?1:0);
+            periodic|=(r.uniform!(bool)()?(1<<idim):0);
         }
         scope x0=emptyR(3);
         randomizeNArray(r.normalD(cast(T)2.0),x0);

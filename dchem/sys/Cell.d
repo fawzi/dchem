@@ -6,15 +6,18 @@ import blip.narray.NArray;
 import blip.serialization.StringSerialize;
 import blip.math.Math;
 
+/// periodicity
+enum CellPeriodic:int{
+    None=0,x=1,y=2,z=4,xyz=7,
+}
 /// cell kind
 enum CellFlag:int{
     NoCell, Ortho, General,Unknown
 }
-
 /// calculates the kind of cell one has
-CellFlag flagForCell(T)(T[]h,int[3]periodic){
+CellFlag flagForCell(T)(T[]h,int periodic){
     CellFlag flag;
-    if ((periodic[0]==1||periodic[1]==1||periodic[2]==1)){
+    if (periodic!=CellPeriodic.None){
         auto offDiag=pow2(h[1])+pow2(h[2])+pow2(h[3])+pow2(h[5])+pow2(h[6])+pow2(h[7]);
         if (offDiag>1.e-6 || offDiag>1.e-6*(pow2(h[0])+pow2(h[4])+pow2(h[8]))) {
             flag=CellFlag.General;// general
@@ -25,10 +28,6 @@ CellFlag flagForCell(T)(T[]h,int[3]periodic){
         flag=CellFlag.NoCell;
     }
     return flag;
-}
-/// periodicity
-enum CellPeriodic:int{
-    None=0,x=1,y=2,z=4,xyz=7,
 }
 /// conversion of a,b,c,alpha,beta,gamma to h
 Matrix!(T, 3, 3) cellParam2h(T)(T a,T b,T c,T alpha,T beta,T gamma){
@@ -146,18 +145,18 @@ class Cell(T)
     alias T dtype;
     Matrix!(T,3,3) h,_hInv;
     Vector!(T,3) x0;
-    int[3] periodic;
+    int periodicFlags;
     CellFlag _flags=CellFlag.Unknown;
     bool hInvOk;
 
     this(){} // just for serialization
     
-    this(Matrix!(T,3,3) h,int[3] periodic){
-        this(h,periodic,Vector!(T,3).zero);
+    this(Matrix!(T,3,3) h,int periodicFlags=CellPeriodic.None){
+        this(h,periodicFlags,Vector!(T,3).zero);
     }
-    this(Matrix!(T,3,3) h,int[3] periodic,Vector!(T,3) x0,bool hInvOk=false,CellFlag flags=CellFlag.Unknown){
+    this(Matrix!(T,3,3) h,int periodicFlags,Vector!(T,3) x0,bool hInvOk=false,CellFlag flags=CellFlag.Unknown){
         this.h=h;
-        this.periodic[]=periodic;
+        this.periodicFlags=periodicFlags;
         this._hInv=hInv;
         this.hInvOk=hInvOk;
         this.x0=x0;
@@ -165,7 +164,7 @@ class Cell(T)
     }
     CellFlag flags(){
         if (_flags==CellFlag.Unknown){
-            _flags=flagForCell(h.cell,periodic);
+            _flags=flagForCell(h.cell,periodicFlags);
         }
         return _flags;
     }
@@ -222,7 +221,7 @@ class Cell(T)
     }
     
     private void opSliceAssign(V)(ref Cell!(V) c2){
-        periodic[]=c2.periodic;
+        periodicFlags=c2.periodicFlags;
         h.set(c2.h);
         _hInv.set(c2._hInv);// recalculate inverse in case the precision of T> precision of V?
         hInvOk=c2.hInvOk;
@@ -241,7 +240,7 @@ class Cell(T)
         return res;
     }
     alias dupT!(T) dup;
-    mixin(serializeSome("","periodic|h|x0"));
+    mixin(serializeSome("","periodicFlags|h|x0"));
     mixin printOut!();
 }
 

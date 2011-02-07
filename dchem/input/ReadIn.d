@@ -12,6 +12,7 @@ import tango.text.Regex:Regex;
 import blip.text.Utils:trim, contains;
 import tango.math.Math: min,max;
 import blip.io.BasicIO;
+import dchem.sys.Cell;
 
 /// a residuum particle
 struct ResiduumP{
@@ -140,7 +141,7 @@ class ReadSystem{
     char[] comments; // comments
     Real[3][3] cell; /// cell info
     Real[3] x0=[0.0,0.0,0.0]; /// lower left pos of the cell
-    int[3] periodic; /// periodic directions
+    int periodic; /// periodic directions
     char[] spaceGroup; /// space group
     size_t nParticles; /// number of particles
     Particle[] _particles; // the particles (use particles)
@@ -160,7 +161,7 @@ class ReadSystem{
         metaI.addFieldOfType!(char[])("name","name of the system");
         metaI.addFieldOfType!(char[])("comments","comments");
         metaI.addFieldOfType!(Real[])("cell","cell matrix");
-        metaI.addFieldOfType!(int[])("periodic","which directions are periodic");
+        metaI.addFieldOfType!(int)("periodic","which directions are periodic");
         metaI.addFieldOfType!(Real[])("x0","lower left corner of the cell");
         metaI.addFieldOfType!(char[])("spaceGroup","spaceGroup");
         metaI.addFieldOfType!(Particle[])("particles","the particles");
@@ -180,11 +181,8 @@ class ReadSystem{
         if (c.ptr !is &(cell[0][0])){
             (&(cell[0][0]))[0..9]=c;
         }
-        auto p=periodic[];
+        auto p=periodic;
         s.field(metaI[3],p);
-        if (p.ptr !is periodic.ptr){
-            periodic[]=p;
-        }
         auto a=x0[];
         s.field(metaI[4],a);
         if (a.ptr !is x0.ptr){
@@ -212,7 +210,7 @@ class ReadSystem{
         cell[]=[[1.0,0.0,0.0],
                 [0.0,1.0,0.0],
                 [0.0,0.0,1.0]];
-        periodic[]=0;
+        periodic=CellPeriodic.None;
         _particles.length=initialCapacity;
         spaceGroup=null;
     }
@@ -461,6 +459,7 @@ Splitter!(T)splitStr(T,U)(T[] line,U[] toSkip){
 }
 /// reads the header of a car file
 /// http://hincklab.uthscsa.edu/~ahinck/html/soft_packs/msi_docs/insight980/formats980/File_Formats_1998.html
+/// periodic stuff to check, it looks strange
 ReadSystem readCarHeader(TextParser!(char) tp,ReadSystem sys=null){
     auto line=tp.nextLine();
     auto firstL="!BIOSYM archive 3"; // relax?
@@ -471,13 +470,13 @@ ReadSystem readCarHeader(TextParser!(char) tp,ReadSystem sys=null){
     if (! line2Re.test(line))
         tp.parseError("second line must be PBC=ON|OFF|2D'"~firstL~"'",__FILE__,__LINE__);
     switch(line2Re.match(1)){
-        case "ON","3D": sys.periodic[]=[1,1,1];
+        case "ON","3D": sys.periodic=CellPeriodic.xyz;
         break;
-        case "OFF": sys.periodic[]=[0,0,0];
+        case "OFF": sys.periodic=CellPeriodic.None;
         break;
-        case "2D": sys.periodic[]=[1,1,0];
+        case "2D": sys.periodic=(CellPeriodic.x|CellPeriodic.y);
         break;
-        case "1D": sys.periodic[]=[1,0,0];
+        case "1D": sys.periodic=CellPeriodic.x;
         break;
         default:
             tp.parseError("error unknown periodicity '"~line2Re.match(1)~"'",__FILE__,__LINE__);
@@ -503,13 +502,13 @@ ReadSystem readCarHeader(TextParser!(char) tp,ReadSystem sys=null){
     } else {
         sys.name=trim(line).dup;
     }
-    if (sys.periodic[2]==1){
+    if ((sys.periodic&CellPeriodic.z)!=0){
         line=tp.nextLine();
         if (line[0..3]!="PBC"){
             tp.parseError("expected PBC line with cell info",__FILE__,__LINE__);
         }
         bool fixedFormat=false;
-        if (sys.periodic[0]==1){
+        if ((sys.periodic&CellPeriodic.x)!=0){
             if (line.length>64 && isNumber(line[3..13]) && isNumber(line[13..23])
                 && isNumber(line[23..33]) && isNumber(line[33..43]) && isNumber(line[43..53])
                 && isNumber(line[53..63]))
@@ -539,7 +538,7 @@ ReadSystem readCarHeader(TextParser!(char) tp,ReadSystem sys=null){
                     }
                 }
             }
-        } else if (sys.periodic[0]==0 && sys.periodic[1]==1){
+        } else if (sys.periodic==(CellPeriodic.x|CellPeriodic.y)){
             if (line.length>64 && isNumber(line[3..13]) && isNumber(line[13..23])
                 && isNumber(line[23..33]))
             {
@@ -574,7 +573,7 @@ ReadSystem readCarHeader(TextParser!(char) tp,ReadSystem sys=null){
                     }
                 }
             }
-        } else if (sys.periodic[0]==0 && sys.periodic[1]==0 && sys.periodic[2]==1){
+        } else if (sys.periodic==CellPeriodic.z){
             real[6] params;
             params[1]=1; params[2]=1;
             params[3]=90; params[4]=90; params[5]=90;

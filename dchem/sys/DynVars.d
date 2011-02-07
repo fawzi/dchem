@@ -31,7 +31,7 @@ enum{
 /// setup as follow: init, update *Structs, possibly consolidateStructs, allocPools, possibly consolidate (normally done by DynamicsVarsStruct.freezeStructs)
 class DynPVectStruct(T){
     char[] name;
-    int[3] cellPeriod;
+    int cellPeriod; // ugly, here just to be able to alloca a cell meaningfully
     SegmentedArrayStruct posStruct;
     SegmentedArrayStruct orientStruct;
     SegmentedArrayStruct dofStruct;
