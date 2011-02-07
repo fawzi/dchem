@@ -5,7 +5,6 @@
         <meta charset="utf-8">
         <meta name="description" content="The dchem program homepage">
         <link rel="Shortcut Icon" type="image/ico" href="img/favicon.png">
-        <link rel="stylesheet" href="css/reset.css" type="text/css" media="screen">
         <link rel="stylesheet" href="css/style.css" type="text/css" media="screen">
         <link rel="stylesheet" href="css/queries/netbooks-tablets.css" type="text/css" media="screen and (max-width: 1007px)" />            
             
@@ -19,7 +18,7 @@
         <div id="wrap">
             <header>
                 <div class="inside">
-                    <h1>Dchem<span>explore reactions</span></h1> <!-- This line for @font-face presentational purposes only -->
+                    <h1>Dchem:<span>explore reactions</span></h1> <!-- This line for @font-face presentational purposes only -->
                     <nav>
                     </nav>
                 </div>
@@ -27,13 +26,25 @@
             <article>
                 <section>
                     <div class="inside">
-<p>Dchem is a program package that allows you to </p>
+<p>Dchem is a program package that allows you to explore the potential energy surface. It build a coarse incremental representation of the PES that is used to efficiently extend the exploration, and can be used for different kinds of analysis. The current version of the program is already quite general and can be applied to a large class of systems, in particular it can</p>
+
+<ul>
+    <li>identify minima and basins of attractions</li>
+    <li>find which minima are directly connected through barriers that are smaller than the explored threshold</li>
+    <li>subset a system to see only some degrees of freedom as active and to be explored</li>
+    <li>add constraints to force a given alignement</li>
+    <li>block the exploration of systems where particles "fly away"</li>
+</ul>
+
+<p>This is the first release of the program, there might still be bugs.</p>
+<p>Dchem needs the blip library, where it is also explained how to setup a D environment, and getting started with the development, but to simply use it you can also try to use one of the distribued binaries.</p>
                     </div>
                 </section>  
             </article>
             <aside>
                 <div class="inside">
 <p>The source code is available at <a href="https://github.com/fawzi/dchem">https://github.com/fawzi/dchem</a></p>
+<p>blip is available at <a href="http://fawzi.github.com/blip">http://fawzi.github.com/blip</a></p>
                 </div>
             </aside>
         </div>
