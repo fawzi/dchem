@@ -56,7 +56,7 @@ class SwapSymmNeighLooper:SymmNeighLooper{
         this.input=input;
         this.ctx=ctx;
     }
-    void loopOnNeighWithinT(T)(ParticleSys!(T)pSys,DynPVector!(T,XType)neigh,T epsilon,
+    void loopOnNeighWithinT(T)(ParticleSys!(T)pSys,DistOps distOps,DynPVector!(T,XType)neigh,T epsilon,
         int delegate(ref DynPVector!(T,XType))loopBody)
     {
         // sequential, non cached version
@@ -85,24 +85,24 @@ class SwapSymmNeighLooper:SymmNeighLooper{
         pSys.dynVars.x.pos+/
     }
     // aliases don't work reliably
-    void loopOnNeighWithin(ParticleSys!(Real)pSys,DynPVector!(Real,XType)neigh,Real epsilon,
+    void loopOnNeighWithin(ParticleSys!(Real)pSys,DistOps distOps,DynPVector!(Real,XType)neigh,Real epsilon,
         int delegate(ref DynPVector!(Real,XType))loopBody)
     {
-        loopOnNeighWithinT!(Real)(pSys,neigh,epsilon,loopBody);
+        loopOnNeighWithinT!(Real)(pSys,distOps,neigh,epsilon,loopBody);
     }
-    void loopOnNeighWithin(ParticleSys!(LowP)pSys,DynPVector!(LowP,XType)neigh,LowP epsilon,
+    void loopOnNeighWithin(ParticleSys!(LowP)pSys,DistOps distOps,DynPVector!(LowP,XType)neigh,LowP epsilon,
         int delegate(ref DynPVector!(LowP,XType))loopBody)
     {
-        loopOnNeighWithinT!(LowP)(pSys,neigh,epsilon,loopBody);
+        loopOnNeighWithinT!(LowP)(pSys,distOps,neigh,epsilon,loopBody);
     }
-    void loopOnNeighWithinReal(ParticleSys!(Real)pSys,DynPVector!(Real,XType)neigh,Real epsilon,
+    void loopOnNeighWithinReal(ParticleSys!(Real)pSys,DistOps distOps,DynPVector!(Real,XType)neigh,Real epsilon,
         int delegate(ref DynPVector!(Real,XType))loopBody)
     {
-        loopOnNeighWithinT!(Real)(pSys,neigh,epsilon,loopBody);
+        loopOnNeighWithinT!(Real)(pSys,distOps,neigh,epsilon,loopBody);
     }
-    void loopOnNeighWithinLowP(ParticleSys!(LowP)pSys,DynPVector!(LowP,XType)neigh,LowP epsilon,
+    void loopOnNeighWithinLowP(ParticleSys!(LowP)pSys,DistOps distOps,DynPVector!(LowP,XType)neigh,LowP epsilon,
         int delegate(ref DynPVector!(LowP,XType))loopBody)
     {
-        loopOnNeighWithinT!(LowP)(pSys,neigh,epsilon,loopBody);
+        loopOnNeighWithinT!(LowP)(pSys,distOps,neigh,epsilon,loopBody);
     }
 }

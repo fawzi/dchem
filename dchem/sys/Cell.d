@@ -154,11 +154,10 @@ class Cell(T)
     this(Matrix!(T,3,3) h,int periodicFlags=CellPeriodic.None){
         this(h,periodicFlags,Vector!(T,3).zero);
     }
-    this(Matrix!(T,3,3) h,int periodicFlags,Vector!(T,3) x0,bool hInvOk=false,CellFlag flags=CellFlag.Unknown){
+    this(Matrix!(T,3,3) h,int periodicFlags,Vector!(T,3) x0,CellFlag flags=CellFlag.Unknown){
         this.h=h;
         this.periodicFlags=periodicFlags;
-        this._hInv=hInv;
-        this.hInvOk=hInvOk;
+        this.hInvOk=false;
         this.x0=x0;
         this._flags=flags;
     }
@@ -214,16 +213,18 @@ class Cell(T)
     private void opMulAssign()(T scale){
         auto x=this;
         mixin(cellLoopMixin(["x"],"x*=scale;"));
+        hChanged();
     }
     private void opMulAssign(V)(Cell!(V) y){
         auto x=this;
         mixin(cellLoopMixin(["x","y"],"x *= y;"));
+        hChanged();
     }
     
     private void opSliceAssign(V)(ref Cell!(V) c2){
         periodicFlags=c2.periodicFlags;
         h.set(c2.h);
-        _hInv.set(c2._hInv);// recalculate inverse in case the precision of T> precision of V?
+        if (c2.hInvOk) _hInv.set(c2._hInv);// recalculate inverse in case the precision of T> precision of V?
         hInvOk=c2.hInvOk;
         x0.set(c2.x0);
         _flags=c2._flags;

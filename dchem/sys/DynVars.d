@@ -21,6 +21,7 @@ import blip.sync.Atomic;
 import blip.util.TemplateFu: nArgs;
 import blip.io.BasicIO;
 import blip.container.GrowableArray;
+import blip.stdc.stdlib: abort; // pippo
 enum{
     XType=0,
     DxType=1,
@@ -218,9 +219,10 @@ char[] dynPVectorOp(char[][]namesLocal,char[] op,bool cell=true,bool nonEq=false
                 }
             }
             res~=`))) {
+                abort(); // pippo
                 auto msg=collectAppender(delegate void(CharSink sink){
                     auto s=dumper(sink);
-                    s("non equivalent DynPVector in `~pp~`");`;
+                    s("non equivalent DynPVector in `~pp~` ");`;
             foreach (i,n; namesLocal){
                 res~=`
                     s("`~n~`:")(`~n~`)("\n");`;

@@ -196,26 +196,31 @@ class TestGrad:Sampler{
         CalculationContext c=m.getCalculator(true,null);
         size_t nDim;
         c.updateEF(true,true);
-        centralPointReal=c.refPSysReal();
-        if (centralPointReal!is null) {
+        auto precision=c.activePrecision();
+        switch (precision){
+        case Precision.Real:
+            centralPointReal=c.refPSysReal();
             centralPointReal=centralPointReal.dup(PSDupLevel.All);
+            centralPointReal[]=c.pSysWriterReal();
             nDim=centralPointReal.dynVars.dVarStruct.dualDxGroup.dataLength;
-            centralPointReal=centralPointReal.dup();
             dualForcesReal=centralPointReal.dynVars.dVarStruct.emptyDualDx();
             centralPointReal.toDualTSpace(centralPointReal.dynVars.mddx,dualForcesReal);
-        }
-        centralPointLowP=c.refPSysLowP();
-        if (centralPointLowP!is null) {
+            break;
+        case Precision.LowP:
+            centralPointLowP=c.refPSysLowP();
             centralPointLowP=centralPointLowP.dup(PSDupLevel.All);
+            centralPointLowP[]=c.pSysWriterLowP();
             nDim=centralPointLowP.dynVars.dVarStruct.dualDxGroup.dataLength;
-            centralPointLowP=centralPointLowP.dup();
             dualForcesLowP=centralPointLowP.dynVars.dVarStruct.emptyDualDx();
             centralPointLowP.toDualTSpace(centralPointLowP.dynVars.mddx,dualForcesLowP);
+            break;
+        default:
+            assert(0);
         }
         dirs=new DirInfo[](nDim);
         auto history=c.storeHistory();
         c.giveBack();
-
+        
         if (centralPointReal!is null){
             doAllChecks!(Real)();
         } else if (centralPointLowP!is null){

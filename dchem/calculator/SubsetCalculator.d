@@ -76,7 +76,7 @@ class FullSysNeighLooper:SymmNeighLooper{
         this.input=input;
         this.ctx=ctx;
     }
-    void loopOnNeighWithinT(V)(ParticleSys!(V)pSys,DynPVector!(V,XType)neigh,V epsilon,
+    void loopOnNeighWithinT(V)(ParticleSys!(V)pSys,DistOps dOps,DynPVector!(V,XType)neigh,V epsilon,
         int delegate(ref DynPVector!(V,XType))loopBody)
     {
         auto fullPSys=refPSysT!(V)(ctx.subContext).dup(PSDupLevel.EmptyDyn);
@@ -85,7 +85,7 @@ class FullSysNeighLooper:SymmNeighLooper{
         ctx.localToFull!(V)(pSys.dynVars.x,fullPSys.dynVars.x);
         ctx.localToFull!(V)(neigh,fullNeigh);
         auto fullLooper=ctx.symmNeighLooper();
-        fullLooper.loopOnNeighWithin(fullPSys,fullNeigh,epsilon,delegate int(ref DynPVector!(V,XType)fullN){
+        fullLooper.loopOnNeighWithin(fullPSys,ctx.distOps,fullNeigh,epsilon,delegate int(ref DynPVector!(V,XType)fullN){
             auto n=neigh.emptyCopy;
             ctx.fullToLocal(fullN,n);
             return loopBody(n);
@@ -95,26 +95,28 @@ class FullSysNeighLooper:SymmNeighLooper{
         fullPSys.release();
         fullNeigh.giveBack();
     }
+    alias loopOnNeighWithinT!(Real) pippo1;
+    alias loopOnNeighWithinT!(LowP) pippo2;
     // aliases don't work reliably
-    void loopOnNeighWithin(ParticleSys!(Real)pSys,DynPVector!(Real,XType)neigh,Real epsilon,
+    void loopOnNeighWithin(ParticleSys!(Real)pSys,DistOps dOps,DynPVector!(Real,XType)neigh,Real epsilon,
         int delegate(ref DynPVector!(Real,XType))loopBody)
     {
-        loopOnNeighWithinT!(Real)(pSys,neigh,epsilon,loopBody);
+        loopOnNeighWithinT!(Real)(pSys,dOps,neigh,epsilon,loopBody);
     }
-    void loopOnNeighWithin(ParticleSys!(LowP)pSys,DynPVector!(LowP,XType)neigh,LowP epsilon,
+    void loopOnNeighWithin(ParticleSys!(LowP)pSys,DistOps dOps,DynPVector!(LowP,XType)neigh,LowP epsilon,
         int delegate(ref DynPVector!(LowP,XType))loopBody)
     {
-        loopOnNeighWithinT!(LowP)(pSys,neigh,epsilon,loopBody);
+        loopOnNeighWithinT!(LowP)(pSys,dOps,neigh,epsilon,loopBody);
     }
-    void loopOnNeighWithinReal(ParticleSys!(Real)pSys,DynPVector!(Real,XType)neigh,Real epsilon,
+    void loopOnNeighWithinReal(ParticleSys!(Real)pSys,DistOps dOps,DynPVector!(Real,XType)neigh,Real epsilon,
         int delegate(ref DynPVector!(Real,XType))loopBody)
     {
-        loopOnNeighWithinT!(Real)(pSys,neigh,epsilon,loopBody);
+        loopOnNeighWithinT!(Real)(pSys,dOps,neigh,epsilon,loopBody);
     }
-    void loopOnNeighWithinLowP(ParticleSys!(LowP)pSys,DynPVector!(LowP,XType)neigh,LowP epsilon,
+    void loopOnNeighWithinLowP(ParticleSys!(LowP)pSys,DistOps dOps,DynPVector!(LowP,XType)neigh,LowP epsilon,
         int delegate(ref DynPVector!(LowP,XType))loopBody)
     {
-        loopOnNeighWithinT!(LowP)(pSys,neigh,epsilon,loopBody);
+        loopOnNeighWithinT!(LowP)(pSys,dOps,neigh,epsilon,loopBody);
     }
 }
 
