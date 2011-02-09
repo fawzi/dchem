@@ -255,7 +255,7 @@ class GoUpExplorer(T):EmptyExplorer!(T){
         rmPoint(p);
     }
     /// should speculatively calculate the gradient? PNetSilos version calls addEnergyEvalLocal
-    override bool speculativeGradientLocal(Point p,Real energy){
+    override bool speculativeGradientLocal(SKey k,Point p,Real energy){
         synchronized(toExploreMore){
             auto l=toExploreMore.length;
             if (l>0 && toExploreMore.peek.energy>=energy){

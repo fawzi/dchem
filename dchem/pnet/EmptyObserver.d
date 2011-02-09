@@ -23,6 +23,8 @@ class EmptyObserver(T): ExplorationObserverI!(T) {
     /// communicates to s that the given point is being explored
     /// pSize is the point size, flags the flags of the point
     void publishPoint(SKey s,SKey owner,Point point,PSysWriter!(T) pos,T pSize,uint flags){}
+    /// communicates that the given local point has been successfully published
+    void publishedLocalPoint(SKey s,Point point){}
     
     /// a neighbor point has calculated its energy (and not the gradient)
     /// neighbors should be restricted to s
@@ -39,6 +41,14 @@ class EmptyObserver(T): ExplorationObserverI!(T) {
     /// drops all calculation/storage connected with the given point, the point will be added with another key
     /// (called upon collisions)
     void publishCollision(SKey,Point){}
+    /// should speculatively calculate the gradient? PNetSilos version calls addEnergyEvalLocal
+    bool speculativeGradientLocal(SKey s,Point p,Real energy){
+        return false;
+    }
+    /// checks it local point is somehow invalid and should better be skipped
+    bool shouldFilterLocalPoint(SKey s,Point p){
+        return false;
+    }
     /// unique name to identify this observer (the different processes should use the same name)
     char[] name(){
         assert(0,"to be implemented in the subclasses"); // implement??

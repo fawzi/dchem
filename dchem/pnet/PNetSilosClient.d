@@ -179,6 +179,10 @@ class PNetSilosClient(T): LocalSilosI!(T){
     void publishPoint(SKey s,SKey owner,Point point,PSysWriter!(T) pos,T pSize,uint flags){
         connection.publishPoint(s,owner,point,pos,pSize,flags);
     }
+    /// communicates that the given local point has been successfully published
+    void publishedLocalPoint(SKey s,Point point){
+        connection.publishedLocalPoint(s,point);
+    }
     
     /// a neighbor point has calculated its energy (and not the gradient)
     /// neighbors should be restricted to s
@@ -225,8 +229,12 @@ class PNetSilosClient(T): LocalSilosI!(T){
         connection.evaluationFailed(s,p);
     }
     /// should speculatively calculate the gradient? PNetSilos version calls addEnergyEvalLocal
-    bool speculativeGradient(SKey s,Point p,Real energy){
-        return connection.speculativeGradient(s,p,energy);
+    bool speculativeGradientLocal(SKey s,Point p,Real energy){
+        return connection.speculativeGradientLocal(s,p,energy);
+    }
+    /// checks it local point is somehow invalid and should better be skipped
+    bool shouldFilterLocalPoint(SKey s,Point p){
+        return connection.shouldFilterLocalPoint(s,p);
     }
 
     // interface of a silos (storage) of the point network

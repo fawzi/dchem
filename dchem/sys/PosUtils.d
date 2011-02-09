@@ -9,6 +9,7 @@ import blip.math.Math;
 import dchem.sys.Cell;
 import dchem.sys.SegmentedArray;
 import blip.container.BulkArray;
+import blip.sync.Atomic;
 
 /// square of the euclidean norm of the distance between c1 and c2
 Real norm22Threshold(T)(T[]c1,T[]c2,Real threshold=Real.max){
@@ -20,6 +21,18 @@ Real norm22Threshold(T)(T[]c1,T[]c2,Real threshold=Real.max){
         }
     }
     return rAtt;
+}
+
+/// square of the euclidean norm of the distance between c1 and c2
+void addNorm22OneToN(T)(T[]c1,T[]c2,T[]dists){
+    assert(c1.length*dists.length==c2.length,"incorrect sizes");
+    Real rAtt=0;
+    size_t ii=0;
+    for(size_t iDist=0;iDist<dists.length;++iDist){
+        for(size_t iC1=0;iC1<c1.length;++iC1){
+            dists[iDist]+=pow2(c2[ii++]-c1[iC1]);
+        }
+    }
 }
 
 // distances between the atoms of two configurations for segmented arrays
@@ -532,7 +545,7 @@ Real nConfigDistKind(T)(T[]c1,T[]c2,Real threshold){
 }
 
 // distances between the atoms of two configurations in the orthorombic periodic case
-Real oConfigDistKind(T)(T[3]h_diag,int periodic,T[]c1,T[]c2,T threshold){
+Real oConfigDistKind(T)(T[3]h_diag,int periodic,T[]c1,T[]c2,Real threshold){
     assert(c1.length==c2.length,"the two configurations should have equal length");
     assert(c1.length%3==0,"the configurations should have a length that is a multiple of 3");
     auto pp=periodic;
@@ -640,9 +653,8 @@ Real configDistKind(T)(T[9]h,T[9]hInv,int periodic,T[]c1,T[]c2,Real threshold,Ce
 
 /// first image convention between the atoms of two configurations for segmented arrays
 void makeClose(W,U,V)(Cell!(W) cell,SegmentedArray!(U)c1,SegmentedArray!(V)c2){
-    static assert(is(W==T),"incompatible cell");
-    static assert(is(U==Vector!(T,3)),"c1 should contain vectors");
-    static assert(is(V==Vector!(T,3)),"c2 should contain vectors");
+    static assert(is(U==Vector!(W,3)),"c1 should contain vectors compatible with the cell "~W.stringof~" "~U.stringof);
+    static assert(is(V==Vector!(W,3)),"c2 should contain vectors compatible with the cell "~W.stringof~" "~V.stringof);
     assert(c1.kRange==c2.kRange,"different kRange of configurations");
     CellFlag flag=cell.flags;
     foreach(k;c1.kRange.pLoop){
@@ -841,15 +853,12 @@ void makeCloseKind(T)(T[9]h,T[9]hInv,int periodic,T[]c1,T[]c2,CellFlag flags=Cel
 
 /// wraps the vector deltaX so that it is inside the first cell
 void wrap(W,U)(Cell!(W) cell,SegmentedArray!(U)deltaX){
-    static assert(is(W==T),"incompatible cell");
-    static assert(is(U==Vector!(T,3)),"c1 should contain vectors");
+    static assert(is(U==Vector!(W,3)),"cell and array incompatible:"~W.stringof~" "~U.stringof);
     CellFlag flag=cell.flags;
-    foreach(k;c1.kRange.pLoop){
-        auto c1Arr=c1[k];
-        auto c2Arr=c2[k];
+    foreach(k;deltaX.kRange.pLoop){
+        auto c1Arr=deltaX[k];
         switch(flag){
         case CellFlag.NoCell:
-            nWrapKind(c1Arr.basicData());
             break;
         case CellFlag.Ortho:
             oWrapKind([cell.h.cgetRC!(0,0)(),cell.h.cgetRC!(1,1)(),cell.h.cgetRC!(2,2)()],cell.periodicFlags,
@@ -867,7 +876,6 @@ void wrap(W,U)(Cell!(W) cell,SegmentedArray!(U)deltaX){
 void wrapKind(W,U)(Cell!(W) cell,BulkArray!(U)c1Arr){
     switch(cell.flags){
     case CellFlag.NoCell:
-        nWrapKind(c1Arr.basicData());
         break;
     case CellFlag.Ortho:
         oWrapKind([cell.h.cgetRC!(0,0)(),cell.h.cgetRC!(1,1)(),cell.h.cgetRC!(2,2)()],cell.periodicFlags,
@@ -955,7 +963,7 @@ private char[] gWrapLoopMixin(int pp){
         } else {
             const T half=(cast(T)1)/(cast(T)2);
         }
-        auto lenAtt=c2.length/3;
+        auto lenAtt=c1.length/3;
         for(size_t i=0;i<lenAtt;++i){
             auto i3=3*i;
             auto p1=c1[i3];

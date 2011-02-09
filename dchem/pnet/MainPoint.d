@@ -1165,7 +1165,7 @@ class MainPoint(T):MainPointI!(T){
             if (calcE && (!calcF)){
                 if (localContext.gradEagerness()==GradEagerness.Speculative){
                     version(TrackPNet) logMsg(delegate void(CharSink s){ s("ask for extra gradient"); });
-                    calcMore=localContext.speculativeGradient(target,point,e);
+                    calcMore=localContext.speculativeGradientLocal(target,point,e);
                 } else {
                     version(TrackPNet) logMsg(delegate void(CharSink s){ s("will communicate energy"); });
                     localContext.addEnergyEvalLocal(target,point,e);

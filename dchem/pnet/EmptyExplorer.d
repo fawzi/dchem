@@ -47,6 +47,8 @@ class EmptyExplorer(T):ExplorerI!(T),SilosWorkerI!(T){
     /// communicates that the given point is being expored
     /// flags: communicate doubleEval?
     void publishPoint(SKey s,SKey owner,Point point,PSysWriter!(T) pos,T pSize,uint flags){ }
+    /// communicates that the given local point has been successfully published
+    void publishedLocalPoint(SKey s,Point point){}
     
     /// a neighbor point has calculated its energy (and not the gradient)
     void neighborHasEnergy(SKey s,Point[] neighbors,PointEMin energy){ }
@@ -72,7 +74,11 @@ class EmptyExplorer(T):ExplorerI!(T),SilosWorkerI!(T){
         return ReturnFlag.NoOp;
     }
     /// should speculatively calculate the gradient? PNetSilos version calls addEnergyEvalLocal
-    bool speculativeGradientLocal(Point p,Real energy){
+    bool speculativeGradientLocal(SKey s,Point p,Real energy){
+        return false;
+    }
+    /// checks it local point is somehow invalid and should better be skipped
+    bool shouldFilterLocalPoint(SKey s,Point p){
         return false;
     }
     void evaluationFailed(SKey k,Point p){ }

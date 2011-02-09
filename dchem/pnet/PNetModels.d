@@ -648,6 +648,8 @@ interface ExplorationObserverI(T){
     /// communicates to s that the given point is being explored
     /// pSize is the point size, flags the flags of the point
     void publishPoint(SKey s,SKey owner,Point point,PSysWriter!(T) pos,T pSize,uint flags);
+    /// communicates that the given local point has been successfully published
+    void publishedLocalPoint(SKey s,Point point);
     
     /// a neighbor point has calculated its energy (and not the gradient)
     /// neighbors should be restricted to s
@@ -664,6 +666,12 @@ interface ExplorationObserverI(T){
     /// drops all calculation/storage connected with the given point, the point will be added with another key
     /// (called upon collisions)
     void publishCollision(SKey,Point);
+    
+    /// should speculatively calculate the gradient? PNetSilos version calls addEnergyEvalLocal
+    bool speculativeGradientLocal(SKey s,Point p,Real energy);
+    /// checks it local point is somehow invalid and should better be skipped
+    bool shouldFilterLocalPoint(SKey s,Point p);
+    
     /// unique name to identify this observer (the different processes should use the same name)
     char[] name();
 }
@@ -749,8 +757,6 @@ interface ExplorerI(T):ExplorationObserverI!(T){
     /// should send an operation to evaluate to the master silos
     /// is called on all core silos in parallel
     ReturnFlag nextOp(void delegate(ExplorerI!(T)) availableAgain,int req);
-    /// should speculatively calculate the gradient? PNetSilos version calls addEnergyEvalLocal
-    bool speculativeGradientLocal(Point p,Real energy);
     /// called when an evaluation fails
     void evaluationFailed(SKey s,Point);
 }
@@ -778,7 +784,7 @@ interface PNetSilosI(T):ExplorationObserverI!(T){
     /// called when an evaluation fails
     void evaluationFailed(SKey s,Point);
     /// should speculatively calculate the gradient? PNetSilos version calls addEnergyEvalLocal
-    bool speculativeGradient(SKey s,Point p,Real energy);
+    bool speculativeGradientLocal(SKey s,Point p,Real energy);
 
     /// load (usage) of the silos s in some arbitrary units
     Real load(SKey s);
@@ -810,7 +816,11 @@ interface PNetSilosI(T):ExplorationObserverI!(T){
     // expose creation & bcast of points and update from dried points? merging should be done carefully to avoid problems... so for now you should do them via executeLocal...
 }
 
-const char[] silosMethodsStr=`increaseRunLevel|addEnergyEvalLocal|addGradEvalLocal|publishPoint|neighborHasEnergy|neighborHasGradient|finishedExploringPoint|didLocalPublish|publishCollision|updateEvalStatus|prepareNextOp:oneway|getNextOp|evaluationFailed|speculativeGradient|load|energyForPointsLocal|energyForPoints|mainPoint|mainPointLocal|pointOwner|nextFreeSilos|addPointToLocalNeighs|addNeighDirsToLocalPoint|executeLocally|propertiesDict|name|addEvalOp|activateExplorer`;
+const char[] silosMethodsStr=`increaseRunLevel|addEnergyEvalLocal|addGradEvalLocal|publishPoint|neighborHasEnergy|neighborHasGradient|`~
+    `finishedExploringPoint|didLocalPublish|publishCollision|updateEvalStatus|prepareNextOp:oneway|getNextOp|`~
+    `evaluationFailed|load|energyForPointsLocal|energyForPoints|mainPoint|mainPointLocal|`~
+    `pointOwner|nextFreeSilos|addPointToLocalNeighs|addNeighDirsToLocalPoint|executeLocally|propertiesDict|`~
+    `name|addEvalOp|activateExplorer|publishedLocalPoint|shouldFilterLocalPoint|speculativeGradientLocal`;
 
 /// how eagerly the gradient is calculated
 enum GradEagerness:uint{
@@ -989,5 +999,5 @@ mixin(genTypeTMixin("Explorer","explorer","LocalSilosI!(T)silos","silos"));
 /// list of the properties exposed by LocalSilosI (useful for ctfe)
 const char[] propertiesList=`discretizationStep|minProjectionResidual|sameDirCosAngle|minNormDual|minNormDualSelf
     minRealNormSelf0|minRealNormSelf1|maxNormDual|explorationSize|dirSize2|dirCartesianSize2
-    maxMoveInternal|maxMoveCartesian|maxMoveDual|maxNormCartesian|minMoveInternal|sameDirCosAngleCartesian|
+    maxMoveInternal|maxMoveCartesian|maxMoveDual|maxNormCartesian|minMoveInternal|sameDirCosAngleCartesian
     minRealNormSelf2|dirDualSize2|inDirCartesianScale2|zeroLen`;

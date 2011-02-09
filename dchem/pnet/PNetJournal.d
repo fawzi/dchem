@@ -66,7 +66,8 @@ class PNetJournal(T):ExplorationObserverI!(T){
     
     static struct JournalEntry{
         enum Kind:int{
-            None,PointGrad, StartPoint,FinishedPoint,PublishCollision,EvalE,NeighborHasEnergy,NeighborHasGradient
+            None,PointGrad, StartPoint,FinishedPoint,PublishCollision,EvalE,NeighborHasEnergy,
+            NeighborHasGradient,PublishedLocalPoint
         }
         Kind kind;
         uint flags;
@@ -89,6 +90,13 @@ class PNetJournal(T):ExplorationObserverI!(T){
             res.sKey=sKey;
             res.flags=flags;
             res.pos=pos;
+            res.point=p;
+            return res;
+        }
+        static JournalEntry PublishedLocalPoint(SKey sKey,Point p){
+            JournalEntry res;
+            res.kind=Kind.PublishedLocalPoint;
+            res.sKey=sKey;
             res.point=p;
             return res;
         }
@@ -226,6 +234,14 @@ class PNetJournal(T):ExplorationObserverI!(T){
             if (input.flushEachEntry) jSerial.flush();
         }
     }
+    /// communicates that the given local point has been published
+    /// flags: communicate doubleEval?
+    void publishedLocalPoint(SKey s,Point point){
+        this.serialLock.lock();
+        scope(exit){ this.serialLock.unlock(); }
+        jSerial(JournalEntry.PublishedLocalPoint(s,point));
+        if (input.flushEachEntry) jSerial.flush();
+    }
     /// finished exploring the given local point (remove it from the active points), bcasts finishedExploringPoint
     void finishedExploringPointLocal(SKey s,Point p,SKey owner){
         this.serialLock.lock();
@@ -277,6 +293,10 @@ class PNetJournal(T):ExplorationObserverI!(T){
             if (input.flushEachEntry) jSerial.flush();
         }
     }
+    /// should speculatively calculate the gradient? PNetSilos version calls addEnergyEvalLocal
+    bool speculativeGradientLocal(SKey s,Point p,Real energy){ return false; }
+    /// checks it local point is somehow invalid and should better be skipped
+    bool shouldFilterLocalPoint(SKey s,Point p){ return false; }
 }
 
 // object that loads some journals
