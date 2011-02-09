@@ -954,16 +954,20 @@ class SubsetContext:CalcContext{
         }
         subContext.updateEF(updateE,updateF);
         if (updateE){
-            mixin(withPSys(`pSys.dynVars.potentialEnergy=subContext.potentialEnergy;`));
+            mixin(withPSys(`
+            pSys.dynVars.potentialEnergy=subContext.potentialEnergy;
+            pSys.dynVars.potentialEnergyError=subContext.potentialEnergyError;`));
         }
         if (updateF){
             switch(activePrecision){
                 case Precision.Real:
                 pSysReal.dynVars.checkMddx;
+                pSysReal.dynVars.mddxError=subContext.pSysReal.dynVars.mddxError;
                 fullToLocal(subContext.pSysReal.dynVars.mddx,pSysReal.dynVars.mddx);
                 break;
                 case Precision.LowP:
                 pSysLowP.dynVars.checkMddx;
+                pSysLowP.dynVars.mddxError=subContext.pSysLowP.dynVars.mddxError;
                 fullToLocal(subContext.pSysLowP.dynVars.mddx,pSysLowP.dynVars.mddx);
                 break;
                 default:

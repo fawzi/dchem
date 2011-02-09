@@ -16,7 +16,7 @@ class EmptyObserver(T): ExplorationObserverI!(T) {
     /// (at the moment there is no support for dynamic adding/removal of silos)
     void increaseRunLevel(SKey s,RunLevel speed){}
     /// adds energy for a point local to s and bCasts addEnergyEval
-    void addEnergyEvalLocal(SKey s,Point p,Real energy){}
+    void addEnergyEvalLocal(SKey s,Point p,Real energy,Real energyError){}
     /// adds gradient value to a point that should be owned by s. Energy if not NAN replaces the previous value
     /// sets inProgress to false
     void addGradEvalLocal(SKey s,Point p,PSysWriter!(T) pSys){}
@@ -42,7 +42,7 @@ class EmptyObserver(T): ExplorationObserverI!(T) {
     /// (called upon collisions)
     void publishCollision(SKey,Point){}
     /// should speculatively calculate the gradient? PNetSilos version calls addEnergyEvalLocal
-    bool speculativeGradientLocal(SKey s,Point p,Real energy){
+    bool speculativeGradientLocal(SKey s,Point p,Real energy,Real energyError){
         return false;
     }
     /// checks it local point is somehow invalid and should better be skipped

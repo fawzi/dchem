@@ -17,6 +17,8 @@ import blip.serialization.Serialization;
 
 void clearEF(T)(ParticleSys!(T)pSys){
     pSys.potentialEnergy=T.init;
+    pSys.potentialEnergyError=T.init;
+    pSys.mddxError=T.init;
     if (pSys.dynVars.mddx.pos !is null)
         pSys.dynVars.mddx.pos[]=T.init;
     // clear also other forces??? for now assume no
@@ -33,7 +35,7 @@ class PoorManExecuter:CmdTemplateExecuter{
 }
 
 /// a context that uses the "poor man" approach: any method works, as long as it puts energy and forces in the appropriate
-/// files in the appropriated format
+/// files in the appropriated format (enegy,error),(error,forces)
 class PoorManContext:ExecuterContext{
     char[] energyFile="dchem.energy";
     char[] forceFile="dchem.forces";
@@ -46,6 +48,7 @@ class PoorManContext:ExecuterContext{
         scope(exit){ inF.shutdownInput(); }
         scope p=new TextParser!(char)(inF);
 
+        p(pSys.dynVars.mddxError);
         auto externalOrder=pSys.sysStruct.externalOrder;
         pSys.checkMddx();
         auto f=pSys.dynVars.mddx.pos;
@@ -56,7 +59,7 @@ class PoorManContext:ExecuterContext{
         }
         auto tok=p.nextToken();
         if (tok.length>0){
-            throw new Exception("force file '"~forceFile~"' is supposed to contain just the forces as sequence of numbers and nothing else, after reading all forces found '"~tok~"'.",__FILE__,__LINE__);
+            throw new Exception("force file '"~forceFile~"' is supposed to contain just the error on the forces and the forces as sequence of numbers and nothing else, after reading all forces found '"~tok~"'.",__FILE__,__LINE__);
         }
     }
     
@@ -72,14 +75,23 @@ class PoorManContext:ExecuterContext{
             scope inF=toReaderChar(templateH.targetDir.file(energyFile).input);
             scope(exit){ inF.shutdownInput(); }
             scope p=new TextParser!(char)(inF);
-            Real ePot;
-            p(ePot);
+            Real ePot,ePotErr;
+            p(ePot)(ePotErr);
             if (p.nextToken().length>0){
-                throw new Exception("Energy file '"~energyFile~" is supposed to contain only a single number.",__FILE__,__LINE__);
+                throw new Exception("Energy file '"~energyFile~" is supposed to contain only energy and its error.",__FILE__,__LINE__);
             }
-            if (pSysReal!is null) pSysReal.dynVars.potentialEnergy=ePot;
-            else if (pSysLowP!is null) pSysLowP.dynVars.potentialEnergy=ePot;
-            else assert(0);
+            switch(activePrecision) {
+            case Precision.Real:
+                pSysReal.dynVars.potentialEnergy=ePot;
+                pSysReal.dynVars.potentialEnergyError=ePotErr;
+                break;
+            case Precision.LowP:
+                pSysLowP.dynVars.potentialEnergy=ePot;
+                pSysLowP.dynVars.potentialEnergyError=ePotErr;
+                break;
+            default:
+                assert(0);
+            }
         }
     }
 }

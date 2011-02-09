@@ -212,6 +212,8 @@ interface CalculationContext{
     void changedDynVars(ChangeLevel changeLevel,Real diff);
     /// the total potential energy
     Real potentialEnergy();
+    /// the error on the potential energy
+    Real potentialEnergyError();
     /// changes the position (utility method)
     void posSet(SegmentedArray!(Vector!(Real,3)) newPos);
     /// gets the positions (utility method)

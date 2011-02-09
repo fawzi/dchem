@@ -679,23 +679,23 @@ final class PNetSilos(T): LocalSilosI!(T){
     }
     /// if the gradient should be speculatively calculated. calls addEnergyEvalLocal (in background)
     /// (should be called on the owner of the point only)
-    bool speculativeGradientLocal(SKey s,Point p,Real energy){
+    bool speculativeGradientLocal(SKey s,Point p,Real energy,Real energyError){
         if (hasKey(s)){
             bool res=false;
             int i=0;
             auto pAtt=mainPointL(p);
-            if (pAtt.setEnergy(energy)){
+            if (pAtt.setEnergy(energy,energyError)){
                 Task("didEnergyEval",&pAtt.didEnergyEval).autorelease.submit(defaultTask);
             }
             if ((pAtt.gFlags&GFlags.GradientInfo)==0){ // not already in progress or done...
                 notifyLocalObservers(delegate void(ExplorationObserverI!(T) obs){
-                    if (obs.speculativeGradientLocal(_key,p,energy)) res=true;
+                    if (obs.speculativeGradientLocal(_key,p,energy,energyError)) res=true;
                 });
             }
             if (res) res=pAtt.shouldCalculateGradient();
             return res;
         } else {
-            return silosForKey(s).speculativeGradientLocal(s,p,energy);
+            return silosForKey(s).speculativeGradientLocal(s,p,energy,energyError);
         }
     }
     
@@ -1072,17 +1072,17 @@ final class PNetSilos(T): LocalSilosI!(T){
     
     // ExplorationObserverI
     /// adds energy for a local point and bCasts addEnergyEval
-    void addEnergyEvalLocal(SKey s,Point p,Real energy){
+    void addEnergyEvalLocal(SKey s,Point p,Real energy,Real energyError){
         if (hasKey(s)) {
             auto mp=localPoints[p];
             if (mp.isLocalCopy){
                 throw new Exception("Local copy in PNetSilos.addEnergyEvalLocal",__FILE__,__LINE__);
             }
-            if (mp.setEnergy(energy)){
+            if (mp.setEnergy(energy,energyError)){
                 mp.didEnergyEval();
             }
         } else {
-            silosForKey(s).addEnergyEvalLocal(s,p,energy);
+            silosForKey(s).addEnergyEvalLocal(s,p,energy,energyError);
         }
     }
     /// adds gradient value to a point that should be owned. Energy if not NAN does not replace the previous value

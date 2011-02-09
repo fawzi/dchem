@@ -40,7 +40,7 @@ class EmptyExplorer(T):ExplorerI!(T),SilosWorkerI!(T){
     /// (at the moment there is no support for dynamic adding/removal of silos)
     void increaseRunLevel(SKey s,RunLevel newLevel){ }
     /// adds energy for a local point and bCasts addEnergyEval
-    void addEnergyEvalLocal(SKey s,Point p,Real energy){ }
+    void addEnergyEvalLocal(SKey s,Point p,Real energy,Real energyError){ }
     /// adds gradient value to a point that should be owned. Energy if not NAN replaces the previous value
     /// sets inProgress to false
     void addGradEvalLocal(SKey s,Point p,PSysWriter!(T) pSys){ }
@@ -74,7 +74,7 @@ class EmptyExplorer(T):ExplorerI!(T),SilosWorkerI!(T){
         return ReturnFlag.NoOp;
     }
     /// should speculatively calculate the gradient? PNetSilos version calls addEnergyEvalLocal
-    bool speculativeGradientLocal(SKey s,Point p,Real energy){
+    bool speculativeGradientLocal(SKey s,Point p,Real energy,Real energyError){
         return false;
     }
     /// checks it local point is somehow invalid and should better be skipped

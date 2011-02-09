@@ -1167,6 +1167,10 @@ struct DynamicsVars(T){
 
     /// potential energy of the system (NAN if unknown)
     Real potentialEnergy;
+    /// error on the energy (NAN if unknown)
+    Real potentialEnergyError;
+    /// error on the derivatives (NAN if unknown)
+    Real mddxError;
     /// position vector
     DynPVector!(T,XType) x;
     /// velocities vector

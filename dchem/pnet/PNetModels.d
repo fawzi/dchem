@@ -491,7 +491,7 @@ interface MainPointI(T){
     /// sets the energy
     /// is really perfomed only the first time (and returns true) 
     /// if true is returned you should call didEnergyEval
-    bool setEnergy(Real e);
+    bool setEnergy(Real e,Real eError);
     /// energy must be valid, should be called just once
     /// gFlags is updated at the end. Sends (and gets) the energy to all neighbors
     void didEnergyEval();
@@ -641,7 +641,7 @@ interface ExplorationObserverI(T){
     /// (at the moment there is no support for dynamic adding/removal of silos)
     void increaseRunLevel(SKey s,RunLevel speed);
     /// adds energy for a point local to s and bCasts addEnergyEval
-    void addEnergyEvalLocal(SKey s,Point p,Real energy);
+    void addEnergyEvalLocal(SKey s,Point p,Real energy,Real energyError);
     /// adds gradient value to a point that should be owned by s. Energy if not NAN replaces the previous value
     /// sets inProgress to false
     void addGradEvalLocal(SKey s,Point p,PSysWriter!(T) pSys);
@@ -668,7 +668,7 @@ interface ExplorationObserverI(T){
     void publishCollision(SKey,Point);
     
     /// should speculatively calculate the gradient? PNetSilos version calls addEnergyEvalLocal
-    bool speculativeGradientLocal(SKey s,Point p,Real energy);
+    bool speculativeGradientLocal(SKey s,Point p,Real energy,Real energyError);
     /// checks it local point is somehow invalid and should better be skipped
     bool shouldFilterLocalPoint(SKey s,Point p);
     
@@ -784,7 +784,7 @@ interface PNetSilosI(T):ExplorationObserverI!(T){
     /// called when an evaluation fails
     void evaluationFailed(SKey s,Point);
     /// should speculatively calculate the gradient? PNetSilos version calls addEnergyEvalLocal
-    bool speculativeGradientLocal(SKey s,Point p,Real energy);
+    bool speculativeGradientLocal(SKey s,Point p,Real energy,Real energyError);
 
     /// load (usage) of the silos s in some arbitrary units
     Real load(SKey s);

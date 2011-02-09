@@ -437,19 +437,25 @@ class ContextLimiterClient:Method{
 
 char[] withPSys(char[]op,char[]from=""){
     return `
-    if(`~from~`pSysReal !is null){
+    switch(`~from~`activePrecision){
+    case Precision.Real:
         auto pSys=`~from~`pSysReal;
         `~op~`
-    } else if (`~from~`pSysLowP !is null){
+        break;
+    case Precision.LowP:
         auto pSys=`~from~`pSysLowP;
         `~op~`
-    } else {
-        throw new Exception("no valid particle system in context "~`~from~`contextId~" trying to execute "~`~ctfe_rep(op)~`,__FILE__,__LINE__);
+        break;
+    default:
+        throw new Exception("unexpected precision "~`~from~`contextId~" trying to execute "~`~ctfe_rep(op)~`,__FILE__,__LINE__);
     }
     `;
 }
 const char[] calcCtxMethodsStr=
-`activePrecision|contextId|pSysWriterReal|pSysWriterLowP|pSysWriterRealSet|pSysWriterLowPSet|refPSysReal|refPSysLowP|constraintGen|sysStruct|changeLevel|changeLevelSet|changedDynVars|potentialEnergy|posSet|pos|dposSet|dpos|mddposSet|mddpos|updateEF|activate|deactivate|giveBack|stop|method|storeHistory|exportedUrl|executeLocally|logMsg1`;
+`activePrecision|contextId|pSysWriterReal|pSysWriterLowP|pSysWriterRealSet|pSysWriterLowPSet|`~
+`refPSysReal|refPSysLowP|constraintGen|sysStruct|changeLevel|changeLevelSet|changedDynVars|`~
+`potentialEnergy|potentialEnergyError|posSet|pos|dposSet|dpos|mddposSet|mddpos|updateEF|activate|deactivate|`~
+`giveBack|stop|method|storeHistory|exportedUrl|executeLocally|logMsg1`;
 
 /// represent a calculation that might have been aready partially setup, in particular the
 /// number of elements,... cannot change
@@ -574,6 +580,9 @@ class CalcContext:LocalCalculationContext{
     void changeLevelSet(ChangeLevel c) { _changeLevel=c; }
     Real potentialEnergy(){
         mixin(withPSys("return pSys.dynVars.potentialEnergy;"));
+    }
+    Real potentialEnergyError(){
+        mixin(withPSys("return pSys.dynVars.potentialEnergyError;"));
     }
     void posSet(SegmentedArray!(Vector!(Real,3)) newPos){
         mixin(withPSys("pSys.dynVars.x.pos[]=newPos;"));

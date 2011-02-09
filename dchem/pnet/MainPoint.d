@@ -578,6 +578,12 @@ class MainPoint(T):MainPointI!(T){
             return pos.dynVars.potentialEnergy;
         }
     }
+    /// energy of the current point
+    Real energyError(){
+        synchronized(this){
+            return pos.dynVars.potentialEnergyError;
+        }
+    }
     PointEMin pointEMin(){
         PointEMin res;
         synchronized(this){
@@ -1136,6 +1142,7 @@ class MainPoint(T):MainPointI!(T){
          (localContext.gradEagerness()>=GradEagerness.Always||(gFlags&GFlags.GradientInProgress)!=0||alwaysGrad));
         if (calcE||calcF){
             Real e=pos.dynVars.potentialEnergy;
+            Real eErr=pos.dynVars.potentialEnergyError;
             mixin(withPSys(`
             pSys.checkX();
             pSys.dynVars.x[]=pos.dynVars.x;`,"c."));
@@ -1144,6 +1151,7 @@ class MainPoint(T):MainPointI!(T){
             version(TrackPNet) logMsg(delegate void(CharSink s){ s("did calculate EF"); });
             if (calcE) {
                 pos.dynVars.potentialEnergy=c.potentialEnergy();
+                pos.dynVars.potentialEnergyError=c.potentialEnergyError();
                 if ((!isNaN(e))&&(e!=pos.dynVars.potentialEnergy)){
                     throw new Exception(collectAppender(delegate void(CharSink s){
                         dumper(s)("energy of point ")(point.data)(" changed from ")(e)(" to ")(pos.dynVars.potentialEnergy);
@@ -1152,9 +1160,12 @@ class MainPoint(T):MainPointI!(T){
             }
             if (calcF) {
                 pos.checkMddx();
-                mixin(withPSys(`pos.dynVars.mddx[]=pSys.dynVars.mddx;`,"c."));
+                mixin(withPSys(`
+                pos.dynVars.mddx[]=pSys.dynVars.mddx;
+                pos.dynVars.mddxError=pSys.dynVars.mddxError;`,"c."));
             }
             e=pos.dynVars.potentialEnergy;
+            eErr=pos.dynVars.potentialEnergyError;
             if (isNaN(e)){
                 throw new Exception(collectAppender(delegate void(CharSink s){
                     dumper(s)("invalid energy after calculation in point ")(point.data);
@@ -1165,10 +1176,10 @@ class MainPoint(T):MainPointI!(T){
             if (calcE && (!calcF)){
                 if (localContext.gradEagerness()==GradEagerness.Speculative){
                     version(TrackPNet) logMsg(delegate void(CharSink s){ s("ask for extra gradient"); });
-                    calcMore=localContext.speculativeGradientLocal(target,point,e);
+                    calcMore=localContext.speculativeGradientLocal(target,point,e,eErr);
                 } else {
                     version(TrackPNet) logMsg(delegate void(CharSink s){ s("will communicate energy"); });
-                    localContext.addEnergyEvalLocal(target,point,e);
+                    localContext.addEnergyEvalLocal(target,point,e,eErr);
                 }
             }
             if (calcMore){
@@ -1176,7 +1187,9 @@ class MainPoint(T):MainPointI!(T){
                 calcF=true;
                 pos.checkMddx();
                 c.updateEF(false,true);
-                mixin(withPSys(`pos.dynVars.mddx[]=pSys.dynVars.mddx;`,"c."));
+                mixin(withPSys(`
+                pos.dynVars.mddx[]=pSys.dynVars.mddx;
+                pos.dynVars.mddxError=pSys.dynVars.mddxError;`,"c."));
                 // update also the energy? it should not change...
             }
             if (calcF){
@@ -1384,7 +1397,7 @@ class MainPoint(T):MainPointI!(T){
     /// sets the energy
     /// is really perfomed only the first time (and returns true)
     /// if true is returned you should call didEnergyEval
-    bool setEnergy(Real e){
+    bool setEnergy(Real e,Real eError){
         assert(!isLocalCopy);
         if (isNaN(e)){
             throw new Exception(collectAppender(delegate void(CharSink s){
@@ -1397,6 +1410,7 @@ class MainPoint(T):MainPointI!(T){
             switch(oldGFlags&GFlags.EnergyInfo){
             case GFlags.None, GFlags.EnergyInProgress:
                 pos.dynVars.potentialEnergy=e;
+                pos.dynVars.potentialEnergyError=eError;
                 oldGFlags=gFlags;
                 _gFlags=(gFlags & ~GFlags.EnergyInfo)|GFlags.EnergyKnown;
                 break;
@@ -1432,7 +1446,7 @@ class MainPoint(T):MainPointI!(T){
         updateNeighE();
         auto s=owner();
         localContext.notifyLocalObservers(delegate void(ExplorationObserverI!(T)obs){
-            obs.addEnergyEvalLocal(s,point,energy);
+            obs.addEnergyEvalLocal(s,point,energy,energyError);
         });
     }
     /// gets the energies of the neighbors and broadcasts its own energy to them
@@ -1692,7 +1706,7 @@ class MainPoint(T):MainPointI!(T){
         localContext.notifyLocalObservers(delegate void(ExplorationObserverI!(T)obs){
             obs.addGradEvalLocal(ownr,point,pSysWriter(pos));
             if(newE) // we do it after to help when playing back the journal (skip???)
-                obs.addEnergyEvalLocal(ownr,point,energy);
+                obs.addEnergyEvalLocal(ownr,point,energy,energyError);
         });
         localNeigh.clearData();
         localNeighDir.clearData();

@@ -364,13 +364,16 @@ class Cp2kContext: ExecuterContext{
             }
             if (updateE){
                 connection.send("GET_E");
-                double[1] e;
+                double[2] e;
                 connection.recv(e);
                 pSysReal.dynVars.potentialEnergy=e[0];
+                pSysReal.dynVars.potentialEnergyError=e[1];
             }
             if (updateF){
                 connection.send("GET_F");
                 pSysReal.checkMddx();
+                double[1] fError;
+                connection.recv(fError);
                 connection.recv(pSysReal.dynVars.mddx.pos.support.basicData); // needs reordering?
             }
         }
