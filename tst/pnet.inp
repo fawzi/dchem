@@ -30,7 +30,7 @@ poorM:{
 
 MinE:{
     class:"dchem.MinEExplorer"
-    nEval:100
+    nEval:10
 }
 
 mullerB:{
@@ -75,13 +75,19 @@ spLogger:{
     logAllGFlagsChanges:1
 }
 
+printAttractors:{
+    class:dchem.PrintAttractors,
+}
+
 pnetSilos:{
     class:dchem.Silos,
     evaluator:{ class:Ref, name:limitedMB}
     evaluatorTask:{ class:Ref, name:workAsker}
     explorers:[ { class:Ref, name:MinE },{ class:Ref, name:journal },{ class:Ref, name:posELog } ]
     loaders:[{ class:Ref, name:initialPos },{ class:Ref, name: spLogger }]
+    finishers:[{ class:Ref, name: printAttractors }]
 }
+
 
 main:{class:Ref, name:pnetSilos}
 
