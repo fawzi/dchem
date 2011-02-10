@@ -1309,13 +1309,13 @@ class MainPoint(T):MainPointI!(T){
                 newFlags|=GFlags.CorrNeighValsSame;
             }
         }
-        if ((forceDir||specialDir==-1) && (isNaN(_attractor.energyThroughPoint) || _attractor.energyThroughPoint>e||
+        if ((forceDir||specialDir==-1||(!hasFrameOfRef)) && (isNaN(_attractor.energyThroughPoint) || _attractor.energyThroughPoint>e||
             (_attractor.throughPoint==eAndMin.point && _attractor.idThroughPoint<eAndMin.id)))
         {
             bool didChangeMinimum=false;
             synchronized(this){
-                if (isNaN(_attractor.energyThroughPoint) || _attractor.energyThroughPoint>e || 
-                    (_attractor.throughPoint==eAndMin.point && _attractor.idThroughPoint<eAndMin.id))
+                if ((forceDir||specialDir==-1||(!hasFrameOfRef))&&(isNaN(_attractor.energyThroughPoint) || _attractor.energyThroughPoint>e || 
+                    (_attractor.throughPoint==eAndMin.point && _attractor.idThroughPoint<eAndMin.id)))
                 {
                     _attractor.throughPoint=eAndMin.point;
                     _attractor.energyThroughPoint=eAndMin.energy;
@@ -1673,6 +1673,14 @@ class MainPoint(T):MainPointI!(T){
             localNeighDir.appendArr(neighDistances.data);
             neighbors.clearData();
             neighDistances.clearData();
+            // clear attractor (would be better to clear it only if it is in the "wrong" direction, change??)
+            if (_attractor.minimum !=  point){
+                _attractor.energyThroughPoint=Real.init;
+                _attractor.minimum=Point(0);
+                _attractor.throughPoint=Point(0);
+                ++(_attractor.id);
+                _attractor.idThroughPoint=0;
+            }
         }
         if (newGFlags!=oldGFlags){
             notifyGFlagChange(oldGFlags);
