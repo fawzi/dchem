@@ -19,7 +19,7 @@ alias bool delegate(ref BulkArray!(PIndex)a) PSubsetLooper;
 /// referencePKind in the level referenceLevel.
 /// instead of the indexes it is possible to select all particles of a given kind (with particleKind).
 /// The group repeats for all the particles of kind referencePKind. By default the reference is the whole system.
-class ParticleRange:InputField{
+class ParticleRange:InputElement{
     PIndex[]particles;
     PIndex particleStart;
     PIndex particleEnd;

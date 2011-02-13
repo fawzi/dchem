@@ -451,20 +451,25 @@ class MainPoint(T):MainPointI!(T){
     }
     /// atomic cas on the flags of this point
     uint gFlagsAtomicCAS(uint newVal,uint oldVal){
+        uint oVal;
         synchronized(this){
-            if (_gFlags==oldVal){
+            oVal=_gFlags;
+            if (oVal==oldVal){
                 _gFlags=newVal;
             }
-            return _gFlags;
         }
+        if (oVal==oldVal&&newVal!=oldVal) notifyGFlagChange(oVal);
+        return oVal;
     }
     /// atomic op on the flags of this point
     uint gFlagsAtomicOp(uint delegate(uint) op){
+        uint oldV;
         synchronized(this){
-            auto oldV=_gFlags;
+            oldV=_gFlags;
             _gFlags=op(oldV);
-            return oldV;
         }
+        if (_gFlags!=oldV) notifyGFlagChange(oldV);
+        return oldV;
     }
     /// explores the next direction, immediately marks it as in exploration
     /// returns direction 0 if the gradient has to be evaluated, an invalid direction if the current point is in evaluation,
@@ -472,26 +477,26 @@ class MainPoint(T):MainPointI!(T){
     /// if lastIsLast is true then the last direction (gradient) is explored as last
     PointAndDir exploreNext(FlagsArray methodDirs=null,bool lastIsLast=true){
         auto exploreFlags=DirFlags.Explored;
+        if ((gFlags&GFlags.HasRefFrame)==0) {
+            synchronized(this){
+                if ((gFlags&(GFlags.InProgress|GFlags.GradientEvaluated))==0){
+                    if (exploredDirs.atomicCAS(0,exploreFlags,DirFlags.Free)==DirFlags.Free){
+                        _gFlags|=GFlags.GradientInProgress;
+                        version(TrackPNet) logMsg(delegate void(CharSink s){
+                            dumper(s)("exploreNext will return self Eval");
+                        });
+                        return PointAndDir(point,0);
+                    } else if ((gFlags&GFlags.DoNotExplore)==0){
+                        throw new Exception("direction 0 taken, but no gradient eval in progress",__FILE__,__LINE__);
+                    }
+                }
+            }
+        }
         if ((gFlags&GFlags.DoNotExplore)!=0){
             version(TrackPNet) logMsg(delegate void(CharSink s){
                 dumper(s)("GFlags.DoNotExplore: exploreNext will return 0,invalidDir");
             });
             return PointAndDir(Point(0),invalidDir);
-        }
-        if ((gFlags&GFlags.HasRefFrame)==0) {
-            synchronized(this){
-                if ((gFlags&(GFlags.InProgress|GFlags.GradientEvaluated))==0){
-                    _gFlags|=GFlags.GradientInProgress;
-                    if (exploredDirs.atomicCAS(0,exploreFlags,DirFlags.Free)==DirFlags.Free){
-                        version(TrackPNet) logMsg(delegate void(CharSink s){
-                            dumper(s)("exploreNext will return self Eval");
-                        });
-                        return PointAndDir(point,0);
-                    } else {
-                        throw new Exception("direction 0 taken, but no gradient eval in progress",__FILE__,__LINE__);
-                    }
-                }
-            }
         }
         assert((gFlags&GFlags.PointBcasted)!=0);
         if ((gFlags&GFlags.InProgress)!=0){
