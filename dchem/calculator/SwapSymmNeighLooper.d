@@ -192,8 +192,6 @@ class SwapSymmNeighLooper:SymmNeighLooper{
         configAtt.giveBack();
         return res;
     }
-    alias loopOnNeighWithinT!(Real) pippo;
-    alias loopOnNeighWithinT!(LowP) pippo2;
     // aliases don't work reliably
     int loopOnNeighWithin(ParticleSys!(Real)pSys,DistOps distOps,DynPVector!(Real,XType)neigh,Real epsilon,
         int delegate(ref DynPVector!(Real,XType))loopBody)

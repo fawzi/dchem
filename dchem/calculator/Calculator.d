@@ -60,8 +60,6 @@ class NDistOps:DistOpsGen,DistOps{
     void wrapT(T)(ParticleSys!(T)pSys,DynPVector!(T,XType)deltaX){
         PosUtils.wrap(pSys.dynVars.x.cell,deltaX.pos);
     }
-    alias wrapT!(Real) pippo1;
-    alias wrapT!(LowP) pippo2;
     // alias don't work reliably :(
     // ditto
     void wrap(ParticleSys!(Real)pSys,DynPVector!(Real,XType)deltaX){
@@ -85,8 +83,6 @@ class NDistOps:DistOpsGen,DistOps{
     void makeCloseT(T)(ParticleSys!(T)pSys,DynPVector!(T,XType)x){
         PosUtils.makeClose(pSys.dynVars.x.cell,pSys.dynVars.x.pos,x.pos);
     }
-    alias makeCloseT!(Real) pippo3;
-    alias makeCloseT!(LowP) pippo4;
     void makeClose(ParticleSys!(Real)pSys,DynPVector!(Real,XType)x){
         makeCloseT!(Real)(pSys,x);
     }
@@ -139,8 +135,6 @@ class NDistOps:DistOpsGen,DistOps{
         }
         return totDist;
     }
-    alias reducedDistT!(Real) pippo5;
-    alias reducedDistT!(LowP) pippo6;
     Real reducedDist(ParticleSys!(Real)pSys,DynPVector!(Real,XType)x,Real threshold){
         return reducedDistT!(Real)(pSys,x,threshold);
     }
@@ -170,8 +164,6 @@ class NDistOps:DistOpsGen,DistOps{
         PosUtils.addNorm22OneToN(ord1.basicData,ord2.basicData,dists);
         PosUtils.addNorm22OneToN(dof1.basicData,dof2.basicData,dists);
     }
-    alias rDistOneToNT!(Real) pippo7;
-    alias rDistOneToNT!(LowP) pippo8;
     void rDistOneToN(ParticleSys!(Real)pSys,KindIdx k,
         BulkArray!(Vector!(Real,3))pos1,BulkArray!(Quaternion!(Real))ord1,BulkArray!(Real)dof1,
         BulkArray!(Vector!(Real,3))pos2,BulkArray!(Quaternion!(Real))ord2,BulkArray!(Real)dof2,
@@ -247,8 +239,6 @@ class NoSymmNeighLooper:SymmNeighLooperGen,SymmNeighLooper{
             return loopBody(neigh);
         }
     }
-    alias loopOnNeighWithinT!(Real) pippo;
-    alias loopOnNeighWithinT!(LowP) pippo2;
     // aliases don't work reliably
     int loopOnNeighWithin(ParticleSys!(Real)pSys,DistOps distOps,DynPVector!(Real,XType)neigh,Real epsilon,
         int delegate(ref DynPVector!(Real,XType))loopBody)

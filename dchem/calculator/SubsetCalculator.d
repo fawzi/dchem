@@ -96,8 +96,6 @@ class FullSysNeighLooper:SymmNeighLooper{
         fullNeigh.giveBack();
         return res;
     }
-    alias loopOnNeighWithinT!(Real) pippo1;
-    alias loopOnNeighWithinT!(LowP) pippo2;
     // aliases don't work reliably
     int loopOnNeighWithin(ParticleSys!(Real)pSys,DistOps dOps,DynPVector!(Real,XType)neigh,Real epsilon,
         int delegate(ref DynPVector!(Real,XType))loopBody)
