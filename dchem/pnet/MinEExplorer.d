@@ -15,6 +15,8 @@ import blip.util.LocalMem;
 import blip.parallel.mpi.MpiModels;
 import dchem.pnet.EmptyExplorer;
 import dchem.pnet.PointEvalOp;
+import blip.core.Array;
+import blip.bindings.ev.Libev:ev_time;
 
 class MinEExplorerDef:ExplorerGen{
     long nEval=long.max;

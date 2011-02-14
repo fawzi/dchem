@@ -10,7 +10,7 @@ import blip.serialization.Serialization;
 import tango.math.random.Random;
 import blip.rtest.RTest;
 import blip.sync.Atomic;
-import blip.math.Math:max,abs,pow2;
+import blip.math.Math:max,abs,pow2,sqrt;
 import tango.util.container.more.Heap;
 import blip.container.BatchedGrowableArray;
 import tango.util.container.HashSet;

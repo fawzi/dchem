@@ -15,6 +15,7 @@ import blip.util.LocalMem;
 import blip.parallel.mpi.MpiModels;
 import dchem.pnet.EmptyExplorer;
 import dchem.pnet.PointEvalOp;
+import blip.core.Array;
 
 class GoUpExplorerDef:ExplorerGen{
     long nEval=long.max;

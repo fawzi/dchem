@@ -16,6 +16,7 @@ import blip.time.Time;
 import blip.time.Clock;
 import blip.util.NotificationCenter;
 import dchem.calculator.CalculatorModels;
+import blip.math.Math:min,max,sqrt;
 import blip.math.IEEE;
 import blip.math.random.Random;
 import blip.container.Cache;
