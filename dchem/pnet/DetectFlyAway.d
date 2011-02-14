@@ -17,9 +17,13 @@ import blip.narray.NArray;
 import blip.container.BulkArray;
 import dchem.interpolate.Microsphere;
 import dchem.util.Rotate;
+import blip.io.FileStream;
 
+/// detects fly away, at the moment it is convex, should I also implement the better connectivity based solution?
 class DetectFlyAwayGen:SilosWorkerGen{
     bool earlyDetect=true;
+    char[] logBaseName;
+    bool flushEachPoint=true;
     Real threshold=3.0;
     InputField particles;
     this(){
@@ -27,6 +31,8 @@ class DetectFlyAwayGen:SilosWorkerGen{
     mixin myFieldMixin!();
     mixin(serializeSome("dchem.DetectFlyAway",`
     earlyDetect: if the configurations detected should be removed early (before trying to calculate them) (true)
+    logBaseName: if given logs the points that have "flown away" to a file that starts with logBaseName
+    flushEachPoint: if each point should be immediately flushed (true)
     threshold: threshold that detects particles flying away (3.0)
     particles: the particles to monitor (if not given uses all the particles)`));
     mixin printOut!();
@@ -54,16 +60,20 @@ class DetectFlyAway(T):EmptyObserver!(T),SilosWorkerI!(T){
     DetectFlyAwayGen input;
     size_t lastNParticles=0;
     LocalSilosI!(T) silos;
+    OutStreamI log;
     
     this(DetectFlyAwayGen input){
         this.input=input;
+        if (input.logBaseName.length>0){
+            log=outfileStrSync(input.logBaseName~"-"~silos.name~"-Filtred.Log",WriteMode.WriteAppend);
+        }
     }
     
     void workOn(LocalSilosI!(T) silos){
         silos=silos;
     }
     
-    bool isFlyingAway(U=T)(ParticleSys!(T) pSys,DynPVector!(U,XType)xV){
+    bool isFlyingAway(U=T)(SKey sKey,Point point,ParticleSys!(T) pSys,DynPVector!(U,XType)xV){
         Vector!(U,3)[256] buf;
         auto xyz=lGrowableArray(buf,0,GASharing.Local);
         scope(exit) xyz.deallocData();
@@ -81,10 +91,11 @@ class DetectFlyAway(T):EmptyObserver!(T),SilosWorkerI!(T){
         if (xyz.length==0) return false;
         auto xyzOrig=a2NA!(U,2)(bulkArray(xyz.data).basicData,false,true,[3,-1]);
         auto toSort=empty!(U)([3,xyz.length]);
-        auto x=toSort[Range(0,-1),0].data;
-        auto y=toSort[Range(0,-1),0].data;
-        auto z=toSort[Range(0,-1),0].data;
-        assert(x.length==xyz.length && y.length==xyz.length && z.length==xyz.length);
+        U[][3] xyzSplit;
+        for (int idim=0;idim<3;++idim){
+            xyzSplit[idim]=toSort[Range(0,-1),idim].data;
+            assert(xyzSplit[idim].length==xyz.length);
+        }
         auto dirs=default3SphereDirs.asType!(U)();
         auto startRot=default3SphereROrigin;
         foreach(idir,dir;dirs){
@@ -92,32 +103,26 @@ class DetectFlyAway(T):EmptyObserver!(T),SilosWorkerI!(T){
             if (dir[0]!=1 || startRot[idir]!=0){
                 rotateEiV(startRot[idir],dir,toSort);
             }
-            sort(x);
-            sort(y);
-            sort(z);
             auto threshold=input.threshold;
-            {
-                auto oldV=x[0];
-                for(size_t i=1;i<x.length;++i){
-                    if (x[i]-oldV>threshold){
+            for (int idim=0;idim<3;++idim){
+                sort(xyzSplit[idim]);
+                auto xx=xyzSplit[idim];
+                auto oldV=xx[0];
+                for(size_t i=1;i<xx.length;++i){
+                    if (xx[i]-oldV>threshold){
+                        if (log!is null){
+                            auto mDir=zeros!(U)(3);
+                            mDir[idim]=cast(U)1;
+                            rotateEiV(startRot[idir],dir,mDir);
+                            auto mid=(xx[i]+oldV)/2;
+                            sinkTogether(log.charSink(),delegate void(CharSink s){
+                                dumper(s)(sKey)(" \t")(point)(" \t")(mDir[0])(" \t")(mDir[1])(" \t")(mDir[2])(" \t")
+                                    (mid*mDir[0])(" \t")(mid*mDir[1])(" \t")(mid*mDir[2])("\n");
+                            });
+                        }
                         return true;
                     }
-                }
-            }
-            {
-                auto oldV=y[0];
-                for(size_t i=1;i<y.length;++i){
-                    if (y[i]-oldV>threshold){
-                        return true;
-                    }
-                }
-            }
-            {
-                auto oldV=z[0];
-                for(size_t i=1;i<z.length;++i){
-                    if (z[i]-oldV>threshold){
-                        return true;
-                    }
+                    oldV=xx[i];
                 }
             }
         }
@@ -125,11 +130,11 @@ class DetectFlyAway(T):EmptyObserver!(T),SilosWorkerI!(T){
     }
     
     /// checks it local point is somehow invalid and should better be skipped
-    bool shouldFilterLocalPoint(SKey s,Point p){
+    override bool shouldFilterLocalPoint(SKey s,Point p){
         if (input.earlyDetect){
             auto m=silos.mainPointL(p);
             alias isFlyingAway!(T) tt;
-            if (isFlyingAway!(T)(m.pos,m.pos.dynVars.x)){
+            if (isFlyingAway!(T)(s,p,m.pos,m.pos.dynVars.x)){
                 return true;
             }
         }
@@ -137,11 +142,19 @@ class DetectFlyAway(T):EmptyObserver!(T),SilosWorkerI!(T){
     }
     
     /// communicates that the given local point has been successfully published
-    void publishedLocalPoint(SKey s,Point point){
+    override void publishedLocalPoint(SKey s,Point point){
         auto m=silos.mainPointL(point);
-        if (isFlyingAway!(T)(m.pos,m.pos.dynVars.x)){
+        if (isFlyingAway!(T)(s,point,m.pos,m.pos.dynVars.x)){
             m.gFlagsAtomicOp(delegate uint(uint a){ return (a|GFlags.DoNotExplore);});
         }
     }
     
+    override void increaseRunLevel(SKey s,RunLevel level){
+        if (log!is null){
+            log.flush();
+            if (level>=RunLevel.Stopped){
+                log.close();
+            }
+        }
+    }
 }

@@ -639,7 +639,7 @@ interface ExplorationObserverI(T){
     }
     /// increases the runLevel on all silos, i.e. you should call it only with SKeyVal.All
     /// (at the moment there is no support for dynamic adding/removal of silos)
-    void increaseRunLevel(SKey s,RunLevel speed);
+    void increaseRunLevel(SKey s,RunLevel level);
     /// adds energy for a point local to s and bCasts addEnergyEval
     void addEnergyEvalLocal(SKey s,Point p,Real energy,Real energyError);
     /// adds gradient value to a point that should be owned by s. Energy if not NAN replaces the previous value
