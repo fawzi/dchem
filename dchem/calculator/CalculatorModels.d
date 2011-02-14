@@ -18,9 +18,11 @@ import blip.util.NotificationCenter;
 import dchem.sys.PIndexes;
 import blip.BasicModels;
 import dchem.sys.Constraints;
+import dchem.sys.DynVars;
 import tango.io.vfs.model.Vfs;
 import dchem.input.WriteOut;
 import blip.parallel.mpi.MpiModels;
+import blip.container.BulkArray;
 
 /// a task that can be excuted locally on the calculation context
 interface RemoteCCTask: Serializable{
@@ -58,6 +60,122 @@ enum Precision{
     Real,
     LowP
 }
+
+/// input object that generates the objects that defines the macroscopic distance space (DistOps)
+interface DistOpsGen:InputElement{
+    DistOps DistOpsForContext(CalculationContext);
+}
+/// an object that handles the various distance measures, and distance related things
+/// it defines the macroscopic distance space, the microscopic distance space (for small changes)
+/// is defined in ParticleSys by its overlap, here one defines things like PBC
+interface DistOps{
+    /// wraps deltaX (a difference between two X points) so that it is as small as possible
+    /// compatibly with the implicit symmetries (but not with the explicit ones)
+    void wrap(ParticleSys!(Real)pSys,DynPVector!(Real,XType)deltaX);
+    /// ditto
+    void wrap(ParticleSys!(LowP)pSys,DynPVector!(LowP,XType)deltaX);
+    /// ditto
+    void wrapReal(ParticleSys!(Real)pSys,DynPVector!(Real,XType)deltaX);
+    /// ditto
+    void wrapLowP(ParticleSys!(LowP)pSys,DynPVector!(LowP,XType)deltaX);
+    
+    /// get the periodic copy of x that is closest (in first image convetion, i.e. in the h_inv distance)
+    /// to pSys (this might be different than the closest one for very skewed h)
+    void makeClose(ParticleSys!(Real)pSys,DynPVector!(Real,XType)x);
+    /// ditto
+    void makeClose(ParticleSys!(LowP)pSys,DynPVector!(LowP,XType)x);
+    /// ditto
+    void makeCloseReal(ParticleSys!(Real)pSys,DynPVector!(Real,XType)x);
+    /// ditto
+    void makeCloseLowP(ParticleSys!(LowP)pSys,DynPVector!(LowP,XType)x);
+    
+    /// distance in the reduced units, this is the norm2 distance between x and pSys.dynVars.x after a makeClose
+    /// or deltaX.norm2 after calling wrap, where deltaX=x-pSys.dynVars.x
+    /// distances larger than threshold might not be computed accurately
+    Real reducedDist(ParticleSys!(Real)pSys,DynPVector!(Real,XType)x,Real threshold=Real.max);
+    /// ditto
+    Real reducedDist(ParticleSys!(LowP)pSys,DynPVector!(LowP,XType)x,Real threshold=Real.max);
+    /// ditto
+    Real reducedDistReal(ParticleSys!(Real)pSys,DynPVector!(Real,XType)x,Real threshold=Real.max);
+    /// ditto
+    Real reducedDistLowP(ParticleSys!(LowP)pSys,DynPVector!(LowP,XType)x,Real threshold=Real.max);
+    
+    /// distance in reduced units between *one* particle of kinf k at pos1,ord1,dof1, and possibly many
+    /// particles of the same kind at pos2,ord2,dof2
+    void rDistOneToN(ParticleSys!(Real)pSys,KindIdx k,
+        BulkArray!(Vector!(Real,3))pos1,BulkArray!(Quaternion!(Real))ord1,BulkArray!(Real)dof1,
+        BulkArray!(Vector!(Real,3))pos2,BulkArray!(Quaternion!(Real))ord2,BulkArray!(Real)dof2,
+        Real[] dists);
+    /// ditto
+    void rDistOneToN(ParticleSys!(LowP)pSys,KindIdx k,
+        BulkArray!(Vector!(LowP,3))pos1,BulkArray!(Quaternion!(LowP))ord1,BulkArray!(LowP)dof1,
+        BulkArray!(Vector!(LowP,3))pos2,BulkArray!(Quaternion!(LowP))ord2,BulkArray!(LowP)dof2,
+        LowP[] dists);
+    /// ditto
+    void rDistOneToNReal(ParticleSys!(Real)pSys,KindIdx k,
+        BulkArray!(Vector!(Real,3))pos1,BulkArray!(Quaternion!(Real))ord1,BulkArray!(Real)dof1,
+        BulkArray!(Vector!(Real,3))pos2,BulkArray!(Quaternion!(Real))ord2,BulkArray!(Real)dof2,
+        Real[] dists);
+    /// ditto
+    void rDistOneToNLowP(ParticleSys!(LowP)pSys,KindIdx k,
+        BulkArray!(Vector!(LowP,3))pos1,BulkArray!(Quaternion!(LowP))ord1,BulkArray!(LowP)dof1,
+        BulkArray!(Vector!(LowP,3))pos2,BulkArray!(Quaternion!(LowP))ord2,BulkArray!(LowP)dof2,
+        LowP[] dists);
+    
+    /// full (cartesian) distance, this is the reducedDist in the full system using cartesian units
+    /// in general it might be expensive to calculate, or be not better than the 
+    /// if threshold is different from 0, then as soon as the distance is detected to be larger than it
+    /// it is returned, which might be quicker if one does not care when for the exact value of distances
+    /// larger than threshold
+    Real fullDist(ParticleSys!(Real)pSys,DynPVector!(Real,XType)x,Real threshold=Real.max);
+    /// ditto
+    Real fullDist(ParticleSys!(LowP)pSys,DynPVector!(LowP,XType)x,Real threshold=Real.max);
+    /// ditto
+    Real fullDistReal(ParticleSys!(Real)pSys,DynPVector!(Real,XType)x, Real threshold=Real.max);
+    /// ditto
+    Real fullDistLowP(ParticleSys!(LowP)pSys,DynPVector!(LowP,XType)x, Real threshold=Real.max);
+}
+
+/// input object that generates the explicit symmetries (SymmNeighLoopers)
+interface SymmNeighLooperGen:InputElement{
+    SymmNeighLooper symmNeighLooperForContext(CalculationContext);
+}
+/// an object that loops on all explicit symmetry equivalent structures generated by neigh that
+/// are within epsilon of pSys (the exact meaning of epsilon is up to the specific operation)
+interface SymmNeighLooper{
+    /// loops on all explicit symmetry equivalent structures generated by neigh that are within epsilon of pSys
+    int loopOnNeighWithin(ParticleSys!(Real)pSys,DistOps dOps,DynPVector!(Real,XType)neigh,Real epsilon,
+        int delegate(ref DynPVector!(Real,XType))loopBody);
+    /// ditto
+    int loopOnNeighWithin(ParticleSys!(LowP)pSys,DistOps dOps,DynPVector!(LowP,XType)neigh,LowP epsilon,
+        int delegate(ref DynPVector!(LowP,XType))loopBody);
+    /// ditto
+    int loopOnNeighWithinReal(ParticleSys!(Real)pSys,DistOps dOps,DynPVector!(Real,XType)neigh,Real epsilon,
+        int delegate(ref DynPVector!(Real,XType))loopBody);
+    /// ditto
+    int loopOnNeighWithinLowP(ParticleSys!(LowP)pSys,DistOps dOps,DynPVector!(LowP,XType)neigh,LowP epsilon,
+        int delegate(ref DynPVector!(LowP,XType))loopBody);
+}
+/// helper structure to support nicer foreach looping
+struct SymmNeighLooperHelper(T){
+    SymmNeighLooper looper;
+    ParticleSys!(T)pSys;
+    DynamicsVars!(T)neigh;
+    T epsilon;
+    int opApply(int delegate(ref DynPVector!(T,XType))loopBody){
+        return looper.loopOnNeighWithin(pSys,neigh,epsilon,loopBody);
+    }
+}
+/// function to support nicer foreach syntax for loop on symmetry equivalent neighbors
+SymmNeighLooperHelper!(T) symmNeighLooper(T,U)(SymmNeighLooper looper,ParticleSys!(T)pSys,DynPVector!(T,XType)neigh,U epsilon){
+    SymmNeighLooperHelper!(T) lHelper;
+    lHelper.looper=looper;
+    lHelper.pSys=pSys;
+    lHelper.neigh=neigh;
+    lHelper.epsilon=cast(T)epsilon;
+    return lHelper;
+}
+
 /// calculation that might have been aready partially setup, in particular the
 /// number of elements,... cannot change
 /// these method can be called from a remote computer, so no overload, and thus
@@ -76,10 +194,11 @@ interface CalculationContext{
     void pSysWriterRealSet(PSysWriter!(Real));
     /// the particle system based on low precision numbers (if activePrecision is LowP)
     void pSysWriterLowPSet(PSysWriter!(LowP));
-    /// a sample particle system based on real numbers (if activePrecision is Real)
-    /// creation of this might be expensive, and changing it might change the internal values or not
+    /// a sample particle system based on real numbers
+    /// creation of this might be expensive, and it might be empty or not update the real PSys
     ParticleSys!(Real) refPSysReal();
-    /// the particle system based on low precision numbers (if activePrecision is LowP)
+    /// the particle system based on low precision numbers
+    /// creation of this might be expensive, and it might be empty or not update the real PSys
     ParticleSys!(LowP) refPSysLowP();
     /// the generator for the constraints of this context
     ConstraintGen constraintGen();
@@ -93,6 +212,8 @@ interface CalculationContext{
     void changedDynVars(ChangeLevel changeLevel,Real diff);
     /// the total potential energy
     Real potentialEnergy();
+    /// the error on the potential energy
+    Real potentialEnergyError();
     /// changes the position (utility method)
     void posSet(SegmentedArray!(Vector!(Real,3)) newPos);
     /// gets the positions (utility method)
@@ -130,6 +251,16 @@ interface CalculationContext{
     void logMsg1(char[]);
 }
 
+ParticleSys!(T) refPSysT(T)(CalculationContext ctx){
+    static if(is(T==LowP)){
+        return ctx.refPSysLowP();
+    } else static if (is(T==Real)){
+        return ctx.refPSysReal();
+    } else {
+        static assert(0,"unexpected type "~T.stringof);
+    }
+}
+
 /// represent the local view to a calculation that might have been aready partially setup, in particular the
 /// number of elements,... cannot change, gives direct access to modifiable ParticleSys, and more
 interface LocalCalculationContext: CalculationContext{
@@ -141,6 +272,10 @@ interface LocalCalculationContext: CalculationContext{
     ConstraintI!(Real) constraintsReal();
     /// the constraints of this context (if activePrecision is LowP)
     ConstraintI!(LowP) constraintsLowP();
+    /// the symmNeighLooper for this context
+    SymmNeighLooper symmNeighLooper();
+    /// the distance operations for this context
+    DistOps distOps();
     /// notification central of the current particle system & context.
     /// will receive activation, deactivation & destruction notifications
     NotificationCenter nCenter();

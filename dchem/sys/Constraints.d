@@ -261,7 +261,8 @@ interface FunctionVarGen{
 }
 
 mixin(genTypeTMixin("FunctionVar","fVar","ParticleSys!(Real)templatePos","templatePos"));
-/+
+
+/+ // to do
 class DistanceConstraint{
 }
 

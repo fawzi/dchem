@@ -376,7 +376,7 @@ ParticleSys!(T) artificialPSys(T)(size_t nPos, size_t nOrient,size_t nDof,
     pSys.checkX();
     Matrix!(T,3,3) h=Matrix!(T,3,3).identity;
 
-    pSys.dynVars.x.cell=new Cell!(T)(h,[0,0,0],Vector!(T,3).zero);
+    pSys.dynVars.x.cell=new Cell!(T)(h,CellPeriodic.None,Vector!(T,3).zero);
     
     auto posV=pSys.dynVars.x;
     posV.nullCell[]=0;

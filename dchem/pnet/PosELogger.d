@@ -99,7 +99,7 @@ class PosELogger(T):EmptyObserver!(T){
     void increaseRunLevel(SKey s,RunLevel rLevel){
     }
     /// adds energy for a local point and bCasts addEnergyEval
-    void addEnergyEvalLocal(SKey key,Point p,Real energy){
+    void addEnergyEvalLocal(SKey key,Point p,Real energy,Real energyError){
         try{
             this.serialLock.lock();
             scope(exit){ this.serialLock.unlock(); }

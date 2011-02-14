@@ -21,6 +21,7 @@ import blip.sync.Atomic;
 import blip.util.TemplateFu: nArgs;
 import blip.io.BasicIO;
 import blip.container.GrowableArray;
+
 enum{
     XType=0,
     DxType=1,
@@ -31,7 +32,7 @@ enum{
 /// setup as follow: init, update *Structs, possibly consolidateStructs, allocPools, possibly consolidate (normally done by DynamicsVarsStruct.freezeStructs)
 class DynPVectStruct(T){
     char[] name;
-    int[3] cellPeriod;
+    int cellPeriod; // ugly, here just to be able to alloca a cell meaningfully
     SegmentedArrayStruct posStruct;
     SegmentedArrayStruct orientStruct;
     SegmentedArrayStruct dofStruct;
@@ -220,7 +221,7 @@ char[] dynPVectorOp(char[][]namesLocal,char[] op,bool cell=true,bool nonEq=false
             res~=`))) {
                 auto msg=collectAppender(delegate void(CharSink sink){
                     auto s=dumper(sink);
-                    s("non equivalent DynPVector in `~pp~`");`;
+                    s("non equivalent DynPVector in `~pp~` ");`;
             foreach (i,n; namesLocal){
                 res~=`
                     s("`~n~`:")(`~n~`)("\n");`;
@@ -467,8 +468,8 @@ struct DynPVector(T,int group){
         if (cell!is null){
             if (idx<9){
                 cell=cell.dup(); // eccessive copying??? introduce ref counting and avoid copying if unique?
-                cell.hInvOk=false;
                 cell.h.cell[idx]=val;
+                cell.hChanged();
                 return;
             }
             idx-=9;
@@ -1165,6 +1166,10 @@ struct DynamicsVars(T){
 
     /// potential energy of the system (NAN if unknown)
     Real potentialEnergy;
+    /// error on the energy (NAN if unknown)
+    Real potentialEnergyError;
+    /// error on the derivatives (NAN if unknown)
+    Real mddxError;
     /// position vector
     DynPVector!(T,XType) x;
     /// velocities vector

@@ -671,6 +671,54 @@ interface HiddenVars:Serializable{
     void updateTo(ParticleSys!(LowP)newP);
 }
 
+/// a pool for commonly used particle properties
+struct CommonParticleProperties{
+    SegArrMemMap!(LowP) poolLowPParticleProperty;
+    SegArrMemMap!(Real) poolRealParticleProperty;
+    SegArrMemMap!(int)  poolIntParticleProperty;
+    SegArrMemMap!(long) poolLongParticleProperty;
+    
+    void reallocWithParticleStruct(SegmentedArrayStruct pStruct){
+        if (poolLowPParticleProperty!is null) poolLowPParticleProperty.rmUser();
+        if (poolRealParticleProperty!is null) poolRealParticleProperty.rmUser();
+        if (poolIntParticleProperty!is null)  poolIntParticleProperty.rmUser();
+        if (poolLongParticleProperty!is null) poolLongParticleProperty.rmUser();
+        poolLowPParticleProperty=new SegArrMemMap!(LowP)(pStruct);
+        poolRealParticleProperty=new SegArrMemMap!(Real)(pStruct);
+        poolIntParticleProperty =new SegArrMemMap!(int )(pStruct);
+        poolLongParticleProperty=new SegArrMemMap!(long)(pStruct);
+        poolIntParticleProperty.consolidate(poolLowPParticleProperty);
+        poolIntParticleProperty.consolidate(poolRealParticleProperty);
+        poolLongParticleProperty.consolidate(poolLowPParticleProperty);
+        poolLongParticleProperty.consolidate(poolRealParticleProperty);
+    }
+    SegmentedArray!(T) particlePropertyT(T)(){
+        static if (is(T==LowP)){
+            return poolLowPParticleProperty.newArray();
+        } else static if (is(T==Real)){
+            return poolRealParticleProperty.newArray();
+        } else static if (is(T==int)){
+            return poolIntParticleProperty.newArray();
+        } else static if (is(T==long)){
+            return poolLongParticleProperty.newArray();
+        } else {
+            static assert(0,T.stringof~" not supported");
+        }
+    }
+    CommonParticleProperties dup(){
+        if (poolLowPParticleProperty!is null) poolLowPParticleProperty.addUser();
+        if (poolRealParticleProperty!is null) poolRealParticleProperty.addUser();
+        if (poolIntParticleProperty !is null) poolIntParticleProperty .addUser();
+        if (poolLongParticleProperty!is null) poolLongParticleProperty.addUser();
+        return *this;
+    }
+    void giveBack(){
+        if (poolLowPParticleProperty!is null) poolLowPParticleProperty.rmUser();
+        if (poolRealParticleProperty!is null) poolRealParticleProperty.rmUser();
+        if (poolIntParticleProperty !is null) poolIntParticleProperty.rmUser();
+        if (poolLongParticleProperty!is null) poolLongParticleProperty.rmUser();
+    }
+}
 /// represent a system of particles
 ///
 /// startup should be as follow:
@@ -691,6 +739,7 @@ class ParticleSys(T): CopiableObjectI,Serializable
     NotificationCenter nCenter;
     SysStruct sysStruct;
     
+    CommonParticleProperties particlePropertiesPools; /// pool for simple scalar properties
     DynamicsVars!(T) dynVars; /// dynamics variables
     HiddenVars hVars; /// possibly some hidden degrees of freedom
     struct DerivOverlap{
@@ -785,10 +834,11 @@ class ParticleSys(T): CopiableObjectI,Serializable
     this(){}
     /// constructor
     this(ulong iter,char[] name,SysStruct sysStruct,NotificationCenter nCenter,DynamicsVars!(T) dynVars,
-        HiddenVars hVars=null){
+        CommonParticleProperties particlePropertiesPools,HiddenVars hVars=null){
         this.iteration=iter;
         this.name=name;
         this.sysStruct=sysStruct;
+        this.particlePropertiesPools=particlePropertiesPools;
         this.dynVars=dynVars;
         this.nCenter=nCenter;
         this.hVars=hVars;
@@ -821,6 +871,7 @@ class ParticleSys(T): CopiableObjectI,Serializable
             auto newDynVars=dVar.dupT!(V)();
         }
         return new ParticleSys!(V)(iteration,name,sysStruct.dup(l),null,newDynVars,
+            particlePropertiesPools.dup(),
             ((hVars!is null && ((l&PSDupLevel.HiddenVars)!=0))?hVars.dup:hVars));
     }
     
@@ -862,6 +913,7 @@ class ParticleSys(T): CopiableObjectI,Serializable
     /// the segmented array structs should be initialized, and modifiable.
     /// positions,... are not yet available
     void sysStructChanged(){
+        this.particlePropertiesPools.reallocWithParticleStruct(sysStruct.particlesStruct);
         derivOverlap.clear();
         this.reallocStructs();
         foreach(pKind;sysStruct.particleKinds.sDataLoop){
@@ -1035,6 +1087,7 @@ class ParticleSys(T): CopiableObjectI,Serializable
     
     void release0(){
         dynVars.giveBack();
+        particlePropertiesPools.giveBack();
     }
     mixin RefCountMixin!();
     mixin(serializeSome("dchem.sys.ParticleSys",

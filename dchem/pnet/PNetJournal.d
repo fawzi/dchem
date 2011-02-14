@@ -66,7 +66,8 @@ class PNetJournal(T):ExplorationObserverI!(T){
     
     static struct JournalEntry{
         enum Kind:int{
-            None,PointGrad, StartPoint,FinishedPoint,PublishCollision,EvalE,NeighborHasEnergy,NeighborHasGradient
+            None,PointGrad, StartPoint,FinishedPoint,PublishCollision,EvalE,NeighborHasEnergy,
+            NeighborHasGradient,PublishedLocalPoint
         }
         Kind kind;
         uint flags;
@@ -74,6 +75,7 @@ class PNetJournal(T):ExplorationObserverI!(T){
         PSysWriter!(T) pos;
         SKey sKey;
         Real energy;
+        Real energyError;
         Point[] neighs;
 
         static JournalEntry PointGrad(Point p,PSysWriter!(T) pos){
@@ -92,6 +94,13 @@ class PNetJournal(T):ExplorationObserverI!(T){
             res.point=p;
             return res;
         }
+        static JournalEntry PublishedLocalPoint(SKey sKey,Point p){
+            JournalEntry res;
+            res.kind=Kind.PublishedLocalPoint;
+            res.sKey=sKey;
+            res.point=p;
+            return res;
+        }
         static JournalEntry FinishedPoint(Point p,SKey owner){
             JournalEntry res;
             res.kind=Kind.FinishedPoint;
@@ -105,11 +114,12 @@ class PNetJournal(T):ExplorationObserverI!(T){
             res.point=p;
             return res;
         }
-        static JournalEntry EvalE(Point p,Real energy){
+        static JournalEntry EvalE(Point p,Real energy,Real energyError){
             JournalEntry res;
             res.kind=Kind.EvalE;
             res.point=p;
             res.energy=energy;
+            res.energyError=energyError;
             return res;
         }
         static JournalEntry NeighborHasEnergy(SKey s,Point[] neighbors,PointEMin energy){
@@ -140,6 +150,7 @@ class PNetJournal(T):ExplorationObserverI!(T){
             metaI.addFieldOfType!(Point)("point","point");
             metaI.addFieldOfType!(PSysWriter!(T))("pos","position and forces");
             metaI.addFieldOfType!(Real)("energy","potential energy");
+            metaI.addFieldOfType!(Real)("energyError","potential energy Error");
             metaI.addFieldOfType!(uint)("flags","flags of the point");
             metaI.addFieldOfType!(Point[])("neighs","neighbors of the point");
         }
@@ -152,8 +163,9 @@ class PNetJournal(T):ExplorationObserverI!(T){
             s.field(metaI[1],point);
             if ((!skip) || (!pos.isDummy())) s.field(metaI[2],pos);
             if (!skip || kind==Kind.EvalE || kind==Kind.NeighborHasGradient || kind==Kind.NeighborHasEnergy) s.field(metaI[3],energy);
-            if (!skip || kind==Kind.StartPoint) s.field(metaI[4],flags);
-            if (!skip || kind==Kind.NeighborHasEnergy|| kind==Kind.NeighborHasEnergy) s.field(metaI[5],neighs);
+            if (!skip || kind==Kind.EvalE) s.field(metaI[4],energyError);
+            if (!skip || kind==Kind.StartPoint) s.field(metaI[5],flags);
+            if (!skip || kind==Kind.NeighborHasEnergy|| kind==Kind.NeighborHasEnergy) s.field(metaI[6],neighs);
         }
         void serialize(Serializer s){
             serial(s);
@@ -200,10 +212,10 @@ class PNetJournal(T):ExplorationObserverI!(T){
         if (rLevel>RunLevel.Stopping) jSerial.close();
     }
     /// adds energy for a local point and bCasts addEnergyEval
-    void addEnergyEvalLocal(SKey s,Point p,Real energy){
+    void addEnergyEvalLocal(SKey s,Point p,Real energy,Real energyError){
         this.serialLock.lock();
         scope(exit){ this.serialLock.unlock(); }
-        jSerial(JournalEntry.EvalE(p,energy));
+        jSerial(JournalEntry.EvalE(p,energy,energyError));
         if (input.flushEachEntry) jSerial.flush();
     }
     /// adds gradient value to a point that should be owned. Energy if not NAN replaces the previous value
@@ -225,6 +237,14 @@ class PNetJournal(T):ExplorationObserverI!(T){
                 ((input.logOtherPos || silos.hasKey(owner))?pos:dummy),flags));
             if (input.flushEachEntry) jSerial.flush();
         }
+    }
+    /// communicates that the given local point has been published
+    /// flags: communicate doubleEval?
+    void publishedLocalPoint(SKey s,Point point){
+        this.serialLock.lock();
+        scope(exit){ this.serialLock.unlock(); }
+        jSerial(JournalEntry.PublishedLocalPoint(s,point));
+        if (input.flushEachEntry) jSerial.flush();
     }
     /// finished exploring the given local point (remove it from the active points), bcasts finishedExploringPoint
     void finishedExploringPointLocal(SKey s,Point p,SKey owner){
@@ -277,6 +297,10 @@ class PNetJournal(T):ExplorationObserverI!(T){
             if (input.flushEachEntry) jSerial.flush();
         }
     }
+    /// should speculatively calculate the gradient? PNetSilos version calls addEnergyEvalLocal
+    bool speculativeGradientLocal(SKey s,Point p,Real energy,Real energyError){ return false; }
+    /// checks it local point is somehow invalid and should better be skipped
+    bool shouldFilterLocalPoint(SKey s,Point p){ return false; }
 }
 
 // object that loads some journals
@@ -419,7 +443,7 @@ noPointStart:   while(1){ // proceed until next point
                             /// no point with StartPoint should have a collision, so we should be able to ignore it
                             break;
                         case Kind.EvalE:
-                            silos.addEnergyEvalLocal(silos.ownerOfPoint(localP),localP,entry.energy);
+                            silos.addEnergyEvalLocal(silos.ownerOfPoint(localP),localP,entry.energy,entry.energyError);
                             break;
                         default:
                     }

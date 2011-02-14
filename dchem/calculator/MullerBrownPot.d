@@ -102,9 +102,11 @@ class MullerBrownPotContext:CalcContext{
             pot.deriv(x,y,dx,dy);
             pSysReal.dynVars.mddx.dof[sys,0]= -dx;
             pSysReal.dynVars.mddx.dof[sys,1]= -dy;
+            pSysReal.dynVars.mddxError=0;
         }
         if (updateE){
             pSysReal.dynVars.potentialEnergy=pot.eval(x,y);
+            pSysReal.dynVars.potentialEnergyError=0;
         }
     }
     

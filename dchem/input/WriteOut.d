@@ -246,7 +246,7 @@ struct DynPVectorWriter(T,int group){
     SegArrWriter!(T) pos;
     SegArrWriter!(T) orient;
     SegArrWriter!(T) dof;
-    int[3] cellPeriod;
+    int cellPeriod;
     mixin(serializeSome("dchem.DynPVectorWriter!("~T.stringof~")","cell|cellX0|cellPeriod|pos|orient|dof"));
     mixin printOut!();
     /// true if this represents a null DynPVector
@@ -265,7 +265,7 @@ struct DynPVectorWriter(T,int group){
         if (v.cell!is null) {
             res.cell=v.cell.h.cell;
             res.cellX0=v.cell.x0.cell;
-            res.cellPeriod[]=v.cell.periodic;
+            res.cellPeriod=v.cell.periodicFlags;
         }
         res.pos=SegArrWriter!(T)(v.pos);
         res.orient=SegArrWriter!(T)(v.orient);
@@ -320,13 +320,17 @@ struct PSysWriter(T){
     DynPVectorWriter!(T,DxType) dx;
     DynPVectorWriter!(T,DxType) mddx;
     Real potentialEnergy;
+    Real potentialEnergyError;
+    Real mddxError;
     HiddenVars hVars;
-    mixin(serializeSome("dchem.PSysWriter!("~T.stringof~")","potentialEnergy|x|dx|mddx|hVars"));
+    mixin(serializeSome("dchem.PSysWriter!("~T.stringof~")","potentialEnergy|potentialEnergyError|mddxError|x|dx|mddx|hVars"));
     mixin printOut!();
     /// creates a writer for the given ParticleSys
     static PSysWriter opCall(ParticleSys!(T) pSys){
         PSysWriter res;
         res.potentialEnergy=pSys.dynVars.potentialEnergy;
+        res.potentialEnergyError=pSys.dynVars.potentialEnergyError;
+        res.mddxError=pSys.dynVars.mddxError;
         res.x=dynPVectorWriter(pSys.dynVars.x);
         res.dx=dynPVectorWriter(pSys.dynVars.dx);
         res.mddx=dynPVectorWriter(pSys.dynVars.mddx);
@@ -338,6 +342,8 @@ struct PSysWriter(T){
     void copyTo(V)(ParticleSys!(V) pSys){
         assert(pSys!is null,"cannot copy to null pSys");
         pSys.dynVars.potentialEnergy=potentialEnergy;
+        pSys.dynVars.potentialEnergyError=potentialEnergyError;
+        pSys.dynVars.mddxError=mddxError;
         // could be smarter about reusing memory...
         if (!x.isDummy()) {
             pSys.checkX();

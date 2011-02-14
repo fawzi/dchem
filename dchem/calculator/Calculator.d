@@ -12,10 +12,13 @@ import blip.serialization.Serialization;
 import blip.sync.UniqueNumber;
 import dchem.input.ReadIn;
 import dchem.input.RootInput;
+import dchem.sys.DynVars;
 import dchem.sys.ParticleSys;
 import dchem.sys.SegmentedArray;
 import blip.container.Deque;
+import blip.container.BulkArray;
 import dchem.sys.Constraints;
+import dchem.sys.PIndexes;
 import tango.sys.Process;
 import blip.io.IOArray;
 import blip.io.NullStream;
@@ -24,6 +27,240 @@ public import dchem.calculator.CalculatorModels;
 import blip.parallel.rpc.Rpc;
 import dchem.input.WriteOut;
 import blip.parallel.mpi.MpiModels;
+import PosUtils=dchem.sys.PosUtils;
+import dchem.sys.Cell;
+import blip.sync.Atomic;
+
+/// cell based distances for positions
+///
+/// an object that handles the various distance measures, and distance related things
+/// it defines the macroscopic distance space, the microscopic distance space (for small changes)
+/// is defined in ParticleSys by its overlap, here one defines things like PBC.
+class NDistOps:DistOpsGen,DistOps{
+    bool useFirstNeigh=true;
+    mixin(serializeSome("dchem.NDistOps",`
+    useFirstNeigh: if the first image convention should be used for periodic directions (true)`));
+    mixin printOut!();
+    mixin myFieldMixin!();
+    this(char[] fName=""){
+        if (fName.length>0){
+            myField=new InputField(fName,InputField.TypeId.InputElement,this);
+        }
+    }
+    bool verify(CharSink s){
+        return true;
+    }
+    
+    DistOps DistOpsForContext(CalculationContext){
+        return this;
+    }
+    
+    /// wraps deltaX (a difference between two X points) so that it is as small as possible
+    /// compatibly with the implicit symmetries (but not with the explicit ones)
+    void wrapT(T)(ParticleSys!(T)pSys,DynPVector!(T,XType)deltaX){
+        PosUtils.wrap(pSys.dynVars.x.cell,deltaX.pos);
+    }
+    // alias don't work reliably :(
+    // ditto
+    void wrap(ParticleSys!(Real)pSys,DynPVector!(Real,XType)deltaX){
+        wrapT!(Real)(pSys,deltaX);
+    }
+    /// ditto
+    void wrap(ParticleSys!(LowP)pSys,DynPVector!(LowP,XType)deltaX){
+        wrapT!(LowP)(pSys,deltaX);
+    }
+    /// ditto
+    void wrapReal(ParticleSys!(Real)pSys,DynPVector!(Real,XType)deltaX){
+        wrapT!(Real)(pSys,deltaX);
+    }
+    /// ditto
+    void wrapLowP(ParticleSys!(LowP)pSys,DynPVector!(LowP,XType)deltaX){
+        wrapT!(LowP)(pSys,deltaX);
+    }
+
+    /// get the periodic copy of x that is closest (in first image convetion, i.e. in the h_inv distance)
+    /// to pSys (this might be different than the closest one for very skewed h)
+    void makeCloseT(T)(ParticleSys!(T)pSys,DynPVector!(T,XType)x){
+        PosUtils.makeClose(pSys.dynVars.x.cell,pSys.dynVars.x.pos,x.pos);
+    }
+    void makeClose(ParticleSys!(Real)pSys,DynPVector!(Real,XType)x){
+        makeCloseT!(Real)(pSys,x);
+    }
+    /// ditto
+    void makeClose(ParticleSys!(LowP)pSys,DynPVector!(LowP,XType)x){
+        makeCloseT!(LowP)(pSys,x);
+    }
+    /// ditto
+    void makeCloseReal(ParticleSys!(Real)pSys,DynPVector!(Real,XType)x){
+        makeCloseT!(Real)(pSys,x);
+    }
+    /// ditto
+    void makeCloseLowP(ParticleSys!(LowP)pSys,DynPVector!(LowP,XType)x){
+        makeCloseT!(LowP)(pSys,x);
+    }
+
+    /// distance in the reduced units, this is the norm2 distance between x and pSys.dynVars.x after a makeClose
+    /// or deltaX.norm2 after calling wrap, where deltaX=x-pSys.dynVars.x
+    Real reducedDistT(T)(ParticleSys!(T)pSys,DynPVector!(T,XType)x,Real threshold){
+        Real totDist=0;
+        if (useFirstNeigh){
+            auto dAtt=PosUtils.configDist(pSys.dynVars.x.cell,pSys.dynVars.x.pos,x.pos);
+            atomicAdd(totDist,dAtt);
+        } else {
+            auto o1=pSys.dynVars.x.pos;
+            auto o2=x.pos;
+            assert(o1.kRange==o2.kRange);
+            foreach(k;o1.kRange.pLoop){
+                auto dAtt=PosUtils.norm22Threshold(o1[k].basicData(),o2[k].basicData(),threshold-totDist);
+                atomicAdd(totDist,dAtt);
+            }
+        }
+        if (totDist<threshold){
+            auto o1=pSys.dynVars.x.orient;
+            auto o2=x.orient;
+            assert(o1.kRange==o2.kRange);
+            foreach(k;o1.kRange.pLoop){
+                auto dAtt=PosUtils.norm22Threshold(o1[k].basicData(),o2[k].basicData(),threshold-totDist);
+                atomicAdd(totDist,dAtt);
+            }
+        }
+        if (totDist<threshold){
+            auto d1=pSys.dynVars.x.dof;
+            auto d2=x.dof;
+            assert(d1.kRange==d2.kRange);
+            foreach(k;d1.kRange.pLoop){
+                auto dAtt=PosUtils.norm22Threshold(d1[k].basicData(),d2[k].basicData(),threshold-totDist);
+                atomicAdd(totDist,dAtt);
+            }
+        }
+        return totDist;
+    }
+    Real reducedDist(ParticleSys!(Real)pSys,DynPVector!(Real,XType)x,Real threshold){
+        return reducedDistT!(Real)(pSys,x,threshold);
+    }
+    /// ditto
+    Real reducedDist(ParticleSys!(LowP)pSys,DynPVector!(LowP,XType)x,Real threshold){
+        return reducedDistT!(LowP)(pSys,x,threshold);
+    }
+    /// ditto
+    Real reducedDistReal(ParticleSys!(Real)pSys,DynPVector!(Real,XType)x,Real threshold){
+        return reducedDistT!(Real)(pSys,x,threshold);
+    }
+    /// ditto
+    Real reducedDistLowP(ParticleSys!(LowP)pSys,DynPVector!(LowP,XType)x,Real threshold){
+        return reducedDistT!(LowP)(pSys,x,threshold);
+    }
+
+    /// distance in reduced units between *one* particle of kinf k at pos1,ord1,dof1, and possibly many
+    /// particles of the same kind at pos2,ord2,dof2
+    void rDistOneToNT(T)(ParticleSys!(T)pSys,KindIdx k,
+        BulkArray!(Vector!(T,3))pos1,BulkArray!(Quaternion!(T))ord1,BulkArray!(T)dof1,
+        BulkArray!(Vector!(T,3))pos2,BulkArray!(Quaternion!(T))ord2,BulkArray!(T)dof2,
+        T[] dists)
+    {
+        auto cell=pSys.dynVars.x.cell;
+        PosUtils.oneToNDistKind!(T)(cell.h.cell,cell.hInv.cell,cell.periodicFlags,pos1.basicData(),
+            pos2.basicData(),dists,cell.flags);
+        PosUtils.addNorm22OneToN(ord1.basicData,ord2.basicData,dists);
+        PosUtils.addNorm22OneToN(dof1.basicData,dof2.basicData,dists);
+    }
+    void rDistOneToN(ParticleSys!(Real)pSys,KindIdx k,
+        BulkArray!(Vector!(Real,3))pos1,BulkArray!(Quaternion!(Real))ord1,BulkArray!(Real)dof1,
+        BulkArray!(Vector!(Real,3))pos2,BulkArray!(Quaternion!(Real))ord2,BulkArray!(Real)dof2,
+        Real[] dists){
+        rDistOneToNT!(Real)(pSys,k,pos1,ord1,dof1,pos2,ord2,dof2,dists);
+    }
+    /// ditto
+    void rDistOneToN(ParticleSys!(LowP)pSys,KindIdx k,
+        BulkArray!(Vector!(LowP,3))pos1,BulkArray!(Quaternion!(LowP))ord1,BulkArray!(LowP)dof1,
+        BulkArray!(Vector!(LowP,3))pos2,BulkArray!(Quaternion!(LowP))ord2,BulkArray!(LowP)dof2,
+        LowP[] dists){
+        rDistOneToNT!(LowP)(pSys,k,pos1,ord1,dof1,pos2,ord2,dof2,dists);
+    }
+    /// ditto
+    void rDistOneToNReal(ParticleSys!(Real)pSys,KindIdx k,
+        BulkArray!(Vector!(Real,3))pos1,BulkArray!(Quaternion!(Real))ord1,BulkArray!(Real)dof1,
+        BulkArray!(Vector!(Real,3))pos2,BulkArray!(Quaternion!(Real))ord2,BulkArray!(Real)dof2,
+        Real[] dists){
+        rDistOneToNT!(Real)(pSys,k,pos1,ord1,dof1,pos2,ord2,dof2,dists);
+    }
+    /// ditto
+    void rDistOneToNLowP(ParticleSys!(LowP)pSys,KindIdx k,
+        BulkArray!(Vector!(LowP,3))pos1,BulkArray!(Quaternion!(LowP))ord1,BulkArray!(LowP)dof1,
+        BulkArray!(Vector!(LowP,3))pos2,BulkArray!(Quaternion!(LowP))ord2,BulkArray!(LowP)dof2,
+        LowP[] dists){
+        rDistOneToNT!(LowP)(pSys,k,pos1,ord1,dof1,pos2,ord2,dof2,dists);
+    }
+
+    /// full (cartesian) distance, this is the reducedDist in the full system using cartesian units
+    /// in general it might be expensive to calculate, or be not better than the 
+    /// if threshold is different from 0, then as soon as the distance is detected to be larger than it
+    /// it is returned, which might be quicker if one does not care when for the exact value of distances
+    /// larger than threshold
+    Real fullDist(ParticleSys!(Real)pSys,DynPVector!(Real,XType)x,Real threshold=0){
+        return reducedDist(pSys,x,threshold);
+    }
+    /// ditto
+    Real fullDist(ParticleSys!(LowP)pSys,DynPVector!(LowP,XType)x,Real threshold=0){
+        return reducedDist(pSys,x,threshold);
+    }
+    /// ditto
+    Real fullDistReal(ParticleSys!(Real)pSys,DynPVector!(Real,XType)x, Real threshold=0){
+        return reducedDist(pSys,x,threshold);
+    }
+    /// ditto
+    Real fullDistLowP(ParticleSys!(LowP)pSys,DynPVector!(LowP,XType)x, Real threshold=0){
+        return reducedDist(pSys,x,threshold);
+    }
+}
+
+/// an object that loops on all symmetry equivalent structures generated by neigh that are within epsilon of pSys
+/// when having no symmetry
+class NoSymmNeighLooper:SymmNeighLooperGen,SymmNeighLooper{
+    mixin(serializeSome("dchem.NoSymmNeighLooper",``));
+    mixin myFieldMixin!();
+    mixin printOut!();
+    this(string fName=""){
+        if (fName.length>0) {
+            myField=new InputField(fName,InputField.TypeId.InputElement,this);
+        }
+    }
+    bool verify(CharSink s){
+        return true;
+    }
+    SymmNeighLooper symmNeighLooperForContext(CalculationContext c){
+        return this;
+    }
+    int loopOnNeighWithinT(T)(ParticleSys!(T)pSys,DistOps distOps,DynPVector!(T,XType)neigh,T epsilon,
+        int delegate(ref DynPVector!(T,XType))loopBody)
+    {
+        auto dist=distOps.reducedDist(pSys,neigh,epsilon);
+        if (dist<epsilon){
+            return loopBody(neigh);
+        }
+    }
+    // aliases don't work reliably
+    int loopOnNeighWithin(ParticleSys!(Real)pSys,DistOps distOps,DynPVector!(Real,XType)neigh,Real epsilon,
+        int delegate(ref DynPVector!(Real,XType))loopBody)
+    {
+        return loopOnNeighWithinT!(Real)(pSys,distOps,neigh,epsilon,loopBody);
+    }
+    int loopOnNeighWithin(ParticleSys!(LowP)pSys,DistOps distOps,DynPVector!(LowP,XType)neigh,LowP epsilon,
+        int delegate(ref DynPVector!(LowP,XType))loopBody)
+    {
+        return loopOnNeighWithinT!(LowP)(pSys,distOps,neigh,epsilon,loopBody);
+    }
+    int loopOnNeighWithinReal(ParticleSys!(Real)pSys,DistOps distOps,DynPVector!(Real,XType)neigh,Real epsilon,
+        int delegate(ref DynPVector!(Real,XType))loopBody)
+    {
+        return loopOnNeighWithinT!(Real)(pSys,distOps,neigh,epsilon,loopBody);
+    }
+    int loopOnNeighWithinLowP(ParticleSys!(LowP)pSys,DistOps distOps,DynPVector!(LowP,XType)neigh,LowP epsilon,
+        int delegate(ref DynPVector!(LowP,XType))loopBody)
+    {
+        return loopOnNeighWithinT!(LowP)(pSys,distOps,neigh,epsilon,loopBody);
+    }
+}
 
 /// Limits the number of contexts that can be created/active
 class ContextLimiter:InputElement{
@@ -190,19 +427,25 @@ class ContextLimiterClient:Method{
 
 char[] withPSys(char[]op,char[]from=""){
     return `
-    if(`~from~`pSysReal !is null){
+    switch(`~from~`activePrecision){
+    case Precision.Real:
         auto pSys=`~from~`pSysReal;
         `~op~`
-    } else if (`~from~`pSysLowP !is null){
+        break;
+    case Precision.LowP:
         auto pSys=`~from~`pSysLowP;
         `~op~`
-    } else {
-        throw new Exception("no valid particle system in context "~`~from~`contextId~" trying to execute "~`~ctfe_rep(op)~`,__FILE__,__LINE__);
+        break;
+    default:
+        throw new Exception("unexpected precision "~`~from~`contextId~" trying to execute "~`~ctfe_rep(op)~`,__FILE__,__LINE__);
     }
     `;
 }
 const char[] calcCtxMethodsStr=
-`activePrecision|contextId|pSysWriterReal|pSysWriterLowP|pSysWriterRealSet|pSysWriterLowPSet|refPSysReal|refPSysLowP|constraintGen|sysStruct|changeLevel|changeLevelSet|changedDynVars|potentialEnergy|posSet|pos|dposSet|dpos|mddposSet|mddpos|updateEF|activate|deactivate|giveBack|stop|method|storeHistory|exportedUrl|executeLocally|logMsg1`;
+`activePrecision|contextId|pSysWriterReal|pSysWriterLowP|pSysWriterRealSet|pSysWriterLowPSet|`~
+`refPSysReal|refPSysLowP|constraintGen|sysStruct|changeLevel|changeLevelSet|changedDynVars|`~
+`potentialEnergy|potentialEnergyError|posSet|pos|dposSet|dpos|mddposSet|mddpos|updateEF|activate|deactivate|`~
+`giveBack|stop|method|storeHistory|exportedUrl|executeLocally|logMsg1`;
 
 /// represent a calculation that might have been aready partially setup, in particular the
 /// number of elements,... cannot change
@@ -217,6 +460,8 @@ class CalcContext:LocalCalculationContext{
     Method _method;
     Real maxChange;
     CharSink _logger;
+    SymmNeighLooper _symmNeighLooper;
+    DistOps _distOps;
     
     void logMsg1(char[]m){
         _logger(m);
@@ -231,12 +476,78 @@ class CalcContext:LocalCalculationContext{
 
     ConstraintI!(Real) constraintsReal(){ return null; }
     ConstraintI!(LowP) constraintsLowP(){ return null; }
+    SymmNeighLooper symmNeighLooper(){
+        if (_symmNeighLooper is null){
+            synchronized(this){
+                if (_symmNeighLooper is null){
+                    _symmNeighLooper=new NoSymmNeighLooper("defaultNoSymmLooper");
+                }
+            }
+        }
+        return _symmNeighLooper;
+    }
+    DistOps distOps(){
+        if (_distOps is null){
+            synchronized(this){
+                if (_distOps is null){
+                    _distOps=new NDistOps("defaultNDistOps");
+                }
+            }
+        }
+        return _distOps;
+    }
     char[] contextId(){ return _contextId; }
     Precision activePrecision() { return Precision.Real; }
-    ParticleSys!(Real) refPSysReal() { return _pSysReal; }
-    ParticleSys!(LowP) refPSysLowP() { return _pSysLowP; }
-    ParticleSys!(Real) pSysReal() { return _pSysReal; }
-    ParticleSys!(LowP) pSysLowP() { return _pSysLowP; }
+    
+    ParticleSys!(Real) refPSysReal() {
+        if (_pSysReal is null){
+            assert(activePrecision==Precision.LowP);
+            auto newPSys=_pSysLowP.dupT!(Real)(PSDupLevel.EmptyDyn);
+            synchronized(this){
+                if (_pSysReal is null){
+                    _pSysReal=newPSys;
+                } else {
+                    newPSys.release();
+                }
+            }
+        }
+        return _pSysReal;
+    }
+    ParticleSys!(LowP) refPSysLowP() {
+        if (_pSysLowP is null){
+            assert(activePrecision==Precision.Real);
+            auto newPSys=_pSysReal.dupT!(LowP)(PSDupLevel.EmptyDyn);
+            synchronized(this){
+                if (_pSysLowP is null){
+                    _pSysLowP=newPSys;
+                } else {
+                    newPSys.release();
+                }
+            }
+        }
+        return _pSysLowP;
+    }
+    void sysStructChangedCallback(cstring n,Callback*cb,Variant v){
+        assert(n=="sysStructChanged","unexpected callback name:"~n);
+        switch(activePrecision){
+        case Precision.Real:
+            if (_pSysLowP is null){
+                _pSysLowP.release();
+            }
+            _pSysLowP=null;
+            break;
+        case Precision.LowP:
+            if (_pSysReal is null){
+                _pSysReal.release();
+            }
+            _pSysReal=null;
+            break;
+        default:
+            assert(0);
+        }
+    }
+    ParticleSys!(Real) pSysReal() { if (activePrecision==Precision.Real) return _pSysReal; return null; }
+    ParticleSys!(LowP) pSysLowP() { if (activePrecision==Precision.LowP) return _pSysLowP; return null; }
     PSysWriter!(Real) pSysWriterReal(){ return pSysWriter(_pSysReal); }
     PSysWriter!(LowP) pSysWriterLowP() { return pSysWriter(_pSysLowP); }
     void pSysWriterRealSet(PSysWriter!(Real)p) { assert(_pSysReal!is null); _pSysReal[]=p; }
@@ -259,6 +570,9 @@ class CalcContext:LocalCalculationContext{
     void changeLevelSet(ChangeLevel c) { _changeLevel=c; }
     Real potentialEnergy(){
         mixin(withPSys("return pSys.dynVars.potentialEnergy;"));
+    }
+    Real potentialEnergyError(){
+        mixin(withPSys("return pSys.dynVars.potentialEnergyError;"));
     }
     void posSet(SegmentedArray!(Vector!(Real,3)) newPos){
         mixin(withPSys("pSys.dynVars.x.pos[]=newPos;"));
@@ -368,6 +682,7 @@ class CalcContext:LocalCalculationContext{
         this._nCenter=nCenter;
         if (nCenter is null)
             this._nCenter=new NotificationCenter();
+        this._nCenter.registerCallback("sysStructChanged",&this.sysStructChangedCallback,Callback.Flags.ReceiveAll);
         // register to the world...
         vendor=new DefaultVendor(this);
         assert(ProtocolHandler.defaultProtocol!is null,"defaultProtocol");

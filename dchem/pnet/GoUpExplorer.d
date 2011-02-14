@@ -85,7 +85,7 @@ class GoUpExplorer(T):EmptyExplorer!(T){
     }
 
     /// adds energy for a local point and bCasts addEnergyEval
-    override void addEnergyEvalLocal(SKey key,Point p,Real energy){
+    override void addEnergyEvalLocal(SKey key,Point p,Real energy,Real energyError){
         void delegate(ExplorerI!(T)) availableAtt;
         synchronized(this){
             toExploreMore.push(PointAndEnergy(p,energy));
@@ -256,7 +256,7 @@ class GoUpExplorer(T):EmptyExplorer!(T){
         rmPoint(p);
     }
     /// should speculatively calculate the gradient? PNetSilos version calls addEnergyEvalLocal
-    override bool speculativeGradientLocal(Point p,Real energy){
+    override bool speculativeGradientLocal(SKey k,Point p,Real energy,Real energyError){
         synchronized(toExploreMore){
             auto l=toExploreMore.length;
             if (l>0 && toExploreMore.peek.energy>=energy){

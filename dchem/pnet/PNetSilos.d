@@ -492,6 +492,7 @@ class PointBcastProgress(T){
             res=nextP.finalName;
         }
         res.bcastLevel(0);
+        localContext.publishedLocalPoint(SKeyVal.Any,res.point);
         release();
         return res;
     }
@@ -621,8 +622,9 @@ final class PNetSilos(T): LocalSilosI!(T){
     }
     NotificationCenter _nCenter;
     /// explorers
-    HashMap!(char[],ExplorerI!(T)) explorers;
-    Deque!(char[]) activeExplorers;
+    HashMap!(char[],ExplorerI!(T)) explorers; /// all explorers (so that concurrent nextOp execution doen't give problems). If you have many you should probably improve this
+    HashMap!(char[],ExplorerI!(T)) generatingExplorers; /// the explorers that might generate new points (but might be suspended)
+    Deque!(char[]) activeExplorers; /// explorers that can generate new points
     WaitCondition waitExplorers;
     WaitCondition waitPendingEnd;
     Deque!(EvalOp!(T)) localOps;
@@ -647,7 +649,7 @@ final class PNetSilos(T): LocalSilosI!(T){
         return new MainPoint!(T)(this,p);
     }
     bool hasActiveExpl(){
-        return activeExplorers.length>0 || explorers.length==0;
+        return activeExplorers.length>0 || generatingExplorers.length==0;
     }
     bool isStopping(){
         return runLevel>RunLevel.WaitPending;
@@ -677,23 +679,23 @@ final class PNetSilos(T): LocalSilosI!(T){
     }
     /// if the gradient should be speculatively calculated. calls addEnergyEvalLocal (in background)
     /// (should be called on the owner of the point only)
-    bool speculativeGradient(SKey s,Point p,Real energy){
+    bool speculativeGradientLocal(SKey s,Point p,Real energy,Real energyError){
         if (hasKey(s)){
             bool res=false;
             int i=0;
             auto pAtt=mainPointL(p);
-            if (pAtt.setEnergy(energy)){
+            if (pAtt.setEnergy(energy,energyError)){
                 Task("didEnergyEval",&pAtt.didEnergyEval).autorelease.submit(defaultTask);
             }
             if ((pAtt.gFlags&GFlags.GradientInfo)==0){ // not already in progress or done...
-                foreach(k,e;explorers){
-                    res=res || e.speculativeGradientLocal(p,energy);
-                }
+                notifyLocalObservers(delegate void(ExplorationObserverI!(T) obs){
+                    if (obs.speculativeGradientLocal(_key,p,energy,energyError)) res=true;
+                });
             }
             if (res) res=pAtt.shouldCalculateGradient();
             return res;
         } else {
-            return silosForKey(s).speculativeGradient(s,p,energy);
+            return silosForKey(s).speculativeGradientLocal(s,p,energy,energyError);
         }
     }
     
@@ -806,7 +808,7 @@ final class PNetSilos(T): LocalSilosI!(T){
         runLevel=RunLevel.Running;
         int nOps=localOps.length;
         paraEnv.bcast(nOps,0);
-        if (explorers.length==0 && nOps==0){
+        if (generatingExplorers.length==0 && nOps==0){
             if (paraEnv.myRank==0) log("no explorers, and no pendingOps, stopping (to avoid this add a dchem.WaitExplorer)\n");
             increaseRunLevel(SKeyVal.All,RunLevel.WaitPending);
         }
@@ -926,7 +928,9 @@ final class PNetSilos(T): LocalSilosI!(T){
                             return s==explName;
                         });
                         paraEnv.barrier();
-                        explorers.removeKey(explName); // this forces explorers to return null only when there are no pending ops...
+                        synchronized(generatingExplorers){
+                            generatingExplorers.removeKey(explName); // this forces explorers to return null only when there are no pending ops...
+                        }
                         break loop;
                     case ExplorerI!(T).ReturnFlag.SkipOp:
                         version(TrackPNet) logMsg(delegate void(CharSink s){
@@ -950,9 +954,9 @@ final class PNetSilos(T): LocalSilosI!(T){
                         assert(0);
                     }
                 }
-                if (explorers.length==0) break loop;
+                if (generatingExplorers.length==0) break loop;
             }
-            if (explorers.length==0){
+            if (generatingExplorers.length==0){
                 increaseRunLevel(SKeyVal.Any,RunLevel.WaitPending);
             }
         } else {
@@ -997,7 +1001,18 @@ final class PNetSilos(T): LocalSilosI!(T){
     void evaluationFailed(SKey s,Point p){
         assert(0,"to do");
     }
-    
+    /// checks if the local point is somehow invalid and should better be skipped
+    bool shouldFilterLocalPoint(SKey s,Point p){
+        if (hasKey(s)){
+            bool res=false;
+            notifyLocalObservers(delegate void(ExplorationObserverI!(T) obs){
+                if (obs.shouldFilterLocalPoint(_key,p)) res=true;
+            });
+            return res;
+        } else {
+            return silosForKey(s).shouldFilterLocalPoint(s,p);
+        }
+    }
     /// returns the key of the silos with the lowest expected load
     SKey nextFreeSilos(SKey s){
         if (hasKey(s)){
@@ -1037,7 +1052,7 @@ final class PNetSilos(T): LocalSilosI!(T){
     
     void stop(){
         synchronized(this){
-            explorers.clear; // drops all explorers
+            generatingExplorers.clear; // drops all explorers
         }
     }
     
@@ -1057,17 +1072,17 @@ final class PNetSilos(T): LocalSilosI!(T){
     
     // ExplorationObserverI
     /// adds energy for a local point and bCasts addEnergyEval
-    void addEnergyEvalLocal(SKey s,Point p,Real energy){
+    void addEnergyEvalLocal(SKey s,Point p,Real energy,Real energyError){
         if (hasKey(s)) {
             auto mp=localPoints[p];
             if (mp.isLocalCopy){
                 throw new Exception("Local copy in PNetSilos.addEnergyEvalLocal",__FILE__,__LINE__);
             }
-            if (mp.setEnergy(energy)){
+            if (mp.setEnergy(energy,energyError)){
                 mp.didEnergyEval();
             }
         } else {
-            silosForKey(s).addEnergyEvalLocal(s,p,energy);
+            silosForKey(s).addEnergyEvalLocal(s,p,energy,energyError);
         }
     }
     /// adds gradient value to a point that should be owned. Energy if not NAN does not replace the previous value
@@ -1131,7 +1146,15 @@ final class PNetSilos(T): LocalSilosI!(T){
             silosForKey(s).publishPoint(s,owner,newPoint,pos,pSize,flags);
         }
     }
-    
+    void publishedLocalPoint(SKey s,Point p){
+        if (hasKey(s)){
+            notifyLocalObservers(delegate void(ExplorationObserverI!(T) obs){
+                obs.publishedLocalPoint(_key,p);
+            });
+        } else {
+            silosForKey(s).publishedLocalPoint(s,p);
+        }
+    }
     /// a neighbor point has calculated its energy (and not the gradient)
     /// neighbors should be restricted to silos
     void neighborHasEnergy(SKey s,Point[] neighbors,PointEMin eAndMin){
@@ -1436,11 +1459,14 @@ final class PNetSilos(T): LocalSilosI!(T){
         synchronized(explorers){
             explorers[o.name]=o;
         }
+        synchronized(generatingExplorers){
+            generatingExplorers[o.name]=o;
+        }
     }
     /// removes the given explorer
     bool rmExplorerNamed(char[] name){
-        synchronized(explorers){
-            return explorers.removeKey(name);
+        synchronized(generatingExplorers){
+            return generatingExplorers.removeKey(name);
         }
     }
     void notifyLocalObservers(void delegate(ExplorationObserverI!(T))op){
@@ -1587,6 +1613,7 @@ final class PNetSilos(T): LocalSilosI!(T){
         this._nCenter=nCenter;
         if (nCenter is null) this._nCenter=new NotificationCenter();
         this.explorers=new HashMap!(char[],ExplorerI!(T))();
+        this.generatingExplorers=new HashMap!(char[],ExplorerI!(T))();
         this.observers=null;
         this._components=new HashMap!(string,SilosComponentI!(T))();
         this.evaluator=cast(Method)this.input.evaluator.contentObj;
@@ -1605,6 +1632,7 @@ final class PNetSilos(T): LocalSilosI!(T){
             if (cast(ExplorerGen)o !is null){
                 auto expl=explorerT!(T)(cast(ExplorerGen)o,this);
                 explorers[expl.name]=expl;
+                generatingExplorers[expl.name]=expl;
                 addObserver(expl);
             } else {
                 addObserver(observerT!(T)(cast(ExplorationObserverGen)o,this));

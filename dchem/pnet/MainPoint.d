@@ -451,20 +451,25 @@ class MainPoint(T):MainPointI!(T){
     }
     /// atomic cas on the flags of this point
     uint gFlagsAtomicCAS(uint newVal,uint oldVal){
+        uint oVal;
         synchronized(this){
-            if (_gFlags==oldVal){
+            oVal=_gFlags;
+            if (oVal==oldVal){
                 _gFlags=newVal;
             }
-            return _gFlags;
         }
+        if (oVal==oldVal&&newVal!=oldVal) notifyGFlagChange(oVal);
+        return oVal;
     }
     /// atomic op on the flags of this point
     uint gFlagsAtomicOp(uint delegate(uint) op){
+        uint oldV;
         synchronized(this){
-            auto oldV=_gFlags;
+            oldV=_gFlags;
             _gFlags=op(oldV);
-            return oldV;
         }
+        if (_gFlags!=oldV) notifyGFlagChange(oldV);
+        return oldV;
     }
     /// explores the next direction, immediately marks it as in exploration
     /// returns direction 0 if the gradient has to be evaluated, an invalid direction if the current point is in evaluation,
@@ -472,26 +477,26 @@ class MainPoint(T):MainPointI!(T){
     /// if lastIsLast is true then the last direction (gradient) is explored as last
     PointAndDir exploreNext(FlagsArray methodDirs=null,bool lastIsLast=true){
         auto exploreFlags=DirFlags.Explored;
+        if ((gFlags&GFlags.HasRefFrame)==0) {
+            synchronized(this){
+                if ((gFlags&(GFlags.InProgress|GFlags.GradientEvaluated))==0){
+                    if (exploredDirs.atomicCAS(0,exploreFlags,DirFlags.Free)==DirFlags.Free){
+                        _gFlags|=GFlags.GradientInProgress;
+                        version(TrackPNet) logMsg(delegate void(CharSink s){
+                            dumper(s)("exploreNext will return self Eval");
+                        });
+                        return PointAndDir(point,0);
+                    } else if ((gFlags&GFlags.DoNotExplore)==0){
+                        throw new Exception("direction 0 taken, but no gradient eval in progress",__FILE__,__LINE__);
+                    }
+                }
+            }
+        }
         if ((gFlags&GFlags.DoNotExplore)!=0){
             version(TrackPNet) logMsg(delegate void(CharSink s){
                 dumper(s)("GFlags.DoNotExplore: exploreNext will return 0,invalidDir");
             });
             return PointAndDir(Point(0),invalidDir);
-        }
-        if ((gFlags&GFlags.HasRefFrame)==0) {
-            synchronized(this){
-                if ((gFlags&(GFlags.InProgress|GFlags.GradientEvaluated))==0){
-                    _gFlags|=GFlags.GradientInProgress;
-                    if (exploredDirs.atomicCAS(0,exploreFlags,DirFlags.Free)==DirFlags.Free){
-                        version(TrackPNet) logMsg(delegate void(CharSink s){
-                            dumper(s)("exploreNext will return self Eval");
-                        });
-                        return PointAndDir(point,0);
-                    } else {
-                        throw new Exception("direction 0 taken, but no gradient eval in progress",__FILE__,__LINE__);
-                    }
-                }
-            }
         }
         assert((gFlags&GFlags.PointBcasted)!=0);
         if ((gFlags&GFlags.InProgress)!=0){
@@ -576,6 +581,12 @@ class MainPoint(T):MainPointI!(T){
     Real energy(){
         synchronized(this){
             return pos.dynVars.potentialEnergy;
+        }
+    }
+    /// energy of the current point
+    Real energyError(){
+        synchronized(this){
+            return pos.dynVars.potentialEnergyError;
         }
     }
     PointEMin pointEMin(){
@@ -1136,6 +1147,7 @@ class MainPoint(T):MainPointI!(T){
          (localContext.gradEagerness()>=GradEagerness.Always||(gFlags&GFlags.GradientInProgress)!=0||alwaysGrad));
         if (calcE||calcF){
             Real e=pos.dynVars.potentialEnergy;
+            Real eErr=pos.dynVars.potentialEnergyError;
             mixin(withPSys(`
             pSys.checkX();
             pSys.dynVars.x[]=pos.dynVars.x;`,"c."));
@@ -1144,6 +1156,7 @@ class MainPoint(T):MainPointI!(T){
             version(TrackPNet) logMsg(delegate void(CharSink s){ s("did calculate EF"); });
             if (calcE) {
                 pos.dynVars.potentialEnergy=c.potentialEnergy();
+                pos.dynVars.potentialEnergyError=c.potentialEnergyError();
                 if ((!isNaN(e))&&(e!=pos.dynVars.potentialEnergy)){
                     throw new Exception(collectAppender(delegate void(CharSink s){
                         dumper(s)("energy of point ")(point.data)(" changed from ")(e)(" to ")(pos.dynVars.potentialEnergy);
@@ -1152,9 +1165,12 @@ class MainPoint(T):MainPointI!(T){
             }
             if (calcF) {
                 pos.checkMddx();
-                mixin(withPSys(`pos.dynVars.mddx[]=pSys.dynVars.mddx;`,"c."));
+                mixin(withPSys(`
+                pos.dynVars.mddx[]=pSys.dynVars.mddx;
+                pos.dynVars.mddxError=pSys.dynVars.mddxError;`,"c."));
             }
             e=pos.dynVars.potentialEnergy;
+            eErr=pos.dynVars.potentialEnergyError;
             if (isNaN(e)){
                 throw new Exception(collectAppender(delegate void(CharSink s){
                     dumper(s)("invalid energy after calculation in point ")(point.data);
@@ -1165,10 +1181,10 @@ class MainPoint(T):MainPointI!(T){
             if (calcE && (!calcF)){
                 if (localContext.gradEagerness()==GradEagerness.Speculative){
                     version(TrackPNet) logMsg(delegate void(CharSink s){ s("ask for extra gradient"); });
-                    calcMore=localContext.speculativeGradient(target,point,e);
+                    calcMore=localContext.speculativeGradientLocal(target,point,e,eErr);
                 } else {
                     version(TrackPNet) logMsg(delegate void(CharSink s){ s("will communicate energy"); });
-                    localContext.addEnergyEvalLocal(target,point,e);
+                    localContext.addEnergyEvalLocal(target,point,e,eErr);
                 }
             }
             if (calcMore){
@@ -1176,7 +1192,9 @@ class MainPoint(T):MainPointI!(T){
                 calcF=true;
                 pos.checkMddx();
                 c.updateEF(false,true);
-                mixin(withPSys(`pos.dynVars.mddx[]=pSys.dynVars.mddx;`,"c."));
+                mixin(withPSys(`
+                pos.dynVars.mddx[]=pSys.dynVars.mddx;
+                pos.dynVars.mddxError=pSys.dynVars.mddxError;`,"c."));
                 // update also the energy? it should not change...
             }
             if (calcF){
@@ -1296,13 +1314,13 @@ class MainPoint(T):MainPointI!(T){
                 newFlags|=GFlags.CorrNeighValsSame;
             }
         }
-        if ((forceDir||specialDir==-1) && (isNaN(_attractor.energyThroughPoint) || _attractor.energyThroughPoint>e||
+        if ((forceDir||specialDir==-1||(!hasFrameOfRef)) && (isNaN(_attractor.energyThroughPoint) || _attractor.energyThroughPoint>e||
             (_attractor.throughPoint==eAndMin.point && _attractor.idThroughPoint<eAndMin.id)))
         {
             bool didChangeMinimum=false;
             synchronized(this){
-                if (isNaN(_attractor.energyThroughPoint) || _attractor.energyThroughPoint>e || 
-                    (_attractor.throughPoint==eAndMin.point && _attractor.idThroughPoint<eAndMin.id))
+                if ((forceDir||specialDir==-1||(!hasFrameOfRef))&&(isNaN(_attractor.energyThroughPoint) || _attractor.energyThroughPoint>e || 
+                    (_attractor.throughPoint==eAndMin.point && _attractor.idThroughPoint<eAndMin.id)))
                 {
                     _attractor.throughPoint=eAndMin.point;
                     _attractor.energyThroughPoint=eAndMin.energy;
@@ -1384,7 +1402,7 @@ class MainPoint(T):MainPointI!(T){
     /// sets the energy
     /// is really perfomed only the first time (and returns true)
     /// if true is returned you should call didEnergyEval
-    bool setEnergy(Real e){
+    bool setEnergy(Real e,Real eError){
         assert(!isLocalCopy);
         if (isNaN(e)){
             throw new Exception(collectAppender(delegate void(CharSink s){
@@ -1397,6 +1415,7 @@ class MainPoint(T):MainPointI!(T){
             switch(oldGFlags&GFlags.EnergyInfo){
             case GFlags.None, GFlags.EnergyInProgress:
                 pos.dynVars.potentialEnergy=e;
+                pos.dynVars.potentialEnergyError=eError;
                 oldGFlags=gFlags;
                 _gFlags=(gFlags & ~GFlags.EnergyInfo)|GFlags.EnergyKnown;
                 break;
@@ -1432,7 +1451,7 @@ class MainPoint(T):MainPointI!(T){
         updateNeighE();
         auto s=owner();
         localContext.notifyLocalObservers(delegate void(ExplorationObserverI!(T)obs){
-            obs.addEnergyEvalLocal(s,point,energy);
+            obs.addEnergyEvalLocal(s,point,energy,energyError);
         });
     }
     /// gets the energies of the neighbors and broadcasts its own energy to them
@@ -1659,6 +1678,14 @@ class MainPoint(T):MainPointI!(T){
             localNeighDir.appendArr(neighDistances.data);
             neighbors.clearData();
             neighDistances.clearData();
+            // clear attractor (would be better to clear it only if it is in the "wrong" direction, change??)
+            if (_attractor.minimum !=  point){
+                _attractor.energyThroughPoint=Real.init;
+                _attractor.minimum=Point(0);
+                _attractor.throughPoint=Point(0);
+                ++(_attractor.id);
+                _attractor.idThroughPoint=0;
+            }
         }
         if (newGFlags!=oldGFlags){
             notifyGFlagChange(oldGFlags);
@@ -1692,7 +1719,7 @@ class MainPoint(T):MainPointI!(T){
         localContext.notifyLocalObservers(delegate void(ExplorationObserverI!(T)obs){
             obs.addGradEvalLocal(ownr,point,pSysWriter(pos));
             if(newE) // we do it after to help when playing back the journal (skip???)
-                obs.addEnergyEvalLocal(ownr,point,energy);
+                obs.addEnergyEvalLocal(ownr,point,energy,energyError);
         });
         localNeigh.clearData();
         localNeighDir.clearData();
