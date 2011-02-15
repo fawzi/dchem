@@ -131,8 +131,8 @@ class TemplateExecuter: Method {
 }
 
 class CmdTemplateExecuter:TemplateExecuter {
-    char[] executeInitialE, executeStructChangeE, executePosChangeE, executeSmallPosChangeE, executeSmoothPosChangeE, executeDefaultE;
-    char[] executeInitialEF, executeStructChangeEF, executePosChangeEF, executeSmallPosChangeEF, executeSmoothPosChangeEF, executeDefaultEF;
+    char[] executeE;
+    char[] executeEF;
     
     bool verify(CharSink sink){
         bool res=super.verify(sink);
@@ -145,53 +145,9 @@ class CmdTemplateExecuter:TemplateExecuter {
         char[] res;
         if (force==false){
             if (energy==false) return "NONE";
-            switch (changeLevel){
-            case ChangeLevel.FirstTime:
-                res=executeInitialE;
-                break;
-            case ChangeLevel.AllChanged:
-                res=executeStructChangeE;
-                break;
-            case ChangeLevel.PosChanged:
-                res=executePosChangeE;
-                break;
-            case ChangeLevel.SmallPosChange:
-                res=executeSmallPosChangeE;
-            break;
-            case ChangeLevel.SmoothPosChange:
-                res=executeSmoothPosChangeE;
-            break;
-            default:
-                throw new Exception(collectAppender(delegate void(CharSink s){ s("unexpected changeLevel "); writeOut(s,changeLevel); }),
-                    __FILE__,__LINE__);
-            }
-            if (res.length==0){
-                res=executeDefaultE;
-            }
+            res=executeE;
         } else {
-            switch (changeLevel){
-            case ChangeLevel.FirstTime:
-                res=executeInitialEF;
-                break;
-            case ChangeLevel.AllChanged:
-                res=executeStructChangeEF;
-                break;
-            case ChangeLevel.PosChanged:
-                res=executePosChangeEF;
-                break;
-            case ChangeLevel.SmallPosChange:
-                res=executeSmallPosChangeEF;
-            break;
-            case ChangeLevel.SmoothPosChange:
-                res=executeSmoothPosChangeEF;
-            break;
-            default:
-                throw new Exception(collectAppender(delegate void(CharSink s){ s("unexpected changeLevel "); writeOut(s,changeLevel); }),
-                    __FILE__,__LINE__);
-            }
-            if (res.length==0){
-                res=executeDefaultE;
-            }
+            res=executeEF;
         }
         if (res.length==0 && superTemplate !is null){
             auto te=cast(TemplateExecuter)superTemplate.content;
@@ -215,18 +171,8 @@ class CmdTemplateExecuter:TemplateExecuter {
     }
     // serialization stuff
     mixin(serializeSome("dchem.CmdTemplateExecuter",`
-    executeInitialE: command executed to calculate the first energy, set to NONE to deactivate
-    executeStructChangeE: command executed to calculate the energy when the structure is changed, set to NONE to deactivate
-    executePosChangeE: command executed to calculate the energy when only positions changed, set to NONE to deactivate
-    executeSmallPosChangeE: command executed to calculate the energy when positions changed by a small amount, set to NONE to deactivate
-    executeSmoothPosChangeE: command executed to calculate the energy when positions changed smoothly, set to NONE to deactivate
-    executeDefaultE: default command for all execute*E commands (if they are empty)
-    executeInitialEF: command executed to calculate the first energy and forces, set to NONE to deactivate
-    executeStructChangeEF: command executed to calculate the energy and forces when the structure is changed, set to NONE to deactivate
-    executePosChangeEF: command executed to calculate the energy and forces when only positions changed, set to NONE to deactivate
-    executeSmallPosChangeEF: command executed to calculate the energy and forces when positions changed by a small amount, set to NONE to deactivate
-    executeSmoothPosChangeEF: command executed to calculate the energy and forces when positions changed smoothly, set to NONE to deactivate
-    executeDefaultEF: default command for all execute*EF commands (if they are empty)
+    executeE: command executed to calculate the energy alone
+    executeEF: command executed to calculate the energy and forces
     `));
 }
 
@@ -293,9 +239,13 @@ class ExecuterContext:CalcContext{
     }
     
     void updateEF(bool updateE=true,bool updateF=true){
+        templateH.subs["evalE"]=(updateE?"T":"F");
+        templateH.subs["evalF"]=(updateF?"T":"F");
         templateH.evalTemplates(changeLevel,input.overwriteUnchangedPaths);
         execCmd(input.commandFor(updateE,updateF,changeLevel));
         collectEF(updateE,updateF);
+        templateH.subs["evalE"]="-";
+        templateH.subs["evalF"]="-";
         maxChange=0;
         changeLevelSet=ChangeLevel.SmoothPosChange;
     }
@@ -420,6 +370,9 @@ class TemplateHandler{
     }
     /// evaluates the templates
     void evalTemplates(int level,bool overwriteUnchangedPaths=false){
+        subs["changeLevel"]=collectAppender(delegate void(CharSink s){
+            writeOut(s,level);
+        });
         if (shouldWriteReplacementsDict){
             auto rDictF=targetDir.file(rDictFilename).create();
             auto outF=strDumper(rDictF.output);
