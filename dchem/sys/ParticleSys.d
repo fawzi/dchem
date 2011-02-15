@@ -83,7 +83,12 @@ char[] derivTransferTMixin(char[]t){
 
 /// interface that implements Real and LowP versions (multiple inheritane of templated interface seems to trigger bugs)
 interface DerivTransfer{
-    mixin(DerivTransferTMixin("Real")~DerivTransferTMixin("LowP"));
+    void addToTangentialSpace(ParticleSys!(Real)pos,DynPVector!(Real,XType)diffP,DynPVector!(Real,DxType)res);
+    void addToTangentialSpace(ParticleSys!(LowP)pos,DynPVector!(LowP,XType)diffP,DynPVector!(LowP,DxType)res);
+    void addFromDualTangentialSpace(ParticleSys!(Real)pos,DynPVector!(Real,DualDxType)deriv,DynPVector!(Real,XType)res);
+    void addFromDualTangentialSpace(ParticleSys!(LowP)pos,DynPVector!(LowP,DualDxType)deriv,DynPVector!(LowP,XType)res);
+    void addFromForeignDualTangentialSpace(ParticleSys!(Real)pos,ParticleSys!(Real)pos2,DynPVector!(Real,DualDxType)derivAtPos2,DynPVector!(Real,DualDxType)res);
+    void addFromForeignDualTangentialSpace(ParticleSys!(LowP)pos,ParticleSys!(LowP)pos2,DynPVector!(LowP,DualDxType)derivAtPos2,DynPVector!(LowP,DualDxType)res);
     /// should return true if the overlap is different from the identity
     bool specialOverlap();
     /// should set the overlap, matrix should use 2d distribution, at the moment it uses just pos,orient,dof sequence
