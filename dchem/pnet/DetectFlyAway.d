@@ -18,6 +18,7 @@ import blip.container.BulkArray;
 import dchem.interpolate.Microsphere;
 import dchem.util.Rotate;
 import blip.io.FileStream;
+import blip.core.Array;
 
 /// detects fly away, at the moment it is convex, should I also implement the better connectivity based solution?
 class DetectFlyAwayGen:SilosWorkerGen{

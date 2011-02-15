@@ -147,6 +147,7 @@ class MultiConstraint(T): ConstraintI!(T){
             // to do cg optimization
             assert(0,"cg optimization not yet implemented");
         }
+        return maxErr;
     }
     
     void applyDR(ParticleSys!(T) state,ParticleSys!(T) diff=null){

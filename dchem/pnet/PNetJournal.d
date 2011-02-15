@@ -12,7 +12,7 @@ import blip.container.GrowableArray;
 import blip.io.BasicIO;
 import blip.io.FileStream;
 import dchem.input.RootInput;
-import blip.io.EventWatcher:ev_time;
+import blip.io.EventWatcher:ev_time,ev_tstamp;
 import blip.parallel.mpi.Mpi;
 
 // object that keeps the journal of the computations done

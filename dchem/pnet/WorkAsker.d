@@ -13,6 +13,7 @@ import blip.io.EventWatcher: ev_tstamp,ev_time;
 import blip.io.Console;
 import blip.parallel.rpc.Rpc;
 import blip.stdc.stdlib: abort;
+import blip.core.Array;
 
 version(TrackPNet){
     version=TrackWorkAsker;

@@ -5,6 +5,7 @@ import blip.io.Console;
 import dchem.util.Rotate;
 import blip.math.IEEE;
 import blip.math.Math;
+import blip.core.Array;
 
 class MicrosphereDef{
     NArray!(Real,2) dirs;
