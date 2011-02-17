@@ -40,6 +40,12 @@ class SubMapping: BasicObjectI{
         auto ik=cast(size_t)(k-lKRange.kStart);
         return cast(ParticleIdx)(kindStarts[ik+1]-kindStarts[ik]);
     }
+    ParticleIdx nLocalParticles(KindRange kr){
+        assert(kr in lKRange);
+        auto ik=cast(size_t)(kr.kStart-lKRange.kStart);
+	auto ik2=cast(size_t)(kr.kEnd-lKRange.kStart);
+        return cast(ParticleIdx)(kindStarts[ik2]-kindStarts[ik]);
+    }
     /// lowlevel constructor
     static SubMapping opCall(char[] name,BulkArray!(PIndex) sortedPIndex,
         BulkArray!(LocalPIndex) gSortedLocalPIndex,
