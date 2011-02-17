@@ -39,7 +39,7 @@ import blip.io.EventWatcher;
 import dchem.pnet.WaitOp;
 import blip.container.AtomicSLink;
 import blip.util.RefCount;
-import blip.core.Array;
+import blip.core.Array:sort;
 //import dchem.pnet.WorkAsker;
 
 /// help structure 
