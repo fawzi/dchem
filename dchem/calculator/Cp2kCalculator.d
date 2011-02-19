@@ -74,8 +74,8 @@ class Cp2kConnection{
         //this.sock.keepalive(true);
         commTask=new SequentialTask("cp2kCommTask",defaultTask,true);
         // should limit buffer to 1280 or 1500 or multiples of them? (jumbo frames)
-        outStream=new BufferedBinStream(&this.writeExact,3000,&this.sock.flush,&this.sock.close);
-        readIn=new BufferIn!(void)(&this.rawReadInto);
+        outStream=new BufferedBinStream("cp2kServer",&this.writeExact,3000,&this.sock.flush,&this.sock.close);
+        readIn=new BufferIn!(void)(&outStream.desc,&this.rawReadInto);
         localUsers=1;
         log=cp2kServ.log;
         version(TrackCp2kSock){

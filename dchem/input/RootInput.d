@@ -262,7 +262,7 @@ class RootInput{
     void writeInput(CharSink s){
         auto nNames=knownNames.keys;
         newKnownNames=null;
-        scope js=new JsonSerializer!(char)(s);
+        scope js=new JsonSerializer!(char)("RootInputOut",s);
         js.context["RootInput"]=Variant(this);
         while (true){
             foreach(k;nNames) {

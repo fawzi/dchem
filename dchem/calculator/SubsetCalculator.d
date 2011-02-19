@@ -972,7 +972,7 @@ class SubsetContext:CalcContext{
                 assert(0);
             }
         }
-        // maxChange=0.0; changeLevel=ChangeLevel.SmoothPosChange;
+        // maxChange=0.0; changeLevel=ChangeLevel.NoChange;
     }
     
     void setup(LinearComm pEnv,CharSink log){ }

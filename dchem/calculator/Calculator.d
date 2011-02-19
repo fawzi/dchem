@@ -473,6 +473,10 @@ class CalcContext:LocalCalculationContext{
     void executeLocally(RemoteCCTask r){
         r.workOn(this);
     }
+    
+    void desc(CharSink s){
+        dumper(s)("executer '")(contextId())("'");
+    }
 
     ConstraintI!(Real) constraintsReal(){ return null; }
     ConstraintI!(LowP) constraintsLowP(){ return null; }

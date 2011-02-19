@@ -53,7 +53,8 @@ enum ChangeLevel{
     AllChanged=1,
     PosChanged=2,
     SmallPosChange=3,
-    SmoothPosChange=4
+    SmoothPosChange=4,
+    NoChange=5
 }
 
 enum Precision{
