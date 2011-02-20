@@ -1,0 +1,36 @@
+{
+startConfig:{
+    class:"dchem.FileConfig",
+    fileName:"1Cu2Co.xyz",
+    format:"xyz",
+    cell:[[8.45,0,0],
+        [0,24.0,0],
+        [0,0,8.45]]
+}
+
+singleP:{
+    class:dchem.SinglePoint,
+    calcE:1,
+    calcF:1,
+    method:{ class:Ref, name:turboM}
+}
+
+turboM:{
+    class:"dchem.TurboExecuter",
+    templateDir:"templates/turbo",
+    subs:{
+        cutoff:"800",
+        projName:"test1",
+    },
+    maxContexts:1,
+    executeE:"cp ../turboCalc/ridft.out ../turboCalc/energy .",
+    executeEF:"sh calc.sh"
+    executeF0:"cp ../turboCalc/gradient .",
+    maxPosDiff:100.0
+    startConfig:{ class:Ref name:startConfig}
+    subset:[44,49]
+}
+
+main:{class:Ref, name:singleP}
+
+}

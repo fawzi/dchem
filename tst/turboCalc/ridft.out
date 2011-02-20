@@ -1,0 +1,3323 @@
+ operating system is UNIX !
+ hostname is         hexa11
+
+ ridft(hexa11) : TURBOMOLE 26 Sep 2007 at 15:07:04
+ Copyright (C) 2007 University of Karlsruhe
+
+
+    2011-02-15 17:39:47.564 
+
+
+
+                                  r i d f t
+
+                        DFT program with RI approximation 
+                                for coulomb part 
+
+
+
+
+                                                 
+                                 References:     
+                                                 
+          TURBOMOLE:                             
+              R. Ahlrichs, M. Baer, M. Haeser, H. Horn, and
+              C. Koelmel
+              Electronic structure calculations on workstation
+              computers: the program system TURBOMOLE
+              Chem. Phys. Lett. 162: 165 (1989)
+          Density Functional:                              
+              O. Treutler and R. Ahlrichs                      
+              Efficient Molecular Numerical Integration Schemes
+              J. Chem. Phys. 102: 346 (1995)                   
+          Parallel Version:                                
+              Performance of parallel TURBOMOLE for Density    
+              Functional Calculations                          
+              M. v. Arnim and R. Ahlrichs                      
+              J. Comp. Chem. 19: 1746 (1998)                   
+          RI-J Method:                                     
+              Auxiliary Basis Sets to approximate Coulomb      
+              Potentials                                       
+              Chem. Phys. Lett. 240: 283 (1995)                
+              K. Eichkorn, O. Treutler, H. Oehm, M. Haeser     
+              and R. Ahlrichs                                  
+              Chem. Phys. Lett. 242: 652 (1995)                
+                                                           
+              Auxiliary Basis Sets for Main Row Atoms and their
+              Use to approximate Coulomb Potentials            
+              K. Eichkorn, F. Weigend, O. Treutler and         
+              R. Ahlrichs                                      
+              Theo. Chem. Acc. 97: 119 (1997)                   
+                                                           
+              Accurate Coulomb-fitting basis sets for H to Rn 
+              F. Weigend                                        
+              Phys. Chem. Chem. Phys. 8: 1057 (2006)            
+                                                           
+          Multipole accelerated RI-J (MARI-J):             
+              Fast evaluation of the Coulomb potential for     
+              electron densities using multipole accelerated   
+              resolution of identity approximation             
+              M. Sierka, A. Hogekamp and R. Ahlrichs           
+              J. Chem. Phys. 118: 9136 (2003)                  
+          RI-JK Method:                                     
+              A fully direct RI-HF algorithm: Implementation,
+              optimised auxiliary basis sets, demonstration of
+              accuracy and efficiency                         
+              F. Weigend                                      
+              Phys. Chem. Chem. Phys. 4: 4285 (2002)           
+                                         
+
+
+ 
+
+
+              +--------------------------------------------------+
+              |      general information about current run       |
+              +--------------------------------------------------+
+
+ 
+
+ UHF modus switched on !
+ Becke-3-Parameter hybrid functional: B3-LYP
+ exchange:    0.8*LDA + 0.72*B88 + 0.2*HF
+ correlation: 0.19*LDA(VWN) + 0.81*LYP
+ A Hybrid-DFT calculation using the RI-J approximation will be carried out.
+ Allocatable memory for RI due to $ricore (MB):         900
+ Multipole approximation for Coulomb integrals is used
+
+ W A R N I N G : BASIS SET NICKNAME none DOES NOT CONTAIN ATOMIC SYMBOL mg !
+
+
+  WARNING : no basis functions have been specified for 
+
+        29   mg f    
+        30   mg f    
+        31   mg f    
+        32   mg f    
+        33   mg f    
+        34   mg f    
+        35   mg f    
+        36   mg f    
+        37   mg f    
+        38   mg f    
+        39   mg f    
+        40   mg f    
+        41   mg f    
+        42   mg f    
+        43   mg f    
+        44   mg f    
+
+
+              +--------------------------------------------------+
+              | Atomic coordinate, charge and isotop information |
+              +--------------------------------------------------+
+
+
+              atomic coordinates              atom shells charge pseudo isotop
+     7.95196757   19.87991892   15.90393513    o      9    8.000    0     0
+    11.92795135   15.90393513   15.90393513    o      9    8.000    0     0
+    11.92795135   19.87991892   15.90393513    mg     8   12.000    0     0
+    11.92795135   23.85590270   15.90393513    o      9    8.000    0     0
+    15.90393513   11.92795135   15.90393513    o      9    8.000    0     0
+    15.90393513   15.90393513   15.90393513    mg     8   12.000    0     0
+    15.90393513   19.87991892   15.90393513    o      9    8.000    0     0
+    15.90393513   23.85590270   15.90393513    mg     8   12.000    0     0
+    15.90393513   27.83188649   15.90393513    o      9    8.000    0     0
+    19.87991892   15.90393513   15.90393513    o      9    8.000    0     0
+    19.87991892   19.87991892   15.90393513    mg     8   12.000    0     0
+    19.87991892   23.85590270   15.90393513    o      9    8.000    0     0
+    23.85590270   19.87991892   15.90393513    o      9    8.000    0     0
+     7.95196757   19.87991892   11.92795135    mg     8   12.000    0     0
+    11.92795135   15.90393513   11.92795135    mg     8   12.000    0     0
+    11.92795135   19.87991892   11.92795135    o      9    8.000    0     0
+    11.92795135   23.85590270   11.92795135    mg     8   12.000    0     0
+    15.90393513   11.92795135   11.92795135    mg     8   12.000    0     0
+    15.90393513   15.90393513   11.92795135    o      9    8.000    0     0
+    15.90393513   19.87991892   11.92795135    mg     8   12.000    0     0
+    15.90393513   23.85590270   11.92795135    o      9    8.000    0     0
+    15.90393513   27.83188649   11.92795135    mg     8   12.000    0     0
+    19.87991892   15.90393513   11.92795135    mg     8   12.000    0     0
+    19.87991892   19.87991892   11.92795135    o      9    8.000    0     0
+    19.87991892   23.85590270   11.92795135    mg     8   12.000    0     0
+    23.85590270   19.87991892   11.92795135    mg     8   12.000    0     0
+    15.90393513   19.87991892    7.95196757    o      9    8.000    0     0
+    15.90393513   19.87991892    3.97598378    mg     8   12.000    0     0
+     3.97598378   19.87991892   15.90393513    mg     0   12.000    1     0
+     7.95196757   15.90393513   15.90393513    mg     0   12.000    1     0
+     7.95196757   23.85590270   15.90393513    mg     0   12.000    1     0
+    11.92795135   11.92795135   15.90393513    mg     0   12.000    1     0
+    11.92795135   27.83188649   15.90393513    mg     0   12.000    1     0
+    15.90393513    7.95196757   15.90393513    mg     0   12.000    1     0
+    15.90393513   31.80787027   15.90393513    mg     0   12.000    1     0
+    19.87991892   11.92795135   15.90393513    mg     0   12.000    1     0
+    19.87991892   27.83188649   15.90393513    mg     0   12.000    1     0
+    23.85590270   15.90393513   15.90393513    mg     0   12.000    1     0
+    23.85590270   23.85590270   15.90393513    mg     0   12.000    1     0
+    27.83188649   19.87991892   15.90393513    mg     0   12.000    1     0
+    11.92795135   19.87991892    7.95196757    mg     0   12.000    1     0
+    15.90393513   15.90393513    7.95196757    mg     0   12.000    1     0
+    15.90393513   23.85590270    7.95196757    mg     0   12.000    1     0
+    19.87991892   19.87991892    7.95196757    mg     0   12.000    1     0
+    15.91037111   19.87872736   19.89199790    cu    13   29.000    0     0
+    13.68092573   22.11654603   21.44476100    c      9    6.000    0     0
+    12.37323062   23.43223838   22.58347085    o      9    8.000    0     0
+    18.14753756   17.64949119   21.44579961    c      9    6.000    0     0
+    19.46234716   16.34228591   22.58615826    o      9    8.000    0     0
+ 
+
+     center of nuclear mass  :   15.90496000   19.88013676   14.30579486
+
+     center of nuclear charge:   15.90494054   19.88014601   14.28571340
+
+
+              +--------------------------------------------------+
+              |               basis set information              |
+              +--------------------------------------------------+
+
+
+              we will work with the  1s 3p 5d  7f  9g ... basis set
+              ...i.e. with spherical basis functions...
+
+
+   type   atoms  prim   cont   basis
+   ---------------------------------------------------------------------------
+    o       16     34     19   def-TZVP   [5s3p1d|11s6p1d]
+    mg      14     35     14   def-TZVP   [5s3p|14s7p]
+    cu       1     80     33   def-TZVP   [6s4p3d|17s11p6d]
+    c        2     34     19   def-TZVP   [5s3p1d|11s6p1d]
+   ---------------------------------------------------------------------------
+   total:   49   1182    571
+   ---------------------------------------------------------------------------
+
+   total number of primitive shells          :   91
+   total number of contracted shells         :  287
+   total number of cartesian basis functions :  592
+   total number of SCF-basis functions       :  571
+
+
+ integral neglect threshold       :  0.56E-11
+ integral storage threshold THIZE :  0.10E-04
+ integral storage threshold THIME :         5
+
+ number of unique ecp types :           1
+ RI-J AUXILIARY BASIS SET information:
+
+ W A R N I N G : BASIS SET NICKNAME none DOES NOT CONTAIN ATOMIC SYMBOL mg !
+
+
+  WARNING : no basis functions have been specified for 
+
+        29   mg f    
+        30   mg f    
+        31   mg f    
+        32   mg f    
+        33   mg f    
+        34   mg f    
+        35   mg f    
+        36   mg f    
+        37   mg f    
+        38   mg f    
+        39   mg f    
+        40   mg f    
+        41   mg f    
+        42   mg f    
+        43   mg f    
+        44   mg f    
+
+   we will work with the  1s 3p 5d  7f  9g 11h 13i auxiliary basis set
+   ...i.e. with spherical basis functions...
+
+   type   atoms  prim   cont   basis
+   ---------------------------------------------------------------------------
+    o       16     40     38   def-TZVP   [7s3p3d1f|9s3p3d1f]
+    mg      14     51     28   def-TZVP   [5s2p2d1f|12s4p4d1f]
+    cu       1    106     68   def-TZVP   [7s4p2d3f2g|17s4p4d3f4g]
+    c        2     40     38   def-TZVP   [7s3p3d1f|9s3p3d1f]
+   ---------------------------------------------------------------------------
+   total:   49   1540   1144
+   ---------------------------------------------------------------------------
+
+   total number of primitive shells          :   85
+   total number of contracted shells         :  410
+   total number of cartesian basis functions : 1345
+   total number of SCF-basis functions       : 1144
+
+
+ symmetry group of the molecule :   c1 
+
+ the group has the following generators :
+   c1(z)
+
+    1 symmetry operations found
+
+ there are 1 real representations :   a   
+
+ maximum number of shells which are related by symmetry :  1
+
+
+    mo occupation :
+   irrep   mo's   occupied
+    a      571      169
+ 
+ number of basis functions   :          571
+ number of occupied orbitals :          169
+ 
+  
+           ------------------
+           density functional
+           ------------------
+ Becke-3-Parameter hybrid functional: B3-LYP
+ exchange:    0.8*LDA + 0.72*B88 + 0.2*HF
+ correlation: 0.19*LDA(VWN) + 0.81*LYP
+ iterations will be done with small grid
+  
+ spherical integration : Lebedev's spherical grid
+ spherical gridsize    :           3
+    i.e. gridpoints    :         302
+ value for diffuse not defined
+ radial integration    : Chebyshev 2nd kind (scaling 3)
+ radial gridsize       :           3
+ integration cells     :          49
+ partition function    : becke
+ partition sharpness   :           3
+  
+
+ biggest AO integral is expected to be    17.830051868
+  
+           ------------------------
+               RI-J - INFORMATION
+           ------------------------
+ 
+    +---------------- Multipole Accelerated RI-J ---------------+
+    -------------------------------------------------------------
+      Number of bins for density partition        :  8
+      Maximum multipole moment used               : 14
+      Multipole precision parameter               :  1.0000E-08
+      Threshold for moment summation              :  1.0000E-24
+      Minimum separation between boxes            :  0.0000E+00
+      Maximum allowed extent                      :  2.0000E+01
+    +-----------------------------------------------------------+
+ 
+ Extensions and centers of shell-pairs:
+  number of shells with a single center:        23936
+  number of shells with double centers:           864
+ Contributions to RI integral batches: 
+  neglected integral batches:           16528
+  multipole/direct contribution:         3253
+  multipole/memory contribution:        21547
+ Memory core needed for (P|Q) and Cholesky     10 MByte
+ Memory core minimum needed except of (P|Q)     2 MByte
+ Total minimum memory core needed (sum)        12 MByte
+  
+ ****************************************
+ Memory allocated for RI-J   900 MByte
+ ****************************************
+                                            
+
+ cpu-time elapsed before start of lpzwei:        0.170 sec
+ lpdrec:
+  Number of neglected batches:       2463676
+  Number of calculated batches:      6370594
+
+          ------------------------
+          nuclear repulsion energy  :   8251.07214727    
+          ------------------------
+
+ 
+          -----------------
+          -S,T+V- integrals
+          -----------------
+
+ 1e-integrals will be neglected if expon. factor < 0.564521E-12
+ 
+           ----------------
+           -ecp-  integrals
+           ----------------
+ ECP: maximum angular momentum =           2
+ ECP: maximum angular projector=           1
+ 
+   Difference densities algorithm switched on.
+   The maximal number of linear combinations of
+   difference densities is          20 .
+
+ automatic virtual orbital shift switched on 
+      shift if e(lumo)-e(homo) < 0.10000000    
+
+
+ DIIS switched on: error vector is FDS-SDF
+ Max. Iterations for DIIS is     :   4
+ DIIS matrix (see manual) 
+    Scaling factor of diagonals  :  1.200
+    threshold for scaling factor :  0.000
+
+ scf convergence criterion : increment of total energy < .1000000D-06
+                  and increment of one-electron energy < .1000000D-03
+
+
+ <geterg> : there is no data group $energy 
+
+  MOs are in ASCII format !
+
+
+ reading orbital data $uhfmo_alpha  from file alpha . 
+
+ orbital characterization : scfconv=7
+ 
+
+ reading orbital data $uhfmo_beta  from file beta . 
+
+ orbital characterization : scfconv=7
+ 
+ mo-orthogonalization by Cholesky decomposition
+ mo-orthogonalization by Cholesky decomposition
+
+ DSCF restart information will be dumped onto file alpha
+
+
+ Starting SCF iterations
+
+          Overall gridpoints after grid construction =        115816
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+   1  -5681.2710451166    -23304.120170     9371.7769775    0.000D+00 0.563D-11
+                            Exc = -361.094502576     Coul =  9819.73905878    
+                            exK = -86.8675786783    
+                         Ntotal = 337.24703989      Nspin = 1.0007423118    
+                             Na = 169.12389110         Nb = 168.12314879    
+                            current damping = 0.700
+ 
+          max. resid. norm for Fia-block=  1.939D-01 for orbital    169a    alpha
+          max. resid. fock norm         =  6.206D-01 for orbital    398a    beta 
+          irrep a   : virtual orbitals shifted by    0.49641
+          irrep a   : virtual orbitals shifted by    0.15753
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+   2  -5679.5908828063    -23309.512692     9378.8496621    0.605D+01 0.359D-11
+                            Exc = -359.282581263      Eck =  9738.13224338    
+                         Ntotal = 337.25188027      Nspin =0.99665779989    
+                             Na = 169.12426903         Nb = 168.12761123    
+                            current damping = 0.700
+ 
+          Norm of current diis error:  3.0618    
+          max. resid. norm for Fia-block=  1.209D-01 for orbital    165a    alpha
+          max. resid. fock norm         =  1.742D-01 for orbital    265a    beta 
+          irrep a   : virtual orbitals shifted by    0.22082
+          irrep a   : virtual orbitals shifted by    0.08769
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+   3  -5679.8546382058    -23317.247123     9386.3203378    0.165D+01 0.297D-11
+                            Exc = -359.516763544      Eck =  9745.83710136    
+                         Ntotal = 337.25393543      Nspin =0.99725126534    
+                             Na = 169.12559335         Nb = 168.12834208    
+                            current damping = 0.600
+ 
+          Norm of current diis error:  2.6333    
+          max. resid. norm for Fia-block=  8.049D-02 for orbital    165a    alpha
+          max. resid. fock norm         =  1.097D-01 for orbital    226a    alpha
+          irrep a   : virtual orbitals shifted by    0.07472
+          irrep a   : virtual orbitals shifted by    0.11616
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+   4  -5680.1765533444    -23310.104810     9378.8561098    0.470D+00 0.253D-11
+                            Exc = -359.488963017      Eck =  9738.34507285    
+                         Ntotal = 337.25398744      Nspin =0.99782734968    
+                             Na = 169.12590740         Nb = 168.12808005    
+                            current damping = 0.650
+ 
+          Norm of current diis error:  2.2400    
+          max. resid. norm for Fia-block=  3.691D-02 for orbital    158a    alpha
+          max. resid. fock norm         =  8.404D-02 for orbital    288a    alpha
+          irrep a   : virtual orbitals shifted by    0.00731
+          irrep a   : virtual orbitals shifted by    0.22255
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+   5  -5680.4684751476    -23311.134935     9379.5943129    0.289D+00 0.226D-11
+                            Exc = -359.676618401      Eck =  9739.27093131    
+                         Ntotal = 337.25283199      Nspin =0.99799861794    
+                             Na = 169.12541530         Nb = 168.12741669    
+                            current damping = 0.700
+ 
+          Norm of current diis error:  1.9603    
+          max. resid. norm for Fia-block=  2.001D-01 for orbital    161a    alpha
+          max. resid. fock norm         =  6.391D-01 for orbital    359a    alpha
+          irrep a   : virtual orbitals shifted by    0.28844
+          irrep a   : virtual orbitals shifted by    1.38994
+          mo-orthogonalization: Cholesky decomposition
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+   6  -5682.1604475138    -23312.862001     9379.6294063    0.233D+01 0.181D-11
+                            Exc = -360.482494163      Eck =  9740.11190047    
+                         Ntotal = 337.25137942      Nspin =0.99731416230    
+                             Na = 169.12434679         Nb = 168.12703263    
+                            current damping = 0.550
+ 
+          Norm of current diis error: 0.77178    
+          max. resid. norm for Fia-block=  1.940D-01 for orbital    168a    beta 
+          max. resid. fock norm         =  1.961D-01 for orbital    168a    beta 
+          irrep a   : virtual orbitals shifted by    0.27694
+          irrep a   : virtual orbitals shifted by    0.76273
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+   7  -5682.6887337095    -23310.078607     9376.3177259    0.158D+01 0.186D-11
+                            Exc = -360.557944968      Eck =  9736.87567089    
+                         Ntotal = 337.25121815      Nspin =0.99840203174    
+                             Na = 169.12481009         Nb = 168.12640806    
+                            current damping = 0.600
+ 
+          Norm of current diis error: 0.71624    
+          max. resid. norm for Fia-block=  2.462D-01 for orbital    163a    beta 
+          max. resid. fock norm         =  2.679D-01 for orbital    174a    beta 
+          irrep a   : virtual orbitals shifted by    0.12847
+          irrep a   : virtual orbitals shifted by    0.50927
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+   8  -5682.9582430898    -23314.332886     9380.3024955    0.908D+00 0.200D-11
+                            Exc = -360.898745690      Eck =  9741.20124122    
+                         Ntotal = 337.24928066      Nspin =0.99893959965    
+                             Na = 169.12411013         Nb = 168.12517053    
+                            current damping = 0.650
+ 
+          Norm of current diis error: 0.73580    
+          max. resid. norm for Fia-block=  1.500D-01 for orbital    168a    beta 
+          max. resid. fock norm         =  1.661D-01 for orbital    173a    beta 
+          irrep a   : virtual orbitals shifted by    0.32472
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+   9  -5683.0055469255    -23316.595673     9382.5179785    0.864D+00 0.225D-11
+                            Exc = -361.096577666      Eck =  9743.61455614    
+                         Ntotal = 337.24793938      Nspin =0.99957546992    
+                             Na = 169.12375742         Nb = 168.12418196    
+                            current damping = 0.550
+ 
+          Norm of current diis error:  1.0416    
+          max. resid. norm for Fia-block=  1.425D-01 for orbital    166a    beta 
+          max. resid. fock norm         =  1.425D-01 for orbital    166a    beta 
+          irrep a   : virtual orbitals shifted by    0.26435
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  10  -5682.8460394494    -23318.197755     9384.2795687    0.595D+00 0.237D-11
+                            Exc = -361.207381065      Eck =  9745.48694978    
+                         Ntotal = 337.24758825      Nspin = 1.0001134226    
+                             Na = 169.12385084         Nb = 168.12373742    
+                            current damping = 0.600
+ 
+          Norm of current diis error:  1.3317    
+          max. resid. norm for Fia-block=  6.968D-02 for orbital    165a    beta 
+          max. resid. fock norm         =  1.272D-01 for orbital    558a    alpha
+          irrep a   : virtual orbitals shifted by    0.15841
+          mo-orthogonalization: Cholesky decomposition
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  11  -5682.8631464885    -23323.503026     9389.5677324    0.281D+00 0.228D-11
+                            Exc = -361.262430531      Eck =  9750.83016289    
+                         Ntotal = 337.24626414      Nspin = 1.0002205083    
+                             Na = 169.12324233         Nb = 168.12302182    
+                            current damping = 0.500
+ 
+          Norm of current diis error:  1.1774    
+          max. resid. norm for Fia-block=  4.440D-02 for orbital    169a    alpha
+          max. resid. fock norm         =  1.261D-01 for orbital    122a    alpha
+          irrep a   : virtual orbitals shifted by    0.10075
+          irrep a   : virtual orbitals shifted by    0.02542
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  12  -5683.0712708917    -23322.166089     9388.0226709    0.328D+00 0.211D-11
+                            Exc = -360.959241936      Eck =  9748.98191283    
+                         Ntotal = 337.24544248      Nspin = 1.0002402196    
+                             Na = 169.12284135         Nb = 168.12260113    
+                            current damping = 0.550
+ 
+          Norm of current diis error: 0.83574    
+          max. resid. norm for Fia-block=  1.088D-01 for orbital    166a    beta 
+          max. resid. fock norm         =  2.099D-01 for orbital    342a    alpha
+          irrep a   : virtual orbitals shifted by    0.48933
+          irrep a   : virtual orbitals shifted by    0.24988
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  13  -5683.3318044175    -23316.319863     9381.9159108    0.574D+00 0.197D-11
+                            Exc = -360.608864571      Eck =  9742.52477540    
+                         Ntotal = 337.24681069      Nspin =0.99973502729    
+                             Na = 169.12327286         Nb = 168.12353783    
+                            current damping = 0.450
+ 
+          Norm of current diis error: 0.22896    
+          max. resid. norm for Fia-block=  5.690D-02 for orbital    169a    alpha
+          max. resid. fock norm         =  5.904D-02 for orbital    169a    alpha
+          irrep a   : virtual orbitals shifted by    0.27854
+          irrep a   : virtual orbitals shifted by    0.11427
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  14  -5683.3604079015    -23318.273173     9383.8406177    0.395D+00 0.187D-11
+                            Exc = -360.636493399      Eck =  9744.47711109    
+                         Ntotal = 337.24671999      Nspin =0.99975513502    
+                             Na = 169.12323756         Nb = 168.12348243    
+                            current damping = 0.500
+ 
+          Norm of current diis error: 0.21037    
+          max. resid. norm for Fia-block=  6.088D-02 for orbital    169a    alpha
+          max. resid. fock norm         =  6.108D-02 for orbital    169a    alpha
+          irrep a   : virtual orbitals shifted by    0.22685
+          irrep a   : virtual orbitals shifted by    0.08023
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  15  -5683.3967429310    -23315.150368     9380.6814778    0.292D+00 0.179D-11
+                            Exc = -360.574086742      Eck =  9741.25556454    
+                         Ntotal = 337.24680599      Nspin =0.99982510657    
+                             Na = 169.12331555         Nb = 168.12349044    
+                            current damping = 0.550
+ 
+          Norm of current diis error: 0.23513    
+          max. resid. norm for Fia-block=  7.252D-02 for orbital    169a    alpha
+          max. resid. fock norm         =  7.254D-02 for orbital    169a    alpha
+          irrep a   : virtual orbitals shifted by    0.18119
+          irrep a   : virtual orbitals shifted by    0.09473
+          mo-orthogonalization: Cholesky decomposition
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  16  -5683.4450984672    -23316.703009     9382.1857635    0.239D+00 0.169D-11
+                            Exc = -360.649842868      Eck =  9742.83560634    
+                         Ntotal = 337.24691406      Nspin =0.99986765572    
+                             Na = 169.12339086         Nb = 168.12352320    
+                            current damping = 0.600
+ 
+          Norm of current diis error: 0.23202    
+          max. resid. norm for Fia-block=  5.651D-02 for orbital    169a    alpha
+          max. resid. fock norm         =  5.655D-02 for orbital    169a    alpha
+          irrep a   : virtual orbitals shifted by    0.13033
+          irrep a   : virtual orbitals shifted by    0.09139
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  17  -5683.4979326837    -23317.678008     9383.1079280    0.133D+00 0.163D-11
+                            Exc = -360.732336643      Eck =  9743.84026460    
+                         Ntotal = 337.24679495      Nspin =0.99994955158    
+                             Na = 169.12337225         Nb = 168.12342270    
+                            current damping = 0.500
+ 
+          Norm of current diis error: 0.19305    
+          max. resid. norm for Fia-block=  5.371D-02 for orbital    169a    alpha
+          max. resid. fock norm         =  5.376D-02 for orbital    169a    alpha
+          irrep a   : virtual orbitals shifted by    0.12087
+          irrep a   : virtual orbitals shifted by    0.08874
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  18  -5683.5355678225    -23317.059559     9382.4518437    0.140D+00 0.158D-11
+                            Exc = -360.754102423      Eck =  9743.20594608    
+                         Ntotal = 337.24679993      Nspin =0.99996369282    
+                             Na = 169.12338181         Nb = 168.12341812    
+                            current damping = 0.550
+ 
+          Norm of current diis error: 0.20704    
+          max. resid. norm for Fia-block=  4.520D-02 for orbital    169a    alpha
+          max. resid. fock norm         =  4.611D-02 for orbital    177a    alpha
+          irrep a   : virtual orbitals shifted by    0.09675
+          irrep a   : virtual orbitals shifted by    0.07388
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  19  -5683.5515585806    -23319.476056     9384.8523497    0.101D+00 0.153D-11
+                            Exc = -360.799886057      Eck =  9745.65223574    
+                         Ntotal = 337.24660458      Nspin =0.99993556658    
+                             Na = 169.12327007         Nb = 168.12333450    
+                            current damping = 0.600
+ 
+          Norm of current diis error: 0.22145    
+          max. resid. norm for Fia-block=  3.363D-02 for orbital    169a    alpha
+          max. resid. fock norm         =  3.584D-02 for orbital    180a    alpha
+          irrep a   : virtual orbitals shifted by    0.12016
+          irrep a   : virtual orbitals shifted by    0.08349
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  20  -5683.5628622108    -23316.823169     9382.1881595    0.103D+00 0.150D-11
+                            Exc = -360.719987567      Eck =  9742.90814703    
+                         Ntotal = 337.24651885      Nspin =0.99986567186    
+                             Na = 169.12319226         Nb = 168.12332659    
+                            current damping = 0.650
+ 
+          Norm of current diis error: 0.17470    
+          max. resid. norm for Fia-block=  2.535D-02 for orbital    169a    alpha
+          max. resid. fock norm         =  2.941D-02 for orbital    184a    alpha
+          irrep a   : virtual orbitals shifted by    0.07332
+          irrep a   : virtual orbitals shifted by    0.10165
+          mo-orthogonalization: Cholesky decomposition
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  21  -5683.5724215080    -23318.069111     9383.4245419    0.103D+00 0.146D-11
+                            Exc = -360.727661678      Eck =  9744.15220360    
+                         Ntotal = 337.24652213      Nspin =0.99977734288    
+                             Na = 169.12314973         Nb = 168.12337239    
+                            current damping = 0.700
+ 
+          Norm of current diis error: 0.10576    
+          max. resid. norm for Fia-block=  2.344D-02 for orbital    169a    alpha
+          max. resid. fock norm         =  2.974D-02 for orbital    490a    alpha
+          irrep a   : virtual orbitals shifted by    0.09056
+          irrep a   : virtual orbitals shifted by    0.08707
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  22  -5683.5797471201    -23317.575285     9382.9233910    0.103D+00 0.563D-11
+                            Exc = -360.684797207     Coul =  9830.28884754    
+                            exK = -86.6806593785    
+                         Ntotal = 337.24633174      Nspin =0.99966109885    
+                             Na = 169.12299642         Nb = 168.12333532    
+                            current damping = 0.750
+ 
+          Norm of current diis error: 0.89639E-01
+          max. resid. norm for Fia-block=  1.353D-02 for orbital    169a    alpha
+          max. resid. fock norm         =  1.374D-02 for orbital    169a    alpha
+          irrep a   : virtual orbitals shifted by    0.09382
+          irrep a   : virtual orbitals shifted by    0.10610
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  23  -5683.5859100236    -23317.425601     9382.7675434    0.344D+00 0.357D-11
+                            Exc = -360.686231635      Eck =  9743.45377502    
+                         Ntotal = 337.24641313      Nspin =0.99968575281    
+                             Na = 169.12304944         Nb = 168.12336369    
+                            current damping = 0.600
+ 
+          Norm of current diis error: 0.60549E-01
+          max. resid. norm for Fia-block=  1.214D-02 for orbital    169a    alpha
+          max. resid. fock norm         =  1.340D-02 for orbital    170a    alpha
+          irrep a   : virtual orbitals shifted by    0.09046
+          irrep a   : virtual orbitals shifted by    0.07159
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  24  -5683.5921378223    -23317.902752     9383.2384669    0.984D-01 0.236D-11
+                            Exc = -360.701045945      Eck =  9743.93951284    
+                         Ntotal = 337.24647767      Nspin =0.99974084760    
+                             Na = 169.12310926         Nb = 168.12336841    
+                            current damping = 0.650
+ 
+          Norm of current diis error: 0.52915E-01
+          max. resid. norm for Fia-block=  1.260D-02 for orbital    169a    alpha
+          max. resid. fock norm         =  1.432D-02 for orbital    170a    alpha
+          irrep a   : virtual orbitals shifted by    0.08015
+          irrep a   : virtual orbitals shifted by    0.09264
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  25  -5683.5984660715    -23317.809370     9383.1387568    0.705D-01 0.180D-11
+                            Exc = -360.694659649      Eck =  9743.83341641    
+                         Ntotal = 337.24652579      Nspin =0.99980568304    
+                             Na = 169.12316574         Nb = 168.12336005    
+                            current damping = 0.700
+ 
+          Norm of current diis error: 0.49811E-01
+          max. resid. norm for Fia-block=  1.364D-02 for orbital    169a    alpha
+          max. resid. fock norm         =  1.525D-02 for orbital    170a    alpha
+          irrep a   : virtual orbitals shifted by    0.06174
+          irrep a   : virtual orbitals shifted by    0.09680
+          mo-orthogonalization: Cholesky decomposition
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  26  -5683.6044915237    -23318.276119     9383.5994800    0.450D-01 0.149D-11
+                            Exc = -360.708407822      Eck =  9744.30788779    
+                         Ntotal = 337.24658486      Nspin =0.99986758246    
+                             Na = 169.12322622         Nb = 168.12335864    
+                            current damping = 0.750
+ 
+          Norm of current diis error: 0.47430E-01
+          max. resid. norm for Fia-block=  1.005D-02 for orbital    169a    alpha
+          max. resid. fock norm         =  1.177D-02 for orbital    170a    alpha
+          irrep a   : virtual orbitals shifted by    0.04515
+          irrep a   : virtual orbitals shifted by    0.09869
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  27  -5683.6083150582    -23318.061672     9383.3812093    0.365D-01 0.134D-11
+                            Exc = -360.698155770      Eck =  9744.07936503    
+                         Ntotal = 337.24663384      Nspin =0.99990382837    
+                             Na = 169.12326883         Nb = 168.12336500    
+                            current damping = 0.800
+ 
+          Norm of current diis error: 0.41264E-01
+          max. resid. norm for Fia-block=  7.755D-03 for orbital    169a    alpha
+          max. resid. fock norm         =  1.005D-02 for orbital    170a    alpha
+          irrep a   : virtual orbitals shifted by    0.02891
+          irrep a   : virtual orbitals shifted by    0.09778
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  28  -5683.6109830429    -23318.365426     9383.6822954    0.332D-01 0.125D-11
+                            Exc = -360.705448285      Eck =  9744.38774364    
+                         Ntotal = 337.24666608      Nspin =0.99992122524    
+                             Na = 169.12329365         Nb = 168.12337243    
+                            current damping = 0.850
+ 
+          Norm of current diis error: 0.39681E-01
+          max. resid. norm for Fia-block=  6.795D-03 for orbital    165a    beta 
+          max. resid. fock norm         =  8.740D-03 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.01879
+          irrep a   : virtual orbitals shifted by    0.09586
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  29  -5683.6128178676    -23318.299069     9383.6141043    0.176D-01 0.120D-11
+                            Exc = -360.703378990      Eck =  9744.31748334    
+                         Ntotal = 337.24671470      Nspin =0.99993111947    
+                             Na = 169.12332291         Nb = 168.12339179    
+                            current damping = 0.900
+ 
+          Norm of current diis error: 0.32791E-01
+          max. resid. norm for Fia-block=  7.025D-03 for orbital    165a    beta 
+          max. resid. fock norm         =  8.931D-03 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.01176
+          irrep a   : virtual orbitals shifted by    0.09306
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  30  -5683.6143377393    -23318.242161     9383.5556762    0.294D-01 0.116D-11
+                            Exc = -360.701126493      Eck =  9744.25680268    
+                         Ntotal = 337.24676932      Nspin =0.99994353716    
+                             Na = 169.12335643         Nb = 168.12341289    
+                            current damping = 0.750
+ 
+          Norm of current diis error: 0.26986E-01
+          max. resid. norm for Fia-block=  6.341D-03 for orbital    165a    beta 
+          max. resid. fock norm         =  8.182D-03 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.01439
+          irrep a   : virtual orbitals shifted by    0.09112
+          mo-orthogonalization: Cholesky decomposition
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  31  -5683.6155224244    -23318.584105     9383.8964354    0.225D-01 0.112D-11
+                            Exc = -360.709666404      Eck =  9744.60610178    
+                         Ntotal = 337.24682475      Nspin =0.99996046233    
+                             Na = 169.12339261         Nb = 168.12343215    
+                            current damping = 0.800
+ 
+          Norm of current diis error: 0.28795E-01
+          max. resid. norm for Fia-block=  5.763D-03 for orbital    164a    beta 
+          max. resid. fock norm         =  6.804D-03 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.01140
+          irrep a   : virtual orbitals shifted by    0.08799
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  32  -5683.6164041124    -23318.336843     9383.6482919    0.119D-01 0.109D-11
+                            Exc = -360.702317759      Eck =  9744.35060970    
+                         Ntotal = 337.24688207      Nspin =0.99997343917    
+                             Na = 169.12342775         Nb = 168.12345432    
+                            current damping = 0.850
+ 
+          Norm of current diis error: 0.19688E-01
+          max. resid. norm for Fia-block=  5.514D-03 for orbital    164a    beta 
+          max. resid. fock norm         =  6.345D-03 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.00744
+          irrep a   : virtual orbitals shifted by    0.08339
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  33  -5683.6171385175    -23318.525801     9383.8365152    0.168D-01 0.106D-11
+                            Exc = -360.708467049      Eck =  9744.54498221    
+                         Ntotal = 337.24695033      Nspin =0.99999494274    
+                             Na = 169.12347264         Nb = 168.12347769    
+                            current damping = 0.900
+ 
+          Norm of current diis error: 0.16474E-01
+          max. resid. norm for Fia-block=  4.937D-03 for orbital    168a    beta 
+          max. resid. fock norm         =  5.675D-03 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.00656
+          irrep a   : virtual orbitals shifted by    0.08085
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  34  -5683.6177133003    -23318.447890     9383.7580298    0.111D-01 0.103D-11
+                            Exc = -360.702765035      Eck =  9744.46079483    
+                         Ntotal = 337.24698512      Nspin = 1.0000064908    
+                             Na = 169.12349580         Nb = 168.12348931    
+                            current damping = 0.950
+ 
+          Norm of current diis error: 0.14356E-01
+          max. resid. norm for Fia-block=  4.183D-03 for orbital    168a    beta 
+          max. resid. fock norm         =  4.440D-03 for orbital    171a    beta 
+          irrep a   : virtual orbitals shifted by    0.00484
+          irrep a   : virtual orbitals shifted by    0.07754
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  35  -5683.6181544134    -23318.546741     9383.8564392    0.475D-02 0.101D-11
+                            Exc = -360.706909439      Eck =  9744.56334862    
+                         Ntotal = 337.24702420      Nspin = 1.0000184342    
+                             Na = 169.12352132         Nb = 168.12350288    
+                            current damping = 1.000
+ 
+          Norm of current diis error: 0.12769E-01
+          max. resid. norm for Fia-block=  4.099D-03 for orbital    168a    beta 
+          max. resid. fock norm         =  4.680D-03 for orbital    171a    beta 
+          irrep a   : virtual orbitals shifted by    0.00353
+          irrep a   : virtual orbitals shifted by    0.07383
+          mo-orthogonalization: Cholesky decomposition
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  36  -5683.6185432158    -23318.457022     9383.7663315    0.454D-02 0.990D-12
+                            Exc = -360.704007251      Eck =  9744.47033879    
+                         Ntotal = 337.24706604      Nspin = 1.0000319254    
+                             Na = 169.12354898         Nb = 168.12351705    
+                            current damping = 1.050
+ 
+          Norm of current diis error: 0.11348E-01
+          max. resid. norm for Fia-block=  3.310D-03 for orbital    168a    beta 
+          max. resid. fock norm         =  3.362D-03 for orbital    168a    beta 
+          irrep a   : virtual orbitals shifted by    0.00179
+          irrep a   : virtual orbitals shifted by    0.07187
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  37  -5683.6187975109    -23318.636446     9383.9455013    0.608D-02 0.975D-12
+                            Exc = -360.705841234      Eck =  9744.65134252    
+                         Ntotal = 337.24707556      Nspin = 1.0000355596    
+                             Na = 169.12355556         Nb = 168.12352000    
+                            current damping = 1.100
+ 
+          Norm of current diis error: 0.13116E-01
+          max. resid. norm for Fia-block=  3.011D-03 for orbital    168a    beta 
+          max. resid. fock norm         =  3.322D-03 for orbital    171a    beta 
+          irrep a   : virtual orbitals shifted by    0.00032
+          irrep a   : virtual orbitals shifted by    0.06928
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  38  -5683.6190434999    -23318.604407     9383.9132159    0.160D-02 0.960D-12
+                            Exc = -360.705640605      Eck =  9744.61885648    
+                         Ntotal = 337.24709548      Nspin = 1.0000425675    
+                             Na = 169.12356903         Nb = 168.12352646    
+                            current damping = 1.150
+ 
+          Norm of current diis error: 0.11092E-01
+          max. resid. norm for Fia-block=  2.717D-03 for orbital    168a    beta 
+          max. resid. fock norm         =  3.094D-03 for orbital    171a    beta 
+          irrep a   : virtual orbitals shifted by    0.06666
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  39  -5683.6192533705    -23318.628646     9383.9372451    0.124D-02 0.947D-12
+                            Exc = -360.707089626      Eck =  9744.64433475    
+                         Ntotal = 337.24711484      Nspin = 1.0000498454    
+                             Na = 169.12358234         Nb = 168.12353249    
+                            current damping = 1.200
+ 
+          Norm of current diis error: 0.10155E-01
+          max. resid. norm for Fia-block=  2.404D-03 for orbital    168a    beta 
+          max. resid. fock norm         =  2.642D-03 for orbital    171a    beta 
+          irrep a   : virtual orbitals shifted by    0.06467
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  40  -5683.6194163653    -23318.591262     9383.8996982    0.100D-02 0.936D-12
+                            Exc = -360.704501999      Eck =  9744.60420017    
+                         Ntotal = 337.24712602      Nspin = 1.0000538456    
+                             Na = 169.12358993         Nb = 168.12353609    
+                            current damping = 1.250
+ 
+          Norm of current diis error: 0.10071E-01
+          max. resid. norm for Fia-block=  2.994D-03 for orbital    169a    alpha
+          max. resid. fock norm         =  3.477D-03 for orbital    171a    beta 
+          irrep a   : virtual orbitals shifted by    0.06225
+          mo-orthogonalization: Cholesky decomposition
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  41  -5683.6196340252    -23318.607482     9383.9157009    0.204D-02 0.922D-12
+                            Exc = -360.706784810      Eck =  9744.62248568    
+                         Ntotal = 337.24714516      Nspin = 1.0000638669    
+                             Na = 169.12360451         Nb = 168.12354064    
+                            current damping = 1.300
+ 
+          Norm of current diis error: 0.83000E-02
+          max. resid. norm for Fia-block=  2.997D-03 for orbital    168a    beta 
+          max. resid. fock norm         =  3.542D-03 for orbital    171a    beta 
+          irrep a   : virtual orbitals shifted by    0.06144
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  42  -5683.6198230124    -23318.612706     9383.9207359    0.280D-02 0.907D-12
+                            Exc = -360.705100329      Eck =  9744.62583623    
+                         Ntotal = 337.24715191      Nspin = 1.0000689755    
+                             Na = 169.12361044         Nb = 168.12354147    
+                            current damping = 1.150
+ 
+          Norm of current diis error: 0.85815E-02
+          max. resid. norm for Fia-block=  3.004D-03 for orbital    169a    alpha
+          max. resid. fock norm         =  3.672D-03 for orbital    171a    beta 
+          irrep a   : virtual orbitals shifted by    0.00244
+          irrep a   : virtual orbitals shifted by    0.06426
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  43  -5683.6200254797    -23318.609503     9383.9173307    0.280D-02 0.563D-11
+                            Exc = -360.706303191     Coul =  9831.32423527    
+                            exK = -86.7006013340    
+                         Ntotal = 337.24716752      Nspin = 1.0000778244    
+                             Na = 169.12362267         Nb = 168.12354485    
+                            current damping = 1.200
+ 
+          Norm of current diis error: 0.72419E-02
+          max. resid. norm for Fia-block=  3.249D-03 for orbital    169a    alpha
+          max. resid. fock norm         =  3.985D-03 for orbital    171a    beta 
+          irrep a   : virtual orbitals shifted by    0.00126
+          irrep a   : virtual orbitals shifted by    0.06357
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  44  -5683.6202233736    -23318.625325     9383.9329543    0.903D-01 0.357D-11
+                            Exc = -360.705552578      Eck =  9744.63850693    
+                         Ntotal = 337.24717648      Nspin = 1.0000857745    
+                             Na = 169.12363113         Nb = 168.12354536    
+                            current damping = 1.250
+ 
+          Norm of current diis error: 0.68932E-02
+          max. resid. norm for Fia-block=  3.015D-03 for orbital    168a    beta 
+          max. resid. fock norm         =  3.691D-03 for orbital    171a    beta 
+          irrep a   : virtual orbitals shifted by    0.06292
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  45  -5683.6203857656    -23318.607518     9383.9149850    0.710D-02 0.244D-11
+                            Exc = -360.706400314      Eck =  9744.62138535    
+                         Ntotal = 337.24718476      Nspin = 1.0000924547    
+                             Na = 169.12363861         Nb = 168.12354615    
+                            current damping = 1.300
+ 
+          Norm of current diis error: 0.61295E-02
+          max. resid. norm for Fia-block=  2.562D-03 for orbital    168a    beta 
+          max. resid. fock norm         =  3.067D-03 for orbital    171a    beta 
+          irrep a   : virtual orbitals shifted by    0.06214
+          mo-orthogonalization: Cholesky decomposition
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  46  -5683.6205101087    -23318.647235     9383.9545772    0.521D-02 0.199D-11
+                            Exc = -360.706214881      Eck =  9744.66079208    
+                         Ntotal = 337.24719050      Nspin = 1.0000975006    
+                             Na = 169.12364400         Nb = 168.12354650    
+                            current damping = 1.350
+ 
+          Norm of current diis error: 0.59287E-02
+          max. resid. norm for Fia-block=  2.468D-03 for orbital    169a    alpha
+          max. resid. fock norm         =  2.774D-03 for orbital    171a    beta 
+          irrep a   : virtual orbitals shifted by    0.06152
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  47  -5683.6206126711    -23318.596431     9383.9036710    0.633D-02 0.171D-11
+                            Exc = -360.705839472      Eck =  9744.60951044    
+                         Ntotal = 337.24719786      Nspin = 1.0001026623    
+                             Na = 169.12365026         Nb = 168.12354760    
+                            current damping = 1.400
+ 
+          Norm of current diis error: 0.50822E-02
+          max. resid. norm for Fia-block=  2.054D-03 for orbital    168a    beta 
+          max. resid. fock norm         =  2.446D-03 for orbital    171a    beta 
+          irrep a   : virtual orbitals shifted by    0.06073
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  48  -5683.6206918896    -23318.650052     9383.9572130    0.228D-02 0.154D-11
+                            Exc = -360.706890624      Eck =  9744.66410366    
+                         Ntotal = 337.24719862      Nspin = 1.0001061728    
+                             Na = 169.12365240         Nb = 168.12354622    
+                            current damping = 1.450
+ 
+          Norm of current diis error: 0.46967E-02
+          max. resid. norm for Fia-block=  2.048D-03 for orbital    169a    alpha
+          max. resid. fock norm         =  2.338D-03 for orbital    171a    alpha
+          irrep a   : virtual orbitals shifted by    0.06002
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  49  -5683.6207597497    -23318.612361     9383.9194542    0.180D-02 0.140D-11
+                            Exc = -360.706045406      Eck =  9744.62549961    
+                         Ntotal = 337.24720284      Nspin = 1.0001097698    
+                             Na = 169.12365630         Nb = 168.12354654    
+                            current damping = 1.500
+ 
+          Norm of current diis error: 0.39786E-02
+          max. resid. norm for Fia-block=  1.973D-03 for orbital    169a    alpha
+          max. resid. fock norm         =  2.262D-03 for orbital    171a    alpha
+          irrep a   : virtual orbitals shifted by    0.05938
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  50  -5683.6208140176    -23318.638700     9383.9457389    0.176D-02 0.129D-11
+                            Exc = -360.706991809      Eck =  9744.65273071    
+                         Ntotal = 337.24720672      Nspin = 1.0001134230    
+                             Na = 169.12366007         Nb = 168.12354665    
+                            current damping = 1.550
+ 
+          Norm of current diis error: 0.35706E-02
+          max. resid. norm for Fia-block=  1.395D-03 for orbital    168a    beta 
+          max. resid. fock norm         =  1.654D-03 for orbital    171a    beta 
+          irrep a   : virtual orbitals shifted by    0.05855
+          mo-orthogonalization: Cholesky decomposition
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  51  -5683.6208513669    -23318.616002     9383.9230031    0.125D-02 0.122D-11
+                            Exc = -360.706062389      Eck =  9744.62906546    
+                         Ntotal = 337.24720613      Nspin = 1.0001152407    
+                             Na = 169.12366069         Nb = 168.12354545    
+                            current damping = 1.600
+ 
+          Norm of current diis error: 0.32884E-02
+          max. resid. norm for Fia-block=  1.263D-03 for orbital    169a    alpha
+          max. resid. fock norm         =  1.470D-03 for orbital    171a    alpha
+          irrep a   : virtual orbitals shifted by    0.05784
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  52  -5683.6208803830    -23318.634428     9383.9414006    0.732D-03 0.115D-11
+                            Exc = -360.706901457      Eck =  9744.64830206    
+                         Ntotal = 337.24720769      Nspin = 1.0001174384    
+                             Na = 169.12366256         Nb = 168.12354512    
+                            current damping = 1.650
+ 
+          Norm of current diis error: 0.28610E-02
+          max. resid. norm for Fia-block=  1.208D-03 for orbital    169a    alpha
+          max. resid. fock norm         =  1.393D-03 for orbital    171a    alpha
+          irrep a   : virtual orbitals shifted by    0.05714
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  53  -5683.6209043740    -23318.610483     9383.9174317    0.729D-03 0.109D-11
+                            Exc = -360.706404099      Eck =  9744.62383577    
+                         Ntotal = 337.24721020      Nspin = 1.0001193900    
+                             Na = 169.12366479         Nb = 168.12354540    
+                            current damping = 1.700
+ 
+          Norm of current diis error: 0.27593E-02
+          max. resid. norm for Fia-block=  8.072D-04 for orbital    167a    beta 
+          max. resid. fock norm         =  8.222D-04 for orbital    167a    beta 
+          irrep a   : virtual orbitals shifted by    0.05630
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  54  -5683.6209185059    -23318.633659     9383.9405936    0.385D-03 0.105D-11
+                            Exc = -360.706610069      Eck =  9744.64720371    
+                         Ntotal = 337.24720913      Nspin = 1.0001201694    
+                             Na = 169.12366465         Nb = 168.12354448    
+                            current damping = 1.750
+ 
+          Norm of current diis error: 0.25652E-02
+          max. resid. norm for Fia-block=  8.644D-04 for orbital    167a    beta 
+          max. resid. fock norm         =  8.781D-04 for orbital    167a    beta 
+          irrep a   : virtual orbitals shifted by    0.05556
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  55  -5683.6209329578    -23318.620670     9383.9275902    0.271D-03 0.101D-11
+                            Exc = -360.706614200      Eck =  9744.63420438    
+                         Ntotal = 337.24720923      Nspin = 1.0001213266    
+                             Na = 169.12366528         Nb = 168.12354395    
+                            current damping = 1.800
+ 
+          Norm of current diis error: 0.23215E-02
+          max. resid. norm for Fia-block=  7.912D-04 for orbital    167a    beta 
+          max. resid. fock norm         =  8.118D-04 for orbital    167a    beta 
+          irrep a   : virtual orbitals shifted by    0.05483
+          mo-orthogonalization: Cholesky decomposition
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  56  -5683.6209449096    -23318.629980     9383.9368881    0.138D-03 0.977D-12
+                            Exc = -360.706936492      Eck =  9744.64382464    
+                         Ntotal = 337.24721021      Nspin = 1.0001224661    
+                             Na = 169.12366634         Nb = 168.12354387    
+                            current damping = 1.850
+ 
+          Norm of current diis error: 0.22153E-02
+          max. resid. norm for Fia-block=  6.750D-04 for orbital    167a    beta 
+          max. resid. fock norm         =  6.825D-04 for orbital    167a    beta 
+          irrep a   : virtual orbitals shifted by    0.05400
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  57  -5683.6209536356    -23318.617740     9383.9246388    0.820D-04 0.950D-12
+                            Exc = -360.706402107      Eck =  9744.63104095    
+                         Ntotal = 337.24720981      Nspin = 1.0001229602    
+                             Na = 169.12366639         Nb = 168.12354343    
+                            current damping = 1.900
+ 
+          Norm of current diis error: 0.21755E-02
+          max. resid. norm for Fia-block=  6.423D-04 for orbital    167a    beta 
+          max. resid. fock norm         =  6.530D-04 for orbital    167a    beta 
+          irrep a   : virtual orbitals shifted by    0.05323
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  58  -5683.6209619247    -23318.627583     9383.9344743    0.526D-04 0.924D-12
+                            Exc = -360.706791992      Eck =  9744.64126629    
+                         Ntotal = 337.24720951      Nspin = 1.0001236614    
+                             Na = 169.12366659         Nb = 168.12354292    
+                            current damping = 1.950
+ 
+          Norm of current diis error: 0.20694E-02
+          max. resid. norm for Fia-block=  6.427D-04 for orbital    167a    beta 
+          max. resid. fock norm         =  6.680D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.05247
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  59  -5683.6209696703    -23318.617746     9383.9246289    0.479D-04 0.899D-12
+                            Exc = -360.706680847      Eck =  9744.63130976    
+                         Ntotal = 337.24720971      Nspin = 1.0001243260    
+                             Na = 169.12366702         Nb = 168.12354269    
+                            current damping = 2.000
+ 
+          Norm of current diis error: 0.20267E-02
+          max. resid. norm for Fia-block=  5.653D-04 for orbital    167a    beta 
+          max. resid. fock norm         =  5.986D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.05166
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  60  -5683.6209759675    -23318.625937     9383.9328142    0.432D-04 0.880D-12
+                            Exc = -360.706732039      Eck =  9744.63954622    
+                         Ntotal = 337.24720927      Nspin = 1.0001247572    
+                             Na = 169.12366701         Nb = 168.12354226    
+                            current damping = 2.050
+ 
+          Norm of current diis error: 0.19768E-02
+          max. resid. norm for Fia-block=  5.976D-04 for orbital    167a    beta 
+          max. resid. fock norm         =  6.437D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.05089
+          mo-orthogonalization: Cholesky decomposition
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  61  -5683.6209825866    -23318.619088     9383.9259580    0.340D-04 0.859D-12
+                            Exc = -360.706687179      Eck =  9744.63264516    
+                         Ntotal = 337.24720916      Nspin = 1.0001252754    
+                             Na = 169.12366722         Nb = 168.12354194    
+                            current damping = 2.100
+ 
+          Norm of current diis error: 0.19416E-02
+          max. resid. norm for Fia-block=  5.888D-04 for orbital    167a    beta 
+          max. resid. fock norm         =  6.546D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.05010
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  62  -5683.6209888031    -23318.624241     9383.9311046    0.126D-04 0.841D-12
+                            Exc = -360.706809324      Eck =  9744.63791391    
+                         Ntotal = 337.24720876      Nspin = 1.0001257439    
+                             Na = 169.12366725         Nb = 168.12354151    
+                            current damping = 2.150
+ 
+          Norm of current diis error: 0.19022E-02
+          max. resid. norm for Fia-block=  5.829D-04 for orbital    167a    beta 
+          max. resid. fock norm         =  6.520D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.04930
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  63  -5683.6209947578    -23318.618862     9383.9257201    0.129D-04 0.823D-12
+                            Exc = -360.706695298      Eck =  9744.63241536    
+                         Ntotal = 337.24720849      Nspin = 1.0001261564    
+                             Na = 169.12366732         Nb = 168.12354117    
+                            current damping = 2.200
+ 
+          Norm of current diis error: 0.18859E-02
+          max. resid. norm for Fia-block=  5.635D-04 for orbital    167a    beta 
+          max. resid. fock norm         =  6.393D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.04851
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  64  -5683.6210005865    -23318.623076     9383.9299284    0.129D-04 0.563D-11
+                            Exc = -360.706810469     Coul =  9831.33879040    
+                            exK = -86.7020515554    
+                         Ntotal = 337.24720807      Nspin = 1.0001265569    
+                             Na = 169.12366731         Nb = 168.12354076    
+                            current damping = 2.250
+ 
+          Norm of current diis error: 0.18630E-02
+          max. resid. norm for Fia-block=  5.703D-04 for orbital    167a    beta 
+          max. resid. fock norm         =  6.524D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.04772
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  65  -5683.6210062052    -23318.618746     9383.9255926    0.108D-01 0.357D-11
+                            Exc = -360.706739885      Eck =  9744.63233253    
+                         Ntotal = 337.24720775      Nspin = 1.0001269300    
+                             Na = 169.12366734         Nb = 168.12354041    
+                            current damping = 2.300
+ 
+          Norm of current diis error: 0.18533E-02
+          max. resid. norm for Fia-block=  5.493D-04 for orbital    167a    beta 
+          max. resid. fock norm         =  6.348D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.04692
+          mo-orthogonalization: Cholesky decomposition
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  66  -5683.6210115151    -23318.621807     9383.9286479    0.360D-03 0.240D-11
+                            Exc = -360.706810762      Eck =  9744.63545866    
+                         Ntotal = 337.24720729      Nspin = 1.0001272743    
+                             Na = 169.12366728         Nb = 168.12354001    
+                            current damping = 2.350
+ 
+          Norm of current diis error: 0.18378E-02
+          max. resid. norm for Fia-block=  5.550D-04 for orbital    167a    beta 
+          max. resid. fock norm         =  6.448D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.04613
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  67  -5683.6210168197    -23318.618750     9383.9255854    0.375D-03 0.187D-11
+                            Exc = -360.706772601      Eck =  9744.63235805    
+                         Ntotal = 337.24720692      Nspin = 1.0001276088    
+                             Na = 169.12366727         Nb = 168.12353966    
+                            current damping = 2.400
+ 
+          Norm of current diis error: 0.18335E-02
+          max. resid. norm for Fia-block=  5.424D-04 for orbital    167a    beta 
+          max. resid. fock norm         =  6.355D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.04533
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  68  -5683.6210219256    -23318.620571     9383.9274015    0.334D-04 0.156D-11
+                            Exc = -360.706818683      Eck =  9744.63422020    
+                         Ntotal = 337.24720646      Nspin = 1.0001279193    
+                             Na = 169.12366719         Nb = 168.12353927    
+                            current damping = 2.450
+ 
+          Norm of current diis error: 0.18251E-02
+          max. resid. norm for Fia-block=  5.464D-04 for orbital    167a    beta 
+          max. resid. fock norm         =  6.431D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.04454
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  69  -5683.6210270251    -23318.618654     9383.9254798    0.143D-04 0.136D-11
+                            Exc = -360.706801221      Eck =  9744.63228106    
+                         Ntotal = 337.24720604      Nspin = 1.0001282229    
+                             Na = 169.12366713         Nb = 168.12353891    
+                            current damping = 2.500
+ 
+          Norm of current diis error: 0.18240E-02
+          max. resid. norm for Fia-block=  5.372D-04 for orbital    167a    beta 
+          max. resid. fock norm         =  6.360D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.04374
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  70  -5683.6210319832    -23318.619491     9383.9263118    0.606D-05 0.122D-11
+                            Exc = -360.706829365      Eck =  9744.63314116    
+                         Ntotal = 337.24720557      Nspin = 1.0001285080    
+                             Na = 169.12366704         Nb = 168.12353853    
+                            current damping = 2.550
+ 
+          Norm of current diis error: 0.18209E-02
+          max. resid. norm for Fia-block=  5.402D-04 for orbital    167a    beta 
+          max. resid. fock norm         =  6.423D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.04294
+          mo-orthogonalization: Cholesky decomposition
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  71  -5683.6210369375    -23318.618411     9383.9252271    0.473D-05 0.111D-11
+                            Exc = -360.706826707      Eck =  9744.63205385    
+                         Ntotal = 337.24720512      Nspin = 1.0001287874    
+                             Na = 169.12366696         Nb = 168.12353817    
+                            current damping = 2.600
+ 
+          Norm of current diis error: 0.18221E-02
+          max. resid. norm for Fia-block=  5.344D-04 for orbital    167a    beta 
+          max. resid. fock norm         =  6.382D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.04214
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  72  -5683.6210417963    -23318.618579     9383.9253897    0.145D-05 0.102D-11
+                            Exc = -360.706843479      Eck =  9744.63223321    
+                         Ntotal = 337.24720464      Nspin = 1.0001290535    
+                             Na = 169.12366685         Nb = 168.12353779    
+                            current damping = 2.650
+ 
+          Norm of current diis error: 0.18226E-02
+          max. resid. norm for Fia-block=  5.359D-04 for orbital    167a    beta 
+          max. resid. fock norm         =  6.424D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.04134
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  73  -5683.6210466421    -23318.618001     9383.9248070    0.400D-06 0.950D-12
+                            Exc = -360.706849181      Eck =  9744.63165619    
+                         Ntotal = 337.24720417      Nspin = 1.0001293138    
+                             Na = 169.12366674         Nb = 168.12353743    
+                            current damping = 2.700
+ 
+          Norm of current diis error: 0.18254E-02
+          max. resid. norm for Fia-block=  5.333D-04 for orbital    167a    beta 
+          max. resid. fock norm         =  6.415D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.04055
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  74  -5683.6210514340    -23318.617821     9383.9246224    0.605D-04 0.903D-12
+                            Exc = -360.706860654      Eck =  9744.63148309    
+                         Ntotal = 337.24720368      Nspin = 1.0001295653    
+                             Na = 169.12366662         Nb = 168.12353706    
+                            current damping = 2.550
+ 
+          Norm of current diis error: 0.18281E-02
+          max. resid. norm for Fia-block=  5.345D-04 for orbital    167a    beta 
+          max. resid. fock norm         =  6.451D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.04296
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  75  -5683.6210564746    -23318.617476     9383.9242726    0.919D-03 0.907D-12
+                            Exc = -360.706871706      Eck =  9744.63114429    
+                         Ntotal = 337.24720316      Nspin = 1.0001298178    
+                             Na = 169.12366649         Nb = 168.12353667    
+                            current damping = 2.400
+ 
+          Norm of current diis error: 0.18349E-02
+          max. resid. norm for Fia-block=  5.315D-04 for orbital    167a    beta 
+          max. resid. fock norm         =  6.431D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.04537
+          mo-orthogonalization: Cholesky decomposition
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  76  -5683.6210616477    -23318.617177     9383.9239683    0.447D-03 0.897D-12
+                            Exc = -360.706882951      Eck =  9744.63085128    
+                         Ntotal = 337.24720262      Nspin = 1.0001300726    
+                             Na = 169.12366635         Nb = 168.12353627    
+                            current damping = 2.250
+ 
+          Norm of current diis error: 0.18407E-02
+          max. resid. norm for Fia-block=  5.331D-04 for orbital    167a    beta 
+          max. resid. fock norm         =  6.456D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.04779
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  77  -5683.6210670129    -23318.616866     9383.9236518    0.543D-04 0.892D-12
+                            Exc = -360.706895318      Eck =  9744.63054711    
+                         Ntotal = 337.24720205      Nspin = 1.0001303312    
+                             Na = 169.12366619         Nb = 168.12353586    
+                            current damping = 2.100
+ 
+          Norm of current diis error: 0.18473E-02
+          max. resid. norm for Fia-block=  5.358D-04 for orbital    167a    beta 
+          max. resid. fock norm         =  6.488D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.05020
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  78  -5683.6210725486    -23318.616523     9383.9233031    0.133D-03 0.886D-12
+                            Exc = -360.706907853      Eck =  9744.63021098    
+                         Ntotal = 337.24720145      Nspin = 1.0001305948    
+                             Na = 169.12366602         Nb = 168.12353543    
+                            current damping = 1.950
+ 
+          Norm of current diis error: 0.18538E-02
+          max. resid. norm for Fia-block=  5.431D-04 for orbital    167a    beta 
+          max. resid. fock norm         =  6.569D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.05261
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  79  -5683.6210783523    -23318.616190     9383.9229642    0.655D-05 0.880D-12
+                            Exc = -360.706921821      Eck =  9744.62988602    
+                         Ntotal = 337.24720081      Nspin = 1.0001308664    
+                             Na = 169.12366584         Nb = 168.12353497    
+                            current damping = 1.800
+ 
+          Norm of current diis error: 0.18607E-02
+          max. resid. norm for Fia-block=  5.491D-04 for orbital    167a    beta 
+          max. resid. fock norm         =  6.625D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.05502
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  80  -5683.6210844600    -23318.615815     9383.9225833    0.403D-05 0.871D-12
+                            Exc = -360.706936354      Eck =  9744.62951964    
+                         Ntotal = 337.24720012      Nspin = 1.0001311465    
+                             Na = 169.12366563         Nb = 168.12353449    
+                            current damping = 1.650
+ 
+          Norm of current diis error: 0.18677E-02
+          max. resid. norm for Fia-block=  5.562D-04 for orbital    167a    beta 
+          max. resid. fock norm         =  6.687D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.05743
+          mo-orthogonalization: Cholesky decomposition
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  81  -5683.6210908755    -23318.615442     9383.9222042    0.542D-05 0.862D-12
+                            Exc = -360.706952395      Eck =  9744.62915659    
+                         Ntotal = 337.24719939      Nspin = 1.0001314358    
+                             Na = 169.12366541         Nb = 168.12353398    
+                            current damping = 1.500
+ 
+          Norm of current diis error: 0.18749E-02
+          max. resid. norm for Fia-block=  5.631D-04 for orbital    167a    beta 
+          max. resid. fock norm         =  6.739D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.05984
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  82  -5683.6210976157    -23318.615030     9383.9217853    0.207D-04 0.854D-12
+                            Exc = -360.706969335      Eck =  9744.62875462    
+                         Ntotal = 337.24719861      Nspin = 1.0001317354    
+                             Na = 169.12366517         Nb = 168.12353344    
+                            current damping = 1.350
+ 
+          Norm of current diis error: 0.18821E-02
+          max. resid. norm for Fia-block=  5.706D-04 for orbital    167a    beta 
+          max. resid. fock norm         =  6.793D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.06225
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  83  -5683.6211047983    -23318.614611     9383.9213593    0.314D-03 0.846D-12
+                            Exc = -360.706988009      Eck =  9744.62834736    
+                         Ntotal = 337.24719777      Nspin = 1.0001320467    
+                             Na = 169.12366491         Nb = 168.12353286    
+                            current damping = 1.200
+ 
+          Norm of current diis error: 0.18895E-02
+          max. resid. norm for Fia-block=  5.783D-04 for orbital    167a    beta 
+          max. resid. fock norm         =  6.843D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.00383
+          irrep a   : virtual orbitals shifted by    0.06466
+ density matrices became linear dependent...
+Subroutine ddmat can not establish optimal linear combination of delta densities !
+ Next fock matrix will be calculated from scratch !
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  84  -5683.6211120772    -23318.614179     9383.9209198    0.314D-03 0.563D-11
+                            Exc = -360.707007755     Coul =  9831.33029903    
+                            exK = -86.7023714587    
+                         Ntotal = 337.24719689      Nspin = 1.0001323934    
+                             Na = 169.12366464         Nb = 168.12353225    
+                            current damping = 1.050
+ 
+          Norm of current diis error: 0.18813E-02
+          max. resid. norm for Fia-block=  6.201D-04 for orbital    167a    beta 
+          max. resid. fock norm         =  7.306D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.01023
+          irrep a   : virtual orbitals shifted by    0.06707
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  85  -5683.6211203572    -23318.613750     9383.9204822    0.154D-01 0.357D-11
+                            Exc = -360.707032927      Eck =  9744.62751510    
+                         Ntotal = 337.24719590      Nspin = 1.0001327779    
+                             Na = 169.12366434         Nb = 168.12353156    
+                            current damping = 0.900
+ 
+          Norm of current diis error: 0.18769E-02
+          max. resid. norm for Fia-block=  6.508D-04 for orbital    167a    beta 
+          max. resid. fock norm         =  7.612D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.01664
+          irrep a   : virtual orbitals shifted by    0.06948
+          mo-orthogonalization: Cholesky decomposition
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  86  -5683.6211293120    -23318.613193     9383.9199166    0.278D-03 0.233D-11
+                            Exc = -360.707056669      Eck =  9744.62697326    
+                         Ntotal = 337.24719481      Nspin = 1.0001332110    
+                             Na = 169.12366401         Nb = 168.12353080    
+                            current damping = 0.750
+ 
+          Norm of current diis error: 0.18596E-02
+          max. resid. norm for Fia-block=  6.953D-04 for orbital    167a    beta 
+          max. resid. fock norm         =  8.064D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.02304
+          irrep a   : virtual orbitals shifted by    0.07189
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  87  -5683.6211393546    -23318.612774     9383.9194872    0.325D-03 0.179D-11
+                            Exc = -360.707092178      Eck =  9744.62657940    
+                         Ntotal = 337.24719355      Nspin = 1.0001336812    
+                             Na = 169.12366362         Nb = 168.12352994    
+                            current damping = 0.600
+ 
+          Norm of current diis error: 0.18506E-02
+          max. resid. norm for Fia-block=  7.093D-04 for orbital    167a    beta 
+          max. resid. fock norm         =  8.136D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.02946
+          irrep a   : virtual orbitals shifted by    0.07430
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  88  -5683.6211498076    -23318.611790     9383.9184926    0.515D-04 0.145D-11
+                            Exc = -360.707112131      Eck =  9744.62560476    
+                         Ntotal = 337.24719221      Nspin = 1.0001342091    
+                             Na = 169.12366321         Nb = 168.12352900    
+                            current damping = 0.450
+ 
+          Norm of current diis error: 0.18179E-02
+          max. resid. norm for Fia-block=  7.532D-04 for orbital    167a    beta 
+          max. resid. fock norm         =  8.545D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.03586
+          irrep a   : virtual orbitals shifted by    0.07671
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  89  -5683.6211616332    -23318.612358     9383.9190493    0.563D-04 0.127D-11
+                            Exc = -360.707187836      Eck =  9744.62623719    
+                         Ntotal = 337.24719063      Nspin = 1.0001347616    
+                             Na = 169.12366269         Nb = 168.12352793    
+                            current damping = 0.500
+ 
+          Norm of current diis error: 0.18145E-02
+          max. resid. norm for Fia-block=  7.250D-04 for orbital    167a    beta 
+          max. resid. fock norm         =  8.103D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.03350
+          irrep a   : virtual orbitals shifted by    0.07591
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  90  -5683.6211724696    -23318.607831     9383.9145112    0.135D-03 0.110D-11
+                            Exc = -360.707116638      Eck =  9744.62162786    
+                         Ntotal = 337.24718911      Nspin = 1.0001352531    
+                             Na = 169.12366218         Nb = 168.12352693    
+                            current damping = 0.550
+ 
+          Norm of current diis error: 0.17962E-02
+          max. resid. norm for Fia-block=  6.644D-04 for orbital    167a    beta 
+          max. resid. fock norm         =  7.323D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.03111
+          irrep a   : virtual orbitals shifted by    0.07510
+          mo-orthogonalization: Cholesky decomposition
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  91  -5683.6211825593    -23318.616199     9383.9228688    0.236D-03 0.100D-11
+                            Exc = -360.707386475      Eck =  9744.63025527    
+                         Ntotal = 337.24718746      Nspin = 1.0001356531    
+                             Na = 169.12366155         Nb = 168.12352590    
+                            current damping = 0.600
+ 
+          Norm of current diis error: 0.18596E-02
+          max. resid. norm for Fia-block=  4.476D-04 for orbital    167a    beta 
+          max. resid. fock norm         =  4.747D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.02883
+          irrep a   : virtual orbitals shifted by    0.07430
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  92  -5683.6211885385    -23318.604070     9383.9107347    0.255D-03 0.908D-12
+                            Exc = -360.707108840      Eck =  9744.61784353    
+                         Ntotal = 337.24718663      Nspin = 1.0001359020    
+                             Na = 169.12366127         Nb = 168.12352536    
+                            current damping = 0.650
+ 
+          Norm of current diis error: 0.18148E-02
+          max. resid. norm for Fia-block=  5.262D-04 for orbital    167a    beta 
+          max. resid. fock norm         =  5.857D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.02646
+          irrep a   : virtual orbitals shifted by    0.07350
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  93  -5683.6211962915    -23318.612986     9383.9196425    0.205D-03 0.861D-12
+                            Exc = -360.707369715      Eck =  9744.62701222    
+                         Ntotal = 337.24718530      Nspin = 1.0001362278    
+                             Na = 169.12366076         Nb = 168.12352453    
+                            current damping = 0.700
+ 
+          Norm of current diis error: 0.18105E-02
+          max. resid. norm for Fia-block=  5.298D-04 for orbital    167a    beta 
+          max. resid. fock norm         =  5.940D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.02409
+          irrep a   : virtual orbitals shifted by    0.07269
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  94  -5683.6212037559    -23318.604647     9383.9112963    0.158D-03 0.817D-12
+                            Exc = -360.707218432      Eck =  9744.61851472    
+                         Ntotal = 337.24718427      Nspin = 1.0001365513    
+                             Na = 169.12366041         Nb = 168.12352386    
+                            current damping = 0.750
+ 
+          Norm of current diis error: 0.17932E-02
+          max. resid. norm for Fia-block=  5.642D-04 for orbital    167a    beta 
+          max. resid. fock norm         =  6.418D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.02170
+          irrep a   : virtual orbitals shifted by    0.07189
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  95  -5683.6212115257    -23318.610483     9383.9171239    0.105D-03 0.781D-12
+                            Exc = -360.707386094      Eck =  9744.62451002    
+                         Ntotal = 337.24718294      Nspin = 1.0001369336    
+                             Na = 169.12365994         Nb = 168.12352300    
+                            current damping = 0.800
+ 
+          Norm of current diis error: 0.17680E-02
+          max. resid. norm for Fia-block=  5.915D-04 for orbital    167a    beta 
+          max. resid. fock norm         =  6.727D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.01928
+          irrep a   : virtual orbitals shifted by    0.07109
+          mo-orthogonalization: Cholesky decomposition
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  96  -5683.6212196681    -23318.602724     9383.9093574    0.133D-02 0.790D-12
+                            Exc = -360.707270165      Eck =  9744.61662758    
+                         Ntotal = 337.24718170      Nspin = 1.0001372711    
+                             Na = 169.12365949         Nb = 168.12352222    
+                            current damping = 0.850
+ 
+          Norm of current diis error: 0.17758E-02
+          max. resid. norm for Fia-block=  5.651D-04 for orbital    167a    beta 
+          max. resid. fock norm         =  6.424D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.01688
+          irrep a   : virtual orbitals shifted by    0.07028
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  97  -5683.6212269925    -23318.609665     9383.9162909    0.265D-04 0.779D-12
+                            Exc = -360.707454573      Eck =  9744.62374548    
+                         Ntotal = 337.24718034      Nspin = 1.0001376578    
+                             Na = 169.12365900         Nb = 168.12352134    
+                            current damping = 0.900
+ 
+          Norm of current diis error: 0.17341E-02
+          max. resid. norm for Fia-block=  6.120D-04 for orbital    167a    beta 
+          max. resid. fock norm         =  6.993D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.01443
+          irrep a   : virtual orbitals shifted by    0.06948
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  98  -5683.6212350362    -23318.599927     9383.9065446    0.218D-04 0.794D-12
+                            Exc = -360.707297343      Eck =  9744.61384192    
+                         Ntotal = 337.24717906      Nspin = 1.0001379873    
+                             Na = 169.12365852         Nb = 168.12352054    
+                            current damping = 0.950
+ 
+          Norm of current diis error: 0.17518E-02
+          max. resid. norm for Fia-block=  5.408D-04 for orbital    167a    beta 
+          max. resid. fock norm         =  6.128D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.01203
+          irrep a   : virtual orbitals shifted by    0.06867
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+  99  -5683.6212416466    -23318.608513     9383.9151242    0.233D-04 0.775D-12
+                            Exc = -360.707522000      Eck =  9744.62264619    
+                         Ntotal = 337.24717772      Nspin = 1.0001383566    
+                             Na = 169.12365804         Nb = 168.12351968    
+                            current damping = 1.000
+ 
+          Norm of current diis error: 0.16903E-02
+          max. resid. norm for Fia-block=  6.199D-04 for orbital    167a    beta 
+          max. resid. fock norm         =  7.129D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.00955
+          irrep a   : virtual orbitals shifted by    0.06787
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+ 100  -5683.6212493983    -23318.598981     9383.9055840    0.175D-02 0.774D-12
+                            Exc = -360.707363265      Eck =  9744.61294725    
+                         Ntotal = 337.24717640      Nspin = 1.0001386772    
+                             Na = 169.12365754         Nb = 168.12351886    
+                            current damping = 1.050
+ 
+          Norm of current diis error: 0.16975E-02
+          max. resid. norm for Fia-block=  5.671D-04 for orbital    167a    beta 
+          max. resid. fock norm         =  6.497D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.00711
+          irrep a   : virtual orbitals shifted by    0.06706
+          mo-orthogonalization: Cholesky decomposition
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+ 101  -5683.6212559754    -23318.606791     9383.9133878    0.181D-04 0.765D-12
+                            Exc = -360.707578404      Eck =  9744.62096622    
+                         Ntotal = 337.24717501      Nspin = 1.0001390628    
+                             Na = 169.12365704         Nb = 168.12351798    
+                            current damping = 1.100
+ 
+          Norm of current diis error: 0.16305E-02
+          max. resid. norm for Fia-block=  6.320D-04 for orbital    167a    beta 
+          max. resid. fock norm         =  7.303D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.00460
+          irrep a   : virtual orbitals shifted by    0.06626
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+ 102  -5683.6212634099    -23318.597759     9383.9043486    0.675D-04 0.783D-12
+                            Exc = -360.707431243      Eck =  9744.61177987    
+                         Ntotal = 337.24717364      Nspin = 1.0001393797    
+                             Na = 169.12365651         Nb = 168.12351713    
+                            current damping = 1.150
+ 
+          Norm of current diis error: 0.16346E-02
+          max. resid. norm for Fia-block=  5.759D-04 for orbital    167a    beta 
+          max. resid. fock norm         =  6.630D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.00214
+          irrep a   : virtual orbitals shifted by    0.06545
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+ 103  -5683.6212696788    -23318.605627     9383.9122098    0.716D-05 0.772D-12
+                            Exc = -360.707645368      Eck =  9744.61985514    
+                         Ntotal = 337.24717222      Nspin = 1.0001397674    
+                             Na = 169.12365600         Nb = 168.12351623    
+                            current damping = 1.200
+ 
+          Norm of current diis error: 0.15633E-02
+          max. resid. norm for Fia-block=  6.287D-04 for orbital    167a    beta 
+          max. resid. fock norm         =  7.277D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.06465
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+ 104  -5683.6212765980    -23318.596108     9383.9026838    0.548D-05 0.785D-12
+                            Exc = -360.707493953      Eck =  9744.61017773    
+                         Ntotal = 337.24717086      Nspin = 1.0001400674    
+                             Na = 169.12365546         Nb = 168.12351540    
+                            current damping = 1.250
+ 
+          Norm of current diis error: 0.15672E-02
+          max. resid. norm for Fia-block=  5.679D-04 for orbital    167a    beta 
+          max. resid. fock norm         =  6.557D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.06384
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+ 105  -5683.6212823140    -23318.604196     9383.9107662    0.548D-05 0.563D-11
+                            Exc = -360.707705663     Coul =  9831.32173363    
+                            exK = -86.7032617809    
+                         Ntotal = 337.24716947      Nspin = 1.0001404670    
+                             Na = 169.12365497         Nb = 168.12351450    
+                            current damping = 1.300
+ 
+          Norm of current diis error: 0.14773E-02
+          max. resid. norm for Fia-block=  6.295D-04 for orbital    167a    beta 
+          max. resid. fock norm         =  7.302D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.06304
+          mo-orthogonalization: Cholesky decomposition
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+ 106  -5683.6212886566    -23318.594923     9383.9014869    0.155D-01 0.357D-11
+                            Exc = -360.707565596      Eck =  9744.60905251    
+                         Ntotal = 337.24716810      Nspin = 1.0001407522    
+                             Na = 169.12365442         Nb = 168.12351367    
+                            current damping = 1.350
+ 
+          Norm of current diis error: 0.14779E-02
+          max. resid. norm for Fia-block=  5.717D-04 for orbital    167a    beta 
+          max. resid. fock norm         =  6.634D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.06223
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+ 107  -5683.6212938773    -23318.602660     9383.9092186    0.124D-02 0.248D-11
+                            Exc = -360.707766501      Eck =  9744.61698515    
+                         Ntotal = 337.24716670      Nspin = 1.0001411483    
+                             Na = 169.12365393         Nb = 168.12351278    
+                            current damping = 1.400
+ 
+          Norm of current diis error: 0.13804E-02
+          max. resid. norm for Fia-block=  6.218D-04 for orbital    167a    beta 
+          max. resid. fock norm         =  7.233D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.06142
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+ 108  -5683.6212995651    -23318.593737     9383.9002904    0.329D-03 0.198D-11
+                            Exc = -360.707634328      Eck =  9744.60792472    
+                         Ntotal = 337.24716535      Nspin = 1.0001414328    
+                             Na = 169.12365339         Nb = 168.12351196    
+                            current damping = 1.450
+ 
+          Norm of current diis error: 0.13723E-02
+          max. resid. norm for Fia-block=  5.622D-04 for orbital    167a    beta 
+          max. resid. fock norm         =  6.542D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.06061
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+ 109  -5683.6213042589    -23318.601504     9383.9080522    0.832D-04 0.169D-11
+                            Exc = -360.707835438      Eck =  9744.61588767    
+                         Ntotal = 337.24716396      Nspin = 1.0001418022    
+                             Na = 169.12365288         Nb = 168.12351108    
+                            current damping = 1.500
+ 
+          Norm of current diis error: 0.12803E-02
+          max. resid. norm for Fia-block=  5.892D-04 for orbital    167a    beta 
+          max. resid. fock norm         =  6.864D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.05981
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+ 110  -5683.6213090857    -23318.592782     9383.8993256    0.571D-04 0.150D-11
+                            Exc = -360.707702982      Eck =  9744.60702863    
+                         Ntotal = 337.24716270      Nspin = 1.0001420819    
+                             Na = 169.12365239         Nb = 168.12351031    
+                            current damping = 1.550
+ 
+          Norm of current diis error: 0.12555E-02
+          max. resid. norm for Fia-block=  5.494D-04 for orbital    167a    beta 
+          max. resid. fock norm         =  6.417D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.05900
+          mo-orthogonalization: Cholesky decomposition
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+ 111  -5683.6213132877    -23318.600300     9383.9068399    0.295D-04 0.135D-11
+                            Exc = -360.707900178      Eck =  9744.61474006    
+                         Ntotal = 337.24716131      Nspin = 1.0001424049    
+                             Na = 169.12365186         Nb = 168.12350945    
+                            current damping = 1.600
+ 
+          Norm of current diis error: 0.11771E-02
+          max. resid. norm for Fia-block=  5.510D-04 for orbital    167a    beta 
+          max. resid. fock norm         =  6.441D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.05820
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+ 112  -5683.6213172904    -23318.592231     9383.8987665    0.191D-04 0.124D-11
+                            Exc = -360.707776088      Eck =  9744.60654259    
+                         Ntotal = 337.24716016      Nspin = 1.0001426819    
+                             Na = 169.12365142         Nb = 168.12350874    
+                            current damping = 1.650
+ 
+          Norm of current diis error: 0.11330E-02
+          max. resid. norm for Fia-block=  5.303D-04 for orbital    167a    beta 
+          max. resid. fock norm         =  6.222D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.05739
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+ 113  -5683.6213209701    -23318.599019     9383.9055508    0.117D-04 0.114D-11
+                            Exc = -360.707957877      Eck =  9744.61350867    
+                         Ntotal = 337.24715881      Nspin = 1.0001429585    
+                             Na = 169.12365089         Nb = 168.12350793    
+                            current damping = 1.700
+ 
+          Norm of current diis error: 0.10696E-02
+          max. resid. norm for Fia-block=  5.092D-04 for orbital    167a    beta 
+          max. resid. fock norm         =  5.975D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.05658
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+ 114  -5683.6213242451    -23318.591686     9383.8982144    0.129D-04 0.106D-11
+                            Exc = -360.707845430      Eck =  9744.60605983    
+                         Ntotal = 337.24715776      Nspin = 1.0001432171    
+                             Na = 169.12365049         Nb = 168.12350727    
+                            current damping = 1.750
+ 
+          Norm of current diis error: 0.10164E-02
+          max. resid. norm for Fia-block=  4.946D-04 for orbital    167a    beta 
+          max. resid. fock norm         =  5.831D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.05577
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+ 115  -5683.6213273116    -23318.597718     9383.9042436    0.507D-05 0.989D-12
+                            Exc = -360.708007549      Eck =  9744.61225116    
+                         Ntotal = 337.24715651      Nspin = 1.0001434567    
+                             Na = 169.12364998         Nb = 168.12350652    
+                            current damping = 1.800
+ 
+          Norm of current diis error: 0.96087E-03
+          max. resid. norm for Fia-block=  4.657D-04 for orbital    167a    beta 
+          max. resid. fock norm         =  5.490D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.05497
+          mo-orthogonalization: Cholesky decomposition
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+ 116  -5683.6213299768    -23318.591070     9383.8975930    0.404D-05 0.932D-12
+                            Exc = -360.707907899      Eck =  9744.60550092    
+                         Ntotal = 337.24715555      Nspin = 1.0001436802    
+                             Na = 169.12364961         Nb = 168.12350593    
+                            current damping = 1.850
+ 
+          Norm of current diis error: 0.90889E-03
+          max. resid. norm for Fia-block=  4.466D-04 for orbital    167a    beta 
+          max. resid. fock norm         =  5.296D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.05415
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+ 117  -5683.6213324267    -23318.596368     9383.9028881    0.327D-05 0.879D-12
+                            Exc = -360.708047902      Eck =  9744.61093596    
+                         Ntotal = 337.24715443      Nspin = 1.0001438891    
+                             Na = 169.12364916         Nb = 168.12350527    
+                            current damping = 1.900
+ 
+          Norm of current diis error: 0.85566E-03
+          max. resid. norm for Fia-block=  4.223D-04 for orbital    167a    beta 
+          max. resid. fock norm         =  5.013D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.05335
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+ 118  -5683.6213345877    -23318.590494     9383.8970123    0.668D-03 0.871D-12
+                            Exc = -360.707963824      Eck =  9744.60497617    
+                         Ntotal = 337.24715356      Nspin = 1.0001440740    
+                             Na = 169.12364882         Nb = 168.12350474    
+                            current damping = 1.950
+ 
+          Norm of current diis error: 0.80973E-03
+          max. resid. norm for Fia-block=  3.952D-04 for orbital    167a    beta 
+          max. resid. fock norm         =  4.723D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.05254
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+ 119  -5683.6213364878    -23318.595092     9383.9016079    0.778D-04 0.858D-12
+                            Exc = -360.708082423      Eck =  9744.60969035    
+                         Ntotal = 337.24715257      Nspin = 1.0001442509    
+                             Na = 169.12364841         Nb = 168.12350416    
+                            current damping = 2.000
+ 
+          Norm of current diis error: 0.75955E-03
+          max. resid. norm for Fia-block=  3.756D-04 for orbital    167a    beta 
+          max. resid. fock norm         =  4.500D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.05173
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+ 120  -5683.6213381239    -23318.590012     9383.8965263    0.270D-02 0.900D-12
+                            Exc = -360.708012727      Eck =  9744.60453901    
+                         Ntotal = 337.24715180      Nspin = 1.0001444014    
+                             Na = 169.12364810         Nb = 168.12350370    
+                            current damping = 2.050
+ 
+          Norm of current diis error: 0.71959E-03
+          max. resid. norm for Fia-block=  3.455D-04 for orbital    167a    beta 
+          max. resid. fock norm         =  4.173D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.05092
+          mo-orthogonalization: Cholesky decomposition
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+ 121  -5683.6213395738    -23318.593979     9383.9004919    0.987D-05 0.888D-12
+                            Exc = -360.708113351      Eck =  9744.60860522    
+                         Ntotal = 337.24715094      Nspin = 1.0001445429    
+                             Na = 169.12364774         Nb = 168.12350320    
+                            current damping = 2.100
+ 
+          Norm of current diis error: 0.67499E-03
+          max. resid. norm for Fia-block=  3.270D-04 for orbital    167a    beta 
+          max. resid. fock norm         =  3.966D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.05011
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+ 122  -5683.6213411095    -23318.589621     9383.8961328    0.690D-03 0.930D-12
+                            Exc = -360.708054540      Eck =  9744.60418729    
+                         Ntotal = 337.24715028      Nspin = 1.0001446635    
+                             Na = 169.12364747         Nb = 168.12350281    
+                            current damping = 2.150
+ 
+          Norm of current diis error: 0.64035E-03
+          max. resid. norm for Fia-block=  2.989D-04 for orbital    167a    beta 
+          max. resid. fock norm         =  3.661D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.04930
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+ 123  -5683.6213424822    -23318.593014     9383.8995245    0.794D-05 0.917D-12
+                            Exc = -360.708139797      Eck =  9744.60766431    
+                         Ntotal = 337.24714954      Nspin = 1.0001447730    
+                             Na = 169.12364716         Nb = 168.12350239    
+                            current damping = 2.200
+ 
+          Norm of current diis error: 0.60217E-03
+          max. resid. norm for Fia-block=  2.803D-04 for orbital    167a    beta 
+          max. resid. fock norm         =  3.455D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.04850
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+ 124  -5683.6213434601    -23318.589311     9383.8958200    0.339D-03 0.960D-12
+                            Exc = -360.708090603      Eck =  9744.60391060    
+                         Ntotal = 337.24714898      Nspin = 1.0001448666    
+                             Na = 169.12364692         Nb = 168.12350206    
+                            current damping = 2.250
+ 
+          Norm of current diis error: 0.57281E-03
+          max. resid. norm for Fia-block=  2.558D-04 for orbital    167a    beta 
+          max. resid. fock norm         =  3.191D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.04769
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+ 125  -5683.6213443679    -23318.592180     9383.8986885    0.629D-05 0.952D-12
+                            Exc = -360.708161377      Eck =  9744.60684988    
+                         Ntotal = 337.24714836      Nspin = 1.0001449495    
+                             Na = 169.12364665         Nb = 168.12350170    
+                            current damping = 2.300
+ 
+          Norm of current diis error: 0.54069E-03
+          max. resid. norm for Fia-block=  2.385D-04 for orbital    167a    beta 
+          max. resid. fock norm         =  3.001D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.04688
+          mo-orthogonalization: Cholesky decomposition
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+ 126  -5683.6213449474    -23318.589046     9383.8955541    0.629D-05 0.563D-11
+                            Exc = -360.708120985     Coul =  9831.30760244    
+                            exK = -86.7039273213    
+                         Ntotal = 337.24714788      Nspin = 1.0001450206    
+                             Na = 169.12364645         Nb = 168.12350143    
+                            current damping = 2.350
+ 
+          Norm of current diis error: 0.51663E-03
+          max. resid. norm for Fia-block=  2.168D-04 for orbital    167a    beta 
+          max. resid. fock norm         =  2.768D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.04607
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+ 127  -5683.6213456889    -23318.591464     9383.8979714    0.487D-02 0.357D-11
+                            Exc = -360.708178884      Eck =  9744.60615028    
+                         Ntotal = 337.24714736      Nspin = 1.0001450807    
+                             Na = 169.12364622         Nb = 168.12350114    
+                            current damping = 2.400
+ 
+          Norm of current diis error: 0.49012E-03
+          max. resid. norm for Fia-block=  2.020D-04 for orbital    167a    beta 
+          max. resid. fock norm         =  2.607D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.04526
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+ 128  -5683.6213463564    -23318.588833     9383.8953398    0.229D-03 0.240D-11
+                            Exc = -360.708146366      Eck =  9744.60348619    
+                         Ntotal = 337.24714697      Nspin = 1.0001451325    
+                             Na = 169.12364605         Nb = 168.12350092    
+                            current damping = 2.450
+ 
+          Norm of current diis error: 0.47075E-03
+          max. resid. norm for Fia-block=  1.833D-04 for orbital    167a    beta 
+          max. resid. fock norm         =  2.407D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.04445
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+ 129  -5683.6213469494    -23318.590856     9383.8973613    0.217D-03 0.192D-11
+                            Exc = -360.708193359      Eck =  9744.60555471    
+                         Ntotal = 337.24714653      Nspin = 1.0001451741    
+                             Na = 169.12364585         Nb = 168.12350068    
+                            current damping = 2.500
+ 
+          Norm of current diis error: 0.44910E-03
+          max. resid. norm for Fia-block=  1.723D-04 for orbital    169a    alpha
+          max. resid. fock norm         =  2.276D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.04364
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+ 130  -5683.6213474864    -23318.588654     9383.8951595    0.972D-05 0.162D-11
+                            Exc = -360.708167141      Eck =  9744.60332662    
+                         Ntotal = 337.24714620      Nspin = 1.0001452109    
+                             Na = 169.12364570         Nb = 168.12350049    
+                            current damping = 2.550
+ 
+          Norm of current diis error: 0.43362E-03
+          max. resid. norm for Fia-block=  1.596D-04 for orbital    169a    alpha
+          max. resid. fock norm         =  2.108D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.04283
+          mo-orthogonalization: Cholesky decomposition
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+ 131  -5683.6213479818    -23318.590346     9383.8968506    0.995D-03 0.161D-11
+                            Exc = -360.708205383      Eck =  9744.60505594    
+                         Ntotal = 337.24714583      Nspin = 1.0001452383    
+                             Na = 169.12364553         Nb = 168.12350030    
+                            current damping = 2.600
+ 
+          Norm of current diis error: 0.41606E-03
+          max. resid. norm for Fia-block=  1.554D-04 for orbital    169a    alpha
+          max. resid. fock norm         =  2.004D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.04202
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+ 132  -5683.6213484315    -23318.588502     9383.8950063    0.304D-02 0.161D-11
+                            Exc = -360.708184396      Eck =  9744.60319070    
+                         Ntotal = 337.24714555      Nspin = 1.0001452632    
+                             Na = 169.12364541         Nb = 168.12350014    
+                            current damping = 2.650
+ 
+          Norm of current diis error: 0.40371E-03
+          max. resid. norm for Fia-block=  1.448D-04 for orbital    169a    alpha
+          max. resid. fock norm         =  1.868D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.04121
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+ 133  -5683.6213488439    -23318.589913     9383.8964173    0.732D-05 0.161D-11
+                            Exc = -360.708215279      Eck =  9744.60463255    
+                         Ntotal = 337.24714524      Nspin = 1.0001452791    
+                             Na = 169.12364526         Nb = 168.12349998    
+                            current damping = 2.700
+ 
+          Norm of current diis error: 0.38939E-03
+          max. resid. norm for Fia-block=  1.418D-04 for orbital    169a    alpha
+          max. resid. fock norm         =  1.788D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.04040
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+ 134  -5683.6213492184    -23318.588372     9383.8948758    0.125D-05 0.161D-11
+                            Exc = -360.708198849      Eck =  9744.60307465    
+                         Ntotal = 337.24714501      Nspin = 1.0001452949    
+                             Na = 169.12364515         Nb = 168.12349986    
+                            current damping = 2.750
+ 
+          Norm of current diis error: 0.37944E-03
+          max. resid. norm for Fia-block=  1.331D-04 for orbital    169a    alpha
+          max. resid. fock norm         =  1.678D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.03959
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+ 135  -5683.6213495726    -23318.589546     9383.8960494    0.136D-04 0.160D-11
+                            Exc = -360.708223624      Eck =  9744.60427304    
+                         Ntotal = 337.24714474      Nspin = 1.0001453023    
+                             Na = 169.12364502         Nb = 168.12349972    
+                            current damping = 2.800
+ 
+          Norm of current diis error: 0.36764E-03
+          max. resid. norm for Fia-block=  1.313D-04 for orbital    169a    alpha
+          max. resid. fock norm         =  1.618D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.03878
+          mo-orthogonalization: Cholesky decomposition
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+ 136  -5683.6213498683    -23318.588256     9383.8947592    0.422D-03 0.161D-11
+                            Exc = -360.708210968      Eck =  9744.60297019    
+                         Ntotal = 337.24714454      Nspin = 1.0001453113    
+                             Na = 169.12364492         Nb = 168.12349961    
+                            current damping = 2.850
+ 
+          Norm of current diis error: 0.35951E-03
+          max. resid. norm for Fia-block=  1.240D-04 for orbital    169a    alpha
+          max. resid. fock norm         =  1.528D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.03797
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+ 137  -5683.6213501629    -23318.589232     9383.8957350    0.287D-02 0.161D-11
+                            Exc = -360.708230766      Eck =  9744.60396581    
+                         Ntotal = 337.24714431      Nspin = 1.0001453119    
+                             Na = 169.12364481         Nb = 168.12349950    
+                            current damping = 2.900
+ 
+          Norm of current diis error: 0.34967E-03
+          max. resid. norm for Fia-block=  1.230D-04 for orbital    169a    alpha
+          max. resid. fock norm         =  1.482D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.03717
+ density matrices became linear dependent...
+Subroutine ddmat can not establish optimal linear combination of delta densities !
+ Next fock matrix will be calculated from scratch !
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+ 138  -5683.6213503939    -23318.588153     9383.8946549    0.287D-02 0.563D-11
+                            Exc = -360.708221251     Coul =  9831.30691877    
+                            exK = -86.7040426306    
+                         Ntotal = 337.24714413      Nspin = 1.0001453153    
+                             Na = 169.12364472         Nb = 168.12349941    
+                            current damping = 2.950
+ 
+          Norm of current diis error: 0.34292E-03
+          max. resid. norm for Fia-block=  1.170D-04 for orbital    169a    alpha
+          max. resid. fock norm         =  1.409D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.03635
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+ 139  -5683.6213506628    -23318.588960     9383.8954623    0.255D-02 0.357D-11
+                            Exc = -360.708236922      Eck =  9744.60369924    
+                         Ntotal = 337.24714393      Nspin = 1.0001453109    
+                             Na = 169.12364462         Nb = 168.12349931    
+                            current damping = 3.000
+ 
+          Norm of current diis error: 0.33460E-03
+          max. resid. norm for Fia-block=  1.164D-04 for orbital    169a    alpha
+          max. resid. fock norm         =  1.373D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.03555
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+ 140  -5683.6213509164    -23318.588059     9383.8945610    0.115D-03 0.238D-11
+                            Exc = -360.708230084      Eck =  9744.60279104    
+                         Ntotal = 337.24714378      Nspin = 1.0001453101    
+                             Na = 169.12364454         Nb = 168.12349923    
+                            current damping = 3.050
+ 
+          Norm of current diis error: 0.32894E-03
+          max. resid. norm for Fia-block=  1.112D-04 for orbital    169a    alpha
+          max. resid. fock norm         =  1.311D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.03474
+          mo-orthogonalization: Cholesky decomposition
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+ 141  -5683.6213511553    -23318.588721     9383.8952227    0.868D-04 0.192D-11
+                            Exc = -360.708242260      Eck =  9744.60346496    
+                         Ntotal = 337.24714360      Nspin = 1.0001453015    
+                             Na = 169.12364445         Nb = 168.12349915    
+                            current damping = 3.100
+ 
+          Norm of current diis error: 0.32183E-03
+          max. resid. norm for Fia-block=  1.110D-04 for orbital    169a    alpha
+          max. resid. fock norm         =  1.283D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.03393
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+ 142  -5683.6213513834    -23318.587975     9383.8944766    0.482D-05 0.163D-11
+                            Exc = -360.708237682      Eck =  9744.60271427    
+                         Ntotal = 337.24714347      Nspin = 1.0001452973    
+                             Na = 169.12364438         Nb = 168.12349908    
+                            current damping = 3.150
+ 
+          Norm of current diis error: 0.31701E-03
+          max. resid. norm for Fia-block=  1.065D-04 for orbital    169a    alpha
+          max. resid. fock norm         =  1.229D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.03312
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+ 143  -5683.6213516085    -23318.588509     9383.8950104    0.762D-03 0.160D-11
+                            Exc = -360.708246926      Eck =  9744.60325732    
+                         Ntotal = 337.24714331      Nspin = 1.0001452855    
+                             Na = 169.12364430         Nb = 168.12349901    
+                            current damping = 3.200
+ 
+          Norm of current diis error: 0.31089E-03
+          max. resid. norm for Fia-block=  1.065D-04 for orbital    169a    alpha
+          max. resid. fock norm         =  1.206D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.03231
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+ 144  -5683.6213518112    -23318.587899     9383.8944001    0.162D-02 0.160D-11
+                            Exc = -360.708244244      Eck =  9744.60264432    
+                         Ntotal = 337.24714319      Nspin = 1.0001452782    
+                             Na = 169.12364423         Nb = 168.12349895    
+                            current damping = 3.250
+ 
+          Norm of current diis error: 0.30675E-03
+          max. resid. norm for Fia-block=  1.026D-04 for orbital    169a    alpha
+          max. resid. fock norm         =  1.160D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.03150
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+ 145  -5683.6213519908    -23318.588320     9383.8948209    0.632D-04 0.160D-11
+                            Exc = -360.708251042      Eck =  9744.60307198    
+                         Ntotal = 337.24714305      Nspin = 1.0001452636    
+                             Na = 169.12364416         Nb = 168.12349889    
+                            current damping = 3.300
+ 
+          Norm of current diis error: 0.30146E-03
+          max. resid. norm for Fia-block=  1.026D-04 for orbital    169a    alpha
+          max. resid. fock norm         =  1.140D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.03069
+          mo-orthogonalization: Cholesky decomposition
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+ 146  -5683.6213521769    -23318.587830     9383.8943304    0.162D-02 0.161D-11
+                            Exc = -360.708249910      Eck =  9744.60258029    
+                         Ntotal = 337.24714294      Nspin = 1.0001452538    
+                             Na = 169.12364410         Nb = 168.12349884    
+                            current damping = 3.350
+ 
+          Norm of current diis error: 0.29787E-03
+          max. resid. norm for Fia-block=  9.910D-05 for orbital    169a    alpha
+          max. resid. fock norm         =  1.099D-04 for orbital    170a    beta 
+          irrep a   : virtual orbitals shifted by    0.02988
+
+ ENERGY CONVERGED !
+
+          Overall gridpoints after grid construction =        363514
+
+ ITERATION  ENERGY          1e-ENERGY        2e-ENERGY     NORM[dD(SAO)]  TOL
+ 147  -5683.5786007902    -23318.588151     9383.9374027    0.864D-06 0.161D-11
+                            Exc = -360.665503145      Eck =  9744.60290582    
+                         Ntotal = 337.00421327      Nspin =0.99996733711    
+                             Na = 169.00209030         Nb = 168.00212297    
+                            current damping = 3.400
+ 
+          Norm of current diis error: 0.29329E-03
+          max. resid. norm for Fia-block=  6.856D-05 for orbital    169a    alpha
+          max. resid. fock norm         =  8.179D-05 for orbital    170a    beta 
+
+ End of SCF iterations
+
+   convergence criteria satisfied after  147 iterations
+
+
+                  ------------------------------------------ 
+                 |  total energy      =  -5683.57860079022  |
+                  ------------------------------------------ 
+                 :  kinetic energy    =   5704.69885758589  :
+                 :  potential energy  = -11388.27745837611  :
+                 :  virial theorem    =      2.00371601385  :
+                 :  wavefunction norm =      1.00000000000  :
+                  .......................................... 
+
+
+ <geterg> : there is no data group $energy 
+
+
+ <skperg> : $end is missing 
+
+
+ orbitals $uhfmo_beta  will be written to file beta
+
+ orbitals $uhfmo_alpha  will be written to file alpha
+
+    irrep                  1a          2a          3a          4a          5a   
+ eigenvalues H       -326.14030   -50.04652   -50.03536   -50.03330   -50.02819
+            eV       -8874.7993  -1361.8459  -1361.5421  -1361.4861  -1361.3471
+ occupation              1.0000      1.0000      1.0000      1.0000      1.0000 
+
+    irrep                  6a          7a          8a          9a         10a   
+ eigenvalues H        -50.02759   -50.02720   -50.02603   -50.02437   -50.02020
+            eV       -1361.3309  -1361.3200  -1361.2882  -1361.2432  -1361.1298
+ occupation              1.0000      1.0000      1.0000      1.0000      1.0000 
+
+    irrep                 11a         12a         13a         14a         15a   
+ eigenvalues H        -49.99440   -49.94595   -49.94539   -49.94476   -49.94336
+            eV       -1360.4275  -1359.1091  -1359.0941  -1359.0770  -1359.0387
+ occupation              1.0000      1.0000      1.0000      1.0000      1.0000 
+
+    irrep                 16a         17a         18a         19a         20a   
+ eigenvalues H        -41.93841   -37.14370   -37.14299   -37.13703   -22.42623
+            eV       -1141.2113  -1010.7394  -1010.7203  -1010.5579   -610.2537
+ occupation              1.0000      1.0000      1.0000      1.0000      1.0000 
+
+    irrep                 21a         22a         23a         24a         25a   
+ eigenvalues H        -22.34884   -22.34798   -22.34778   -22.34485   -22.26140
+            eV        -608.1478   -608.1243   -608.1187   -608.0391   -605.7684
+ occupation              1.0000      1.0000      1.0000      1.0000      1.0000 
+
+    irrep                 26a         27a         28a         29a         30a   
+ eigenvalues H        -22.24926   -22.24899   -22.23661   -22.23261   -22.22176
+            eV        -605.4378   -605.4307   -605.0937   -604.9848   -604.6896
+ occupation              1.0000      1.0000      1.0000      1.0000      1.0000 
+
+    irrep                 31a         32a         33a         34a         35a   
+ eigenvalues H        -22.21919   -22.20040   -22.20006   -22.19965   -22.19774
+            eV        -604.6197   -604.1085   -604.0991   -604.0881   -604.0359
+ occupation              1.0000      1.0000      1.0000      1.0000      1.0000 
+
+    irrep                 36a         37a         38a         39a         40a   
+ eigenvalues H        -13.29218   -13.29208    -7.43294    -6.33362    -6.32648
+            eV        -361.7015   -361.6988   -202.2621   -172.3480   -172.1537
+ occupation              1.0000      1.0000      1.0000      1.0000      1.0000 
+
+    irrep                 41a         42a         43a         44a         45a   
+ eigenvalues H         -6.32379    -6.31623    -6.30849    -6.30544    -6.30510
+            eV        -172.0806   -171.8747   -171.6640   -171.5811   -171.5719
+ occupation              1.0000      1.0000      1.0000      1.0000      1.0000 
+
+    irrep                 46a         47a         48a         49a         50a   
+ eigenvalues H         -6.30392    -6.30225    -6.26161    -6.23410    -6.23354
+            eV        -171.5397   -171.4943   -170.3883   -169.6398   -169.6246
+ occupation              1.0000      1.0000      1.0000      1.0000      1.0000 
+
+    irrep                 51a         52a         53a         54a         55a   
+ eigenvalues H         -6.23292    -6.23150    -5.93585    -5.92827    -5.91233
+            eV        -169.6077   -169.5690   -161.5240   -161.3177   -160.8838
+ occupation              1.0000      1.0000      1.0000      1.0000      1.0000 
+
+    irrep                 56a         57a         58a         59a         60a   
+ eigenvalues H         -5.08042    -5.07991    -5.07500    -5.07187    -5.07171
+            eV        -138.2463   -138.2324   -138.0989   -138.0136   -138.0092
+ occupation              1.0000      1.0000      1.0000      1.0000      1.0000 
+
+    irrep                 61a         62a         63a         64a         65a   
+ eigenvalues H         -5.07163    -5.07009    -5.06958    -5.06494    -5.06300
+            eV        -138.0073   -137.9653   -137.9514   -137.8251   -137.7724
+ occupation              1.0000      1.0000      1.0000      1.0000      1.0000 
+
+    irrep                 66a         67a         68a         69a         70a   
+ eigenvalues H         -5.06274    -5.05744    -5.05538    -5.05517    -5.05230
+            eV        -137.7651   -137.6210   -137.5649   -137.5593   -137.4811
+ occupation              1.0000      1.0000      1.0000      1.0000      1.0000 
+
+    irrep                 71a         72a         73a         74a         75a   
+ eigenvalues H         -5.05192    -5.05164    -5.05131    -5.05077    -5.05014
+            eV        -137.4707   -137.4631   -137.4543   -137.4396   -137.4225
+ occupation              1.0000      1.0000      1.0000      1.0000      1.0000 
+
+    irrep                 76a         77a         78a         79a         80a   
+ eigenvalues H         -5.04969    -5.04907    -5.04846    -5.04642    -5.04599
+            eV        -137.4102   -137.3932   -137.3767   -137.3211   -137.3095
+ occupation              1.0000      1.0000      1.0000      1.0000      1.0000 
+
+    irrep                 81a         82a         83a         84a         85a   
+ eigenvalues H         -5.04492    -5.04318    -5.00580    -5.00577    -5.00173
+            eV        -137.2803   -137.2331   -136.2158   -136.2151   -136.1051
+ occupation              1.0000      1.0000      1.0000      1.0000      1.0000 
+
+    irrep                 86a         87a         88a         89a         90a   
+ eigenvalues H         -4.98094    -4.98038    -4.97976    -4.97873    -4.97865
+            eV        -135.5394   -135.5241   -135.5073   -135.4792   -135.4771
+ occupation              1.0000      1.0000      1.0000      1.0000      1.0000 
+
+    irrep                 91a         92a         93a         94a         95a   
+ eigenvalues H         -4.97835    -4.97810    -4.97773    -4.97739    -4.97731
+            eV        -135.4688   -135.4621   -135.4519   -135.4427   -135.4405
+ occupation              1.0000      1.0000      1.0000      1.0000      1.0000 
+
+    irrep                 96a         97a         98a         99a        100a   
+ eigenvalues H         -4.97596    -4.97577    -4.26220    -4.18605    -4.17741
+            eV        -135.4038   -135.3986   -115.9812   -113.9091   -113.6740
+ occupation              1.0000      1.0000      1.0000      1.0000      1.0000 
+
+    irrep                101a        102a        103a        104a        105a   
+ eigenvalues H         -4.17627    -4.16925    -4.11526    -4.11485    -4.08540
+            eV        -113.6431   -113.4520   -111.9829   -111.9716   -111.1703
+ occupation              1.0000      1.0000      1.0000      1.0000      1.0000 
+
+    irrep                106a        107a        108a        109a        110a   
+ eigenvalues H         -4.05316    -4.05059    -4.03796    -4.03514    -4.01311
+            eV        -110.2928   -110.2231   -109.8792   -109.8027   -109.2031
+ occupation              1.0000      1.0000      1.0000      1.0000      1.0000 
+
+    irrep                111a        112a        113a        114a        115a   
+ eigenvalues H         -4.01229    -4.01125    -4.00996    -3.72021    -3.71216
+            eV        -109.1807   -109.1526   -109.1174   -101.2329   -101.0137
+ occupation              1.0000      1.0000      1.0000      1.0000      1.0000 
+
+    irrep                116a        117a        118a        119a        120a   
+ eigenvalues H         -3.71130    -3.66389    -3.65444    -3.64782    -3.64729
+            eV        -100.9903    -99.7003    -99.4431    -99.2631    -99.2486
+ occupation              1.0000      1.0000      1.0000      1.0000      1.0000 
+
+    irrep                121a        122a        123a        124a        125a   
+ eigenvalues H         -3.63079    -3.63005    -3.62840    -3.61652    -3.61289
+            eV         -98.7997    -98.7795    -98.7347    -98.4113    -98.3125
+ occupation              1.0000      1.0000      1.0000      1.0000      1.0000 
+
+    irrep                126a        127a        128a        129a        130a   
+ eigenvalues H         -3.61088    -3.60571    -3.60101    -3.56703    -3.55095
+            eV         -98.2579    -98.1170    -97.9893    -97.0647    -96.6271
+ occupation              1.0000      1.0000      1.0000      1.0000      1.0000 
+
+    irrep                131a        132a        133a        134a        135a   
+ eigenvalues H         -3.54464    -3.53231    -3.52924    -3.51041    -3.50759
+            eV         -96.4552    -96.1197    -96.0363    -95.5240    -95.4471
+ occupation              1.0000      1.0000      1.0000      1.0000      1.0000 
+
+    irrep                136a        137a        138a        139a        140a   
+ eigenvalues H         -3.50341    -3.49885    -3.49578    -3.48822    -3.48428
+            eV         -95.3335    -95.2092    -95.1257    -94.9200    -94.8128
+ occupation              1.0000      1.0000      1.0000      1.0000      1.0000 
+
+    irrep                141a        142a        143a        144a        145a   
+ eigenvalues H         -3.47922    -3.47242    -3.47063    -3.46090    -3.45617
+            eV         -94.6752    -94.4902    -94.4415    -94.1765    -94.0478
+ occupation              1.0000      1.0000      1.0000      1.0000      1.0000 
+
+    irrep                146a        147a        148a        149a        150a   
+ eigenvalues H         -3.45539    -3.45451    -3.45339    -3.45248    -3.45088
+            eV         -94.0268    -94.0028    -93.9721    -93.9475    -93.9041
+ occupation              1.0000      1.0000      1.0000      1.0000      1.0000 
+
+    irrep                151a        152a        153a        154a        155a   
+ eigenvalues H         -3.44923    -3.43951    -3.43719    -3.43685    -3.43556
+            eV         -93.8589    -93.5945    -93.5315    -93.5221    -93.4872
+ occupation              1.0000      1.0000      1.0000      1.0000      1.0000 
+
+    irrep                156a        157a        158a        159a        160a   
+ eigenvalues H         -3.42931    -3.42750    -3.42647    -3.42503    -3.42343
+            eV         -93.3171    -93.2678    -93.2398    -93.2007    -93.1569
+ occupation              1.0000      1.0000      1.0000      1.0000      1.0000 
+
+    irrep                161a        162a        163a        164a        165a   
+ eigenvalues H         -3.41875    -3.40952    -3.40453    -3.39103    -3.38550
+            eV         -93.0295    -92.7785    -92.6426    -92.2754    -92.1249
+ occupation              1.0000      1.0000      1.0000      1.0000      1.0000 
+
+    irrep                166a        167a        168a        169a        170a   
+ eigenvalues H         -3.37496    -3.36573    -3.35572    -3.32334    -3.27531
+            eV         -91.8380    -91.5868    -91.3145    -90.4333    -89.1263
+ occupation              1.0000      1.0000      1.0000      1.0000 
+
+    irrep                171a        172a        173a        174a        175a   
+ eigenvalues H         -3.25821    -3.23569    -3.20765    -3.20518    -3.18279
+            eV         -88.6610    -88.0482    -87.2852    -87.2181    -86.6087
+
+    irrep                176a        177a        178a        179a        180a   
+ eigenvalues H         -3.17909    -3.13911    -3.13707    -3.12781    -3.11924
+            eV         -86.5081    -85.4202    -85.3648    -85.1126    -84.8795
+
+    irrep                181a        182a        183a        184a        185a   
+ eigenvalues H         -3.11698    -3.09999    -3.09710    -3.07711    -3.04998
+            eV         -84.8180    -84.3556    -84.2771    -83.7331    -82.9947
+
+    irrep                186a        187a        188a        189a        190a   
+ eigenvalues H         -3.04657    -3.03693    -3.02405    -3.01836    -3.01504
+            eV         -82.9021    -82.6397    -82.2891    -82.1345    -82.0440
+
+    irrep                191a        192a        193a        194a        195a   
+ eigenvalues H         -3.01110    -3.00879    -3.00166    -2.99429    -2.99216
+            eV         -81.9369    -81.8741    -81.6799    -81.4795    -81.4215
+
+    irrep                196a        197a        198a        199a        200a   
+ eigenvalues H         -2.99144    -2.98378    -2.97454    -2.96877    -2.96753
+            eV         -81.4019    -81.1935    -80.9420    -80.7850    -80.7513
+
+    irrep                201a        202a        203a        204a        205a   
+ eigenvalues H         -2.96490    -2.94882    -2.94341    -2.94134    -2.93224
+            eV         -80.6796    -80.2420    -80.0949    -80.0386    -79.7909
+
+    irrep                206a        207a        208a        209a        210a   
+ eigenvalues H         -2.92840    -2.90656    -2.90590    -2.90535    -2.87287
+            eV         -79.6865    -79.0922    -79.0743    -79.0593    -78.1755
+
+    irrep                211a        212a        213a        214a        215a   
+ eigenvalues H         -2.87137    -2.85983    -2.85945    -2.85854    -2.85208
+            eV         -78.1345    -77.8205    -77.8102    -77.7853    -77.6097
+
+    irrep                216a        217a        218a        219a        220a   
+ eigenvalues H         -2.84914    -2.83444    -2.82840    -2.82365    -2.82293
+            eV         -77.5296    -77.1297    -76.9653    -76.8359    -76.8164
+
+    irrep                221a        222a        223a        224a        225a   
+ eigenvalues H         -2.82247    -2.81848    -2.81185    -2.80996    -2.78974
+            eV         -76.8039    -76.6954    -76.5149    -76.4635    -75.9132
+
+    irrep                226a        227a        228a        229a        230a   
+ eigenvalues H         -2.78309    -2.77899    -2.76557    -2.76372    -2.76088
+            eV         -75.7324    -75.6207    -75.2557    -75.2053    -75.1280
+
+    irrep                231a        232a        233a        234a        235a   
+ eigenvalues H         -2.75069    -2.74531    -2.73860    -2.73730    -2.73581
+            eV         -74.8507    -74.7042    -74.5218    -74.4862    -74.4459
+
+    irrep                236a        237a        238a        239a        240a   
+ eigenvalues H         -2.73427    -2.71777    -2.71644    -2.70361    -2.70152
+            eV         -74.4040    -73.9549    -73.9187    -73.5696    -73.5126
+
+    irrep                241a        242a        243a        244a        245a   
+ eigenvalues H         -2.69055    -2.68898    -2.68439    -2.68043    -2.67358
+            eV         -73.2140    -73.1713    -73.0464    -72.9387    -72.7523
+
+    irrep                246a        247a        248a        249a        250a   
+ eigenvalues H         -2.66882    -2.66705    -2.65692    -2.65525    -2.65162
+            eV         -72.6230    -72.5748    -72.2992    -72.2536    -72.1549
+
+    irrep                251a        252a        253a        254a        255a   
+ eigenvalues H         -2.64856    -2.62786    -2.62444    -2.61344    -2.61184
+            eV         -72.0715    -71.5082    -71.4153    -71.1159    -71.0724
+
+    irrep                256a        257a        258a        259a        260a   
+ eigenvalues H         -2.60909    -2.60385    -2.59516    -2.58875    -2.58556
+            eV         -70.9976    -70.8549    -70.6185    -70.4440    -70.3571
+
+    irrep                261a        262a        263a        264a        265a   
+ eigenvalues H         -2.58159    -2.56136    -2.55270    -2.55006    -2.53990
+            eV         -70.2493    -69.6986    -69.4629    -69.3913    -69.1149
+
+    irrep                266a        267a        268a        269a        270a   
+ eigenvalues H         -2.53826    -2.53699    -2.53502    -2.52710    -2.51798
+            eV         -69.0700    -69.0354    -68.9820    -68.7663    -68.5183
+
+    irrep                271a        272a        273a        274a        275a   
+ eigenvalues H         -2.51445    -2.50949    -2.50499    -2.48219    -2.47799
+            eV         -68.4221    -68.2872    -68.1647    -67.5443    -67.4300
+
+    irrep                276a        277a        278a        279a        280a   
+ eigenvalues H         -2.47132    -2.46792    -2.46463    -2.45270    -2.45108
+            eV         -67.2486    -67.1561    -67.0664    -66.7418    -66.6978
+
+    irrep                281a        282a        283a        284a        285a   
+ eigenvalues H         -2.44870    -2.44457    -2.42092    -2.41261    -2.40961
+            eV         -66.6330    -66.5206    -65.8770    -65.6510    -65.5693
+
+    irrep                286a        287a        288a        289a        290a   
+ eigenvalues H         -2.40763    -2.38779    -2.38671    -2.37873    -2.37204
+            eV         -65.5155    -64.9755    -64.9462    -64.7290    -64.5469
+
+    irrep                291a        292a        293a        294a        295a   
+ eigenvalues H         -2.34929    -2.33638    -2.32723    -2.32045    -2.31723
+            eV         -63.9280    -63.5768    -63.3276    -63.1433    -63.0555
+
+    irrep                296a        297a        298a        299a        300a   
+ eigenvalues H         -2.31090    -2.30281    -2.30015    -2.30002    -2.29925
+            eV         -62.8834    -62.6631    -62.5909    -62.5872    -62.5662
+
+    irrep                301a        302a        303a        304a        305a   
+ eigenvalues H         -2.27981    -2.27839    -2.27675    -2.27552    -2.25796
+            eV         -62.0372    -61.9987    -61.9541    -61.9205    -61.4428
+
+    irrep                306a        307a        308a        309a        310a   
+ eigenvalues H         -2.24724    -2.23973    -2.23683    -2.21947    -2.21659
+            eV         -61.1509    -60.9467    -60.8677    -60.3955    -60.3170
+
+    irrep                311a        312a        313a        314a        315a   
+ eigenvalues H         -2.21387    -2.15242    -2.11754    -2.09578    -2.09131
+            eV         -60.2429    -58.5708    -57.6216    -57.0294    -56.9078
+
+    irrep                316a        317a        318a        319a        320a   
+ eigenvalues H         -2.08195    -2.07959    -2.06544    -2.04611    -2.04328
+            eV         -56.6531    -56.5890    -56.2040    -55.6779    -55.6009
+
+    irrep                321a        322a        323a        324a        325a   
+ eigenvalues H         -2.03070    -1.91877    -1.88055    -1.84249    -1.83195
+            eV         -55.2587    -52.2129    -51.1728    -50.1370    -49.8502
+
+    irrep                326a        327a        328a        329a        330a   
+ eigenvalues H         -1.81553    -1.53856    -1.53415    -1.52990    -1.52923
+            eV         -49.4035    -41.8666    -41.7467    -41.6311    -41.6129
+
+    irrep                331a        332a        333a        334a        335a   
+ eigenvalues H         -1.50634    -1.49149    -1.48976    -1.48729    -1.46554
+            eV         -40.9898    -40.5858    -40.5387    -40.4715    -39.8797
+
+    irrep                336a        337a        338a        339a        340a   
+ eigenvalues H         -1.46429    -1.46161    -1.45965    -1.45263    -1.44244
+            eV         -39.8457    -39.7728    -39.7193    -39.5284    -39.2510
+
+    irrep                341a        342a        343a        344a        345a   
+ eigenvalues H         -1.43485    -1.42978    -1.42918    -1.41585    -1.41524
+            eV         -39.0446    -38.9065    -38.8902    -38.5277    -38.5109
+
+    irrep                346a        347a        348a        349a        350a   
+ eigenvalues H         -1.40878    -1.39332    -1.38344    -1.38284    -1.37397
+            eV         -38.3351    -37.9144    -37.6456    -37.6293    -37.3880
+
+    irrep                351a        352a        353a        354a        355a   
+ eigenvalues H         -1.37090    -1.36967    -1.34983    -1.34306    -1.34150
+            eV         -37.3044    -37.2710    -36.7310    -36.5469    -36.5043
+
+    irrep                356a        357a        358a        359a        360a   
+ eigenvalues H         -1.33692    -1.33275    -1.32597    -1.31832    -1.29266
+            eV         -36.3798    -36.2662    -36.0818    -35.8736    -35.1752
+
+    irrep                361a        362a        363a        364a        365a   
+ eigenvalues H         -1.28072    -1.25312    -1.25263    -1.24890    -1.24641
+            eV         -34.8505    -34.0993    -34.0860    -33.9844    -33.9169
+
+    irrep                366a        367a        368a        369a        370a   
+ eigenvalues H         -1.24504    -1.23385    -1.20666    -1.19702    -1.19361
+            eV         -33.8795    -33.5750    -32.8350    -32.5727    -32.4800
+
+    irrep                371a        372a        373a        374a        375a   
+ eigenvalues H         -1.18799    -1.17738    -1.17518    -1.16646    -1.16629
+            eV         -32.3270    -32.0385    -31.9786    -31.7413    -31.7365
+
+    irrep                376a        377a        378a        379a        380a   
+ eigenvalues H         -1.16509    -1.13050    -1.12161    -1.11940    -1.09716
+            eV         -31.7039    -30.7626    -30.5209    -30.4607    -29.8554
+
+    irrep                381a        382a        383a        384a        385a   
+ eigenvalues H         -1.09004    -1.08701    -1.01901    -1.01252    -0.85534
+            eV         -29.6618    -29.5792    -27.7290    -27.5522    -23.2753
+
+    irrep                386a        387a        388a        389a        390a   
+ eigenvalues H         -0.78066    -0.75302    -0.74904    -0.74822    -0.72559
+            eV         -21.2429    -20.4910    -20.3826    -20.3602    -19.7444
+
+    irrep                391a        392a        393a        394a        395a   
+ eigenvalues H         -0.72529    -0.70671    -0.69754    -0.67700    -0.65472
+            eV         -19.7364    -19.2308    -18.9811    -18.4223    -17.8160
+
+    irrep                396a        397a        398a        399a        400a   
+ eigenvalues H         -0.65390    -0.65064    -0.64478    -0.64392    -0.64023
+            eV         -17.7936    -17.7050    -17.5455    -17.5221    -17.4216
+
+    irrep                401a        402a        403a        404a        405a   
+ eigenvalues H         -0.63837    -0.63763    -0.63594    -0.62929    -0.62413
+            eV         -17.3711    -17.3509    -17.3050    -17.1241    -16.9835
+
+    irrep                406a        407a        408a        409a        410a   
+ eigenvalues H         -0.62368    -0.62284    -0.60442    -0.60322    -0.59724
+            eV         -16.9713    -16.9485    -16.4472    -16.4145    -16.2519
+
+    irrep                411a        412a        413a        414a        415a   
+ eigenvalues H         -0.59534    -0.59326    -0.59248    -0.59118    -0.58747
+            eV         -16.2002    -16.1435    -16.1224    -16.0870    -15.9861
+
+    irrep                416a        417a        418a        419a        420a   
+ eigenvalues H         -0.57634    -0.57177    -0.56695    -0.56645    -0.56428
+            eV         -15.6832    -15.5588    -15.4275    -15.4139    -15.3550
+
+    irrep                421a        422a        423a        424a        425a   
+ eigenvalues H         -0.56191    -0.55987    -0.55397    -0.55186    -0.55145
+            eV         -15.2904    -15.2351    -15.0745    -15.0170    -15.0059
+
+    irrep                426a        427a        428a        429a        430a   
+ eigenvalues H         -0.54716    -0.54456    -0.53591    -0.52800    -0.52747
+            eV         -14.8891    -14.8183    -14.5831    -14.3676    -14.3534
+
+    irrep                431a        432a        433a        434a        435a   
+ eigenvalues H         -0.52383    -0.52252    -0.52092    -0.51380    -0.51138
+            eV         -14.2543    -14.2185    -14.1750    -13.9813    -13.9155
+
+    irrep                436a        437a        438a        439a        440a   
+ eigenvalues H         -0.50605    -0.50450    -0.50358    -0.49425    -0.49119
+            eV         -13.7705    -13.7282    -13.7031    -13.4493    -13.3661
+
+    irrep                441a        442a        443a        444a        445a   
+ eigenvalues H         -0.49098    -0.48889    -0.48762    -0.48260    -0.47104
+            eV         -13.3603    -13.3035    -13.2689    -13.1323    -12.8176
+
+    irrep                446a        447a        448a        449a        450a   
+ eigenvalues H         -0.46604    -0.46188    -0.45855    -0.45730    -0.45457
+            eV         -12.6818    -12.5685    -12.4778    -12.4440    -12.3695
+
+    irrep                451a        452a        453a        454a        455a   
+ eigenvalues H         -0.45304    -0.45111    -0.45070    -0.44739    -0.44516
+            eV         -12.3280    -12.2753    -12.2642    -12.1742    -12.1134
+
+    irrep                456a        457a        458a        459a        460a   
+ eigenvalues H         -0.44058    -0.43981    -0.43647    -0.42765    -0.42215
+            eV         -11.9890    -11.9679    -11.8770    -11.6371    -11.4874
+
+    irrep                461a        462a        463a        464a        465a   
+ eigenvalues H         -0.42170    -0.42109    -0.41199    -0.40911    -0.40217
+            eV         -11.4752    -11.4586    -11.2109    -11.1325    -10.9436
+
+    irrep                466a        467a        468a        469a        470a   
+ eigenvalues H         -0.39806    -0.39710    -0.39558    -0.38906    -0.37182
+            eV         -10.8319    -10.8057    -10.7644    -10.5870    -10.1177
+
+    irrep                471a        472a        473a        474a        475a   
+ eigenvalues H         -0.37100    -0.37042    -0.36906    -0.36772    -0.36357
+            eV         -10.0955    -10.0796    -10.0428    -10.0062     -9.8935
+
+    irrep                476a        477a        478a        479a        480a   
+ eigenvalues H         -0.35557    -0.34687    -0.34507    -0.34306    -0.34021
+            eV          -9.6757     -9.4390     -9.3899     -9.3352     -9.2576
+
+    irrep                481a        482a        483a        484a        485a   
+ eigenvalues H         -0.33944    -0.33468    -0.33257    -0.33042    -0.32688
+            eV          -9.2368     -9.1073     -9.0498     -8.9912     -8.8949
+
+    irrep                486a        487a        488a        489a        490a   
+ eigenvalues H         -0.32685    -0.32647    -0.32177    -0.32108    -0.30769
+            eV          -8.8941     -8.8837     -8.7557     -8.7371     -8.3727
+
+    irrep                491a        492a        493a        494a        495a   
+ eigenvalues H         -0.30437    -0.29723    -0.28705    -0.28404    -0.27746
+            eV          -8.2823     -8.0882     -7.8111     -7.7291     -7.5502
+
+    irrep                496a        497a        498a        499a        500a   
+ eigenvalues H         -0.27371    -0.27129    -0.26915    -0.25840    -0.24772
+            eV          -7.4480     -7.3823     -7.3241     -7.0315     -6.7409
+
+    irrep                501a        502a        503a        504a        505a   
+ eigenvalues H         -0.23664    -0.21856    -0.21324    -0.19981    -0.17925
+            eV          -6.4393     -5.9472     -5.8027     -5.4373     -4.8777
+
+    irrep                506a        507a        508a        509a        510a   
+ eigenvalues H         -0.17620    -0.16991    -0.16955    -0.13964    -0.12499
+            eV          -4.7947     -4.6235     -4.6138     -3.7999     -3.4011
+
+    irrep                511a        512a        513a        514a        515a   
+ eigenvalues H         -0.12441    -0.08501    -0.07746    -0.04440    -0.01934
+            eV          -3.3853     -2.3134     -2.1078     -1.2081     -0.5262
+
+    irrep                516a        517a        518a        519a        520a   
+ eigenvalues H         -0.01469     0.03366     0.05118     0.09410     0.09984
+            eV          -0.3998      0.9160      1.3926      2.5606      2.7168
+
+    irrep                521a        522a        523a        524a        525a   
+ eigenvalues H          0.10592     0.11515     0.12480     0.12768     0.25215
+            eV           2.8821      3.1334      3.3961      3.4742      6.8614
+
+    irrep                526a        527a        528a        529a        530a   
+ eigenvalues H          0.27886     0.29035     0.29150     0.30290     0.30555
+            eV           7.5882      7.9009      7.9321      8.2423      8.3145
+
+    irrep                531a        532a        533a        534a        535a   
+ eigenvalues H          0.31927     0.36831     0.59391     0.63099     0.69797
+            eV           8.6880     10.0222     16.1612     17.1702     18.9930
+
+    irrep                536a        537a        538a        539a        540a   
+ eigenvalues H          0.76065     0.88365     1.29809     1.32514     1.40140
+            eV          20.6986     24.0455     35.3231     36.0592     38.1343
+
+    irrep                541a        542a        543a        544a        545a   
+ eigenvalues H          1.40322     1.40445     1.40686     1.55128     1.80496
+            eV          38.1840     38.2173     38.2829     42.2127     49.1158
+
+    irrep                546a        547a        548a        549a        550a   
+ eigenvalues H          1.88475     1.89419     1.95142     2.31296     2.33768
+            eV          51.2871     51.5439     53.1013     62.9393     63.6119
+
+    irrep                551a        552a        553a        554a        555a   
+ eigenvalues H          2.41407     2.48160     3.02630    18.92165    18.95376
+            eV          65.6907     67.5284     82.3506    514.8885    515.7621
+
+    irrep                556a        557a        558a        559a        560a   
+ eigenvalues H         39.80577    39.98303    40.00749    40.02300    40.06171
+            eV        1083.1788   1088.0022   1088.6677   1089.0898   1090.1433
+
+    irrep                561a        562a        563a        564a        565a   
+ eigenvalues H         40.20754    40.20882    40.21451    40.23616    40.29433
+            eV        1094.1115   1094.1464   1094.3012   1094.8904   1096.4731
+
+    irrep                566a        567a        568a        569a        570a   
+ eigenvalues H         40.33488    40.34111    40.34366    40.39510    40.39763
+            eV        1097.5767   1097.7462   1097.8154   1099.2152   1099.2840
+
+    irrep                571a   
+ eigenvalues H         40.60640
+            eV        1104.9650
+ 
+
+    irrep                  1a          2a          3a          4a          5a   
+ eigenvalues H       -326.13984   -50.04736   -50.03414   -50.03331   -50.02912
+            eV       -8874.7870  -1361.8687  -1361.5089  -1361.4864  -1361.3724
+ occupation              1.0000      1.0000      1.0000      1.0000      1.0000 
+
+    irrep                  6a          7a          8a          9a         10a   
+ eigenvalues H        -50.02778   -50.02713   -50.02622   -50.02439   -50.02154
+            eV       -1361.3359  -1361.3182  -1361.2936  -1361.2436  -1361.1663
+ occupation              1.0000      1.0000      1.0000      1.0000      1.0000 
+
+    irrep                 11a         12a         13a         14a         15a   
+ eigenvalues H        -49.99438   -49.94594   -49.94539   -49.94476   -49.94336
+            eV       -1360.4271  -1359.1090  -1359.0941  -1359.0769  -1359.0387
+ occupation              1.0000      1.0000      1.0000      1.0000      1.0000 
+
+    irrep                 16a         17a         18a         19a         20a   
+ eigenvalues H        -41.93057   -37.13524   -37.13512   -37.13369   -22.42635
+            eV       -1140.9979  -1010.5093  -1010.5061  -1010.4670   -610.2568
+ occupation              1.0000      1.0000      1.0000      1.0000      1.0000 
+
+    irrep                 21a         22a         23a         24a         25a   
+ eigenvalues H        -22.35058   -22.34999   -22.34747   -22.34502   -22.26131
+            eV        -608.1951   -608.1791   -608.1105   -608.0438   -605.7657
+ occupation              1.0000      1.0000      1.0000      1.0000      1.0000 
+
+    irrep                 26a         27a         28a         29a         30a   
+ eigenvalues H        -22.23735   -22.23211   -22.23182   -22.23174   -22.22247
+            eV        -605.1140   -604.9714   -604.9634   -604.9612   -604.7089
+ occupation              1.0000      1.0000      1.0000      1.0000      1.0000 
+
+    irrep                 31a         32a         33a         34a         35a   
+ eigenvalues H        -22.22008   -22.20112   -22.20041   -22.19971   -22.19767
+            eV        -604.6439   -604.1279   -604.1088   -604.0897   -604.0342
+ occupation              1.0000      1.0000      1.0000      1.0000      1.0000 
+
+    irrep                 36a         37a         38a         39a         40a   
+ eigenvalues H        -13.29017   -13.28996    -7.41708    -6.33505    -6.32649
+            eV        -361.6467   -361.6410   -201.8307   -172.3869   -172.1539
+ occupation              1.0000      1.0000      1.0000      1.0000      1.0000 
+
+    irrep                 41a         42a         43a         44a         45a   
+ eigenvalues H         -6.32166    -6.31783    -6.31079    -6.30577    -6.30498
+            eV        -172.0226   -171.9182   -171.7266   -171.5900   -171.5687
+ occupation              1.0000      1.0000      1.0000      1.0000      1.0000 
+
+    irrep                 46a         47a         48a         49a         50a   
+ eigenvalues H         -6.30428    -6.30228    -6.26158    -6.23410    -6.23354
+            eV        -171.5494   -171.4951   -170.3876   -169.6398   -169.6247
+ occupation              1.0000      1.0000      1.0000      1.0000      1.0000 
+
+    irrep                 51a         52a         53a         54a         55a   
+ eigenvalues H         -6.23291    -6.23150    -5.91337    -5.90772    -5.90506
+            eV        -169.6076   -169.5690   -160.9123   -160.7584   -160.6861
+ occupation              1.0000      1.0000      1.0000      1.0000      1.0000 
+
+    irrep                 56a         57a         58a         59a         60a   
+ eigenvalues H         -5.08149    -5.08106    -5.07620    -5.07185    -5.07180
+            eV        -138.2755   -138.2637   -138.1315   -138.0131   -138.0119
+ occupation              1.0000      1.0000      1.0000      1.0000      1.0000 
+
+    irrep                 61a         62a         63a         64a         65a   
+ eigenvalues H         -5.07163    -5.06853    -5.06830    -5.06415    -5.06378
+            eV        -138.0072   -137.9228   -137.9164   -137.8037   -137.7936
+ occupation              1.0000      1.0000      1.0000      1.0000      1.0000 
+
+    irrep                 66a         67a         68a         69a         70a   
+ eigenvalues H         -5.06294    -5.05900    -5.05702    -5.05667    -5.05256
+            eV        -137.7708   -137.6634   -137.6097   -137.6002   -137.4881
+ occupation              1.0000      1.0000      1.0000      1.0000      1.0000 
+
+    irrep                 71a         72a         73a         74a         75a   
+ eigenvalues H         -5.05196    -5.05193    -5.05184    -5.05118    -5.05103
+            eV        -137.4718   -137.4712   -137.4686   -137.4506   -137.4467
+ occupation              1.0000      1.0000      1.0000      1.0000      1.0000 
+
+    irrep                 76a         77a         78a         79a         80a   
+ eigenvalues H         -5.05048    -5.04910    -5.04848    -5.04661    -5.04592
+            eV        -137.4316   -137.3940   -137.3772   -137.3263   -137.3076
+ occupation              1.0000      1.0000      1.0000      1.0000      1.0000 
+
+    irrep                 81a         82a         83a         84a         85a   
+ eigenvalues H         -5.04513    -5.04321    -5.00578    -5.00576    -5.00171
+            eV        -137.2861   -137.2337   -136.2154   -136.2147   -136.1045
+ occupation              1.0000      1.0000      1.0000      1.0000      1.0000 
+
+    irrep                 86a         87a         88a         89a         90a   
+ eigenvalues H         -4.98094    -4.98038    -4.97976    -4.97873    -4.97865
+            eV        -135.5394   -135.5240   -135.5073   -135.4791   -135.4770
+ occupation              1.0000      1.0000      1.0000      1.0000      1.0000 
+
+    irrep                 91a         92a         93a         94a         95a   
+ eigenvalues H         -4.97835    -4.97810    -4.97773    -4.97739    -4.97731
+            eV        -135.4688   -135.4621   -135.4519   -135.4427   -135.4405
+ occupation              1.0000      1.0000      1.0000      1.0000      1.0000 
+
+    irrep                 96a         97a         98a         99a        100a   
+ eigenvalues H         -4.97596    -4.97577    -4.26244    -4.18824    -4.17937
+            eV        -135.4039   -135.3986   -115.9879   -113.9688   -113.7273
+ occupation              1.0000      1.0000      1.0000      1.0000      1.0000 
+
+    irrep                101a        102a        103a        104a        105a   
+ eigenvalues H         -4.17805    -4.17049    -4.08521    -4.07799    -4.07757
+            eV        -113.6913   -113.4856   -111.1651   -110.9685   -110.9572
+ occupation              1.0000      1.0000      1.0000      1.0000      1.0000 
+
+    irrep                106a        107a        108a        109a        110a   
+ eigenvalues H         -4.05491    -4.04848    -4.03967    -4.03729    -4.01436
+            eV        -110.3405   -110.1657   -109.9260   -109.8611   -109.2370
+ occupation              1.0000      1.0000      1.0000      1.0000      1.0000 
+
+    irrep                111a        112a        113a        114a        115a   
+ eigenvalues H         -4.01348    -4.01175    -4.00990    -3.72044    -3.71223
+            eV        -109.2133   -109.1660   -109.1158   -101.2391   -101.0157
+ occupation              1.0000      1.0000      1.0000      1.0000      1.0000 
+
+    irrep                116a        117a        118a        119a        120a   
+ eigenvalues H         -3.71205    -3.66622    -3.65605    -3.64954    -3.64873
+            eV        -101.0109    -99.7638    -99.4870    -99.3099    -99.2878
+ occupation              1.0000      1.0000      1.0000      1.0000      1.0000 
+
+    irrep                121a        122a        123a        124a        125a   
+ eigenvalues H         -3.63280    -3.63106    -3.62879    -3.61751    -3.61355
+            eV         -98.8543    -98.8070    -98.7451    -98.4382    -98.3305
+ occupation              1.0000      1.0000      1.0000      1.0000      1.0000 
+
+    irrep                126a        127a        128a        129a        130a   
+ eigenvalues H         -3.61344    -3.60679    -3.60313    -3.55542    -3.54934
+            eV         -98.3276    -98.1464    -98.0468    -96.7486    -96.5833
+ occupation              1.0000      1.0000      1.0000      1.0000      1.0000 
+
+    irrep                131a        132a        133a        134a        135a   
+ eigenvalues H         -3.54503    -3.52808    -3.51125    -3.50737    -3.50481
+            eV         -96.4660    -96.0047    -95.5467    -95.4413    -95.3714
+ occupation              1.0000      1.0000      1.0000      1.0000      1.0000 
+
+    irrep                136a        137a        138a        139a        140a   
+ eigenvalues H         -3.50263    -3.49928    -3.49631    -3.48950    -3.48342
+            eV         -95.3121    -95.2210    -95.1403    -94.9549    -94.7895
+ occupation              1.0000      1.0000      1.0000      1.0000      1.0000 
+
+    irrep                141a        142a        143a        144a        145a   
+ eigenvalues H         -3.47906    -3.47285    -3.46990    -3.46269    -3.45779
+            eV         -94.6709    -94.5017    -94.4215    -94.2254    -94.0921
+ occupation              1.0000      1.0000      1.0000      1.0000      1.0000 
+
+    irrep                146a        147a        148a        149a        150a   
+ eigenvalues H         -3.45622    -3.45484    -3.45414    -3.45279    -3.44049
+            eV         -94.0492    -94.0117    -93.9926    -93.9559    -93.6211
+ occupation              1.0000      1.0000      1.0000      1.0000      1.0000 
+
+    irrep                151a        152a        153a        154a        155a   
+ eigenvalues H         -3.43761    -3.43722    -3.43650    -3.43092    -3.42937
+            eV         -93.5428    -93.5324    -93.5126    -93.3608    -93.3186
+ occupation              1.0000      1.0000      1.0000      1.0000      1.0000 
+
+    irrep                156a        157a        158a        159a        160a   
+ eigenvalues H         -3.42725    -3.42448    -3.41804    -3.41574    -3.39984
+            eV         -93.2609    -93.1857    -93.0103    -92.9479    -92.5150
+ occupation              1.0000      1.0000      1.0000      1.0000      1.0000 
+
+    irrep                161a        162a        163a        164a        165a   
+ eigenvalues H         -3.39565    -3.38315    -3.37088    -3.36659    -3.35905
+            eV         -92.4009    -92.0610    -91.7270    -91.6103    -91.4051
+ occupation              1.0000      1.0000      1.0000      1.0000      1.0000 
+
+    irrep                166a        167a        168a        169a        170a   
+ eigenvalues H         -3.34773    -3.33073    -3.29924    -3.28312    -3.27389
+            eV         -91.0971    -90.6346    -89.7776    -89.3389    -89.0878
+ occupation              1.0000      1.0000      1.0000 
+
+    irrep                171a        172a        173a        174a        175a   
+ eigenvalues H         -3.24494    -3.23810    -3.21047    -3.20841    -3.18654
+            eV         -88.2999    -88.1138    -87.3621    -87.3059    -86.7109
+
+    irrep                176a        177a        178a        179a        180a   
+ eigenvalues H         -3.18513    -3.14347    -3.14011    -3.12760    -3.12601
+            eV         -86.6724    -85.5389    -85.4475    -85.1071    -85.0639
+
+    irrep                181a        182a        183a        184a        185a   
+ eigenvalues H         -3.11508    -3.10370    -3.09769    -3.07305    -3.04946
+            eV         -84.7664    -84.4567    -84.2930    -83.6225    -82.9807
+
+    irrep                186a        187a        188a        189a        190a   
+ eigenvalues H         -3.04418    -3.03913    -3.02138    -3.01803    -3.01526
+            eV         -82.8369    -82.6996    -82.2165    -82.1254    -82.0499
+
+    irrep                191a        192a        193a        194a        195a   
+ eigenvalues H         -3.00130    -3.00027    -2.99871    -2.99451    -2.98965
+            eV         -81.6701    -81.6421    -81.5997    -81.4853    -81.3531
+
+    irrep                196a        197a        198a        199a        200a   
+ eigenvalues H         -2.98190    -2.98066    -2.97366    -2.96680    -2.96442
+            eV         -81.1424    -81.1085    -80.9182    -80.7315    -80.6665
+
+    irrep                201a        202a        203a        204a        205a   
+ eigenvalues H         -2.95954    -2.94463    -2.93964    -2.93447    -2.92884
+            eV         -80.5339    -80.1282    -79.9924    -79.8515    -79.6985
+
+    irrep                206a        207a        208a        209a        210a   
+ eigenvalues H         -2.92201    -2.90742    -2.90674    -2.90423    -2.87299
+            eV         -79.5126    -79.1157    -79.0970    -79.0289    -78.1787
+
+    irrep                211a        212a        213a        214a        215a   
+ eigenvalues H         -2.87150    -2.86009    -2.85943    -2.85793    -2.85261
+            eV         -78.1381    -77.8277    -77.8098    -77.7688    -77.6240
+
+    irrep                216a        217a        218a        219a        220a   
+ eigenvalues H         -2.85044    -2.83642    -2.82857    -2.82588    -2.82351
+            eV         -77.5651    -77.1836    -76.9698    -76.8967    -76.8323
+
+    irrep                221a        222a        223a        224a        225a   
+ eigenvalues H         -2.82317    -2.81903    -2.81185    -2.80944    -2.78808
+            eV         -76.8229    -76.7104    -76.5150    -76.4494    -75.8682
+
+    irrep                226a        227a        228a        229a        230a   
+ eigenvalues H         -2.78278    -2.77977    -2.76480    -2.76448    -2.76099
+            eV         -75.7238    -75.6421    -75.2347    -75.2261    -75.1308
+
+    irrep                231a        232a        233a        234a        235a   
+ eigenvalues H         -2.75058    -2.74564    -2.73852    -2.73779    -2.73614
+            eV         -74.8476    -74.7133    -74.5194    -74.4997    -74.4549
+
+    irrep                236a        237a        238a        239a        240a   
+ eigenvalues H         -2.73514    -2.71769    -2.71669    -2.70182    -2.70112
+            eV         -74.4275    -73.9528    -73.9254    -73.5208    -73.5019
+
+    irrep                241a        242a        243a        244a        245a   
+ eigenvalues H         -2.69068    -2.68889    -2.68283    -2.68086    -2.67356
+            eV         -73.2178    -73.1690    -73.0041    -72.9504    -72.7518
+
+    irrep                246a        247a        248a        249a        250a   
+ eigenvalues H         -2.66915    -2.66726    -2.65606    -2.65564    -2.65240
+            eV         -72.6318    -72.5805    -72.2755    -72.2642    -72.1760
+
+    irrep                251a        252a        253a        254a        255a   
+ eigenvalues H         -2.64765    -2.62828    -2.62394    -2.61250    -2.61073
+            eV         -72.0468    -71.5196    -71.4016    -71.0902    -71.0420
+
+    irrep                256a        257a        258a        259a        260a   
+ eigenvalues H         -2.60694    -2.60377    -2.59424    -2.58890    -2.58602
+            eV         -70.9390    -70.8529    -70.5935    -70.4480    -70.3697
+
+    irrep                261a        262a        263a        264a        265a   
+ eigenvalues H         -2.58056    -2.56169    -2.55141    -2.55081    -2.53866
+            eV         -70.2211    -69.7076    -69.4279    -69.4116    -69.0809
+
+    irrep                266a        267a        268a        269a        270a   
+ eigenvalues H         -2.53773    -2.53683    -2.53519    -2.52829    -2.51811
+            eV         -69.0556    -69.0311    -68.9867    -68.7987    -68.5218
+
+    irrep                271a        272a        273a        274a        275a   
+ eigenvalues H         -2.51522    -2.50829    -2.50454    -2.48198    -2.47830
+            eV         -68.4431    -68.2545    -68.1527    -67.5387    -67.4386
+
+    irrep                276a        277a        278a        279a        280a   
+ eigenvalues H         -2.47161    -2.46906    -2.46604    -2.45306    -2.45187
+            eV         -67.2565    -67.1871    -67.1048    -66.7517    -66.7193
+
+    irrep                281a        282a        283a        284a        285a   
+ eigenvalues H         -2.44739    -2.44525    -2.42015    -2.41134    -2.40984
+            eV         -66.5974    -66.5392    -65.8562    -65.6165    -65.5757
+
+    irrep                286a        287a        288a        289a        290a   
+ eigenvalues H         -2.40944    -2.38713    -2.38404    -2.37806    -2.37257
+            eV         -65.5648    -64.9576    -64.8735    -64.7107    -64.5613
+
+    irrep                291a        292a        293a        294a        295a   
+ eigenvalues H         -2.34275    -2.33581    -2.32277    -2.32021    -2.31860
+            eV         -63.7500    -63.5610    -63.2063    -63.1366    -63.0928
+
+    irrep                296a        297a        298a        299a        300a   
+ eigenvalues H         -2.30986    -2.30299    -2.29894    -2.29442    -2.29260
+            eV         -62.8550    -62.6682    -62.5578    -62.4349    -62.3852
+
+    irrep                301a        302a        303a        304a        305a   
+ eigenvalues H         -2.27848    -2.27807    -2.27679    -2.26614    -2.25705
+            eV         -62.0010    -61.9900    -61.9551    -61.6654    -61.4180
+
+    irrep                306a        307a        308a        309a        310a   
+ eigenvalues H         -2.24213    -2.23954    -2.23599    -2.21717    -2.21247
+            eV         -61.0121    -60.9414    -60.8450    -60.3327    -60.2049
+
+    irrep                311a        312a        313a        314a        315a   
+ eigenvalues H         -2.21222    -2.14823    -2.11131    -2.09472    -2.07977
+            eV         -60.1980    -58.4569    -57.4521    -57.0006    -56.5939
+
+    irrep                316a        317a        318a        319a        320a   
+ eigenvalues H         -2.07925    -2.07542    -2.04968    -2.04707    -2.04200
+            eV         -56.5798    -56.4755    -55.7752    -55.7040    -55.5660
+
+    irrep                321a        322a        323a        324a        325a   
+ eigenvalues H         -2.02741    -1.91888    -1.87043    -1.82955    -1.82140
+            eV         -55.1692    -52.2159    -50.8975    -49.7851    -49.5631
+
+    irrep                326a        327a        328a        329a        330a   
+ eigenvalues H         -1.80530    -1.54037    -1.53541    -1.53153    -1.52804
+            eV         -49.1250    -41.9161    -41.7811    -41.6754    -41.5803
+
+    irrep                331a        332a        333a        334a        335a   
+ eigenvalues H         -1.50876    -1.49092    -1.49053    -1.48743    -1.46506
+            eV         -41.0559    -40.5704    -40.5596    -40.4754    -39.8667
+
+    irrep                336a        337a        338a        339a        340a   
+ eigenvalues H         -1.46347    -1.46180    -1.45960    -1.45297    -1.44203
+            eV         -39.8232    -39.7780    -39.7180    -39.5376    -39.2400
+
+    irrep                341a        342a        343a        344a        345a   
+ eigenvalues H         -1.43522    -1.42981    -1.42937    -1.41620    -1.40952
+            eV         -39.0547    -38.9075    -38.8956    -38.5369    -38.3553
+
+    irrep                346a        347a        348a        349a        350a   
+ eigenvalues H         -1.40861    -1.38758    -1.38608    -1.38108    -1.37260
+            eV         -38.3306    -37.7581    -37.7173    -37.5813    -37.3506
+
+    irrep                351a        352a        353a        354a        355a   
+ eigenvalues H         -1.37027    -1.36943    -1.34428    -1.34292    -1.33585
+            eV         -37.2873    -37.2644    -36.5801    -36.5431    -36.3508
+
+    irrep                356a        357a        358a        359a        360a   
+ eigenvalues H         -1.33174    -1.32691    -1.31957    -1.31742    -1.29041
+            eV         -36.2388    -36.1074    -35.9077    -35.8491    -35.1142
+
+    irrep                361a        362a        363a        364a        365a   
+ eigenvalues H         -1.26644    -1.25352    -1.25314    -1.25032    -1.24443
+            eV         -34.4617    -34.1102    -34.1000    -34.0231    -33.8630
+
+    irrep                366a        367a        368a        369a        370a   
+ eigenvalues H         -1.24195    -1.23343    -1.20718    -1.19683    -1.19396
+            eV         -33.7954    -33.5635    -32.8492    -32.5676    -32.4897
+
+    irrep                371a        372a        373a        374a        375a   
+ eigenvalues H         -1.17837    -1.17735    -1.16632    -1.16527    -1.16482
+            eV         -32.0654    -32.0377    -31.7373    -31.7088    -31.6966
+
+    irrep                376a        377a        378a        379a        380a   
+ eigenvalues H         -1.16151    -1.12910    -1.11945    -1.11767    -1.09779
+            eV         -31.6065    -30.7246    -30.4620    -30.4135    -29.8725
+
+    irrep                381a        382a        383a        384a        385a   
+ eigenvalues H         -1.08405    -1.08278    -1.01152    -1.00774    -0.85196
+            eV         -29.4987    -29.4641    -27.5251    -27.4222    -23.1832
+
+    irrep                386a        387a        388a        389a        390a   
+ eigenvalues H         -0.78114    -0.75337    -0.74924    -0.74877    -0.72588
+            eV         -21.2561    -20.5004    -20.3880    -20.3753    -19.7523
+
+    irrep                391a        392a        393a        394a        395a   
+ eigenvalues H         -0.72558    -0.69679    -0.69131    -0.67746    -0.65632
+            eV         -19.7443    -18.9607    -18.8117    -18.4348    -17.8596
+
+    irrep                396a        397a        398a        399a        400a   
+ eigenvalues H         -0.65541    -0.65139    -0.64594    -0.64483    -0.64166
+            eV         -17.8347    -17.7254    -17.5770    -17.5468    -17.4606
+
+    irrep                401a        402a        403a        404a        405a   
+ eigenvalues H         -0.63967    -0.63824    -0.63659    -0.63009    -0.62458
+            eV         -17.4065    -17.3675    -17.3227    -17.1458    -16.9958
+
+    irrep                406a        407a        408a        409a        410a   
+ eigenvalues H         -0.62416    -0.62229    -0.60428    -0.60326    -0.59862
+            eV         -16.9845    -16.9334    -16.4433    -16.4157    -16.2893
+
+    irrep                411a        412a        413a        414a        415a   
+ eigenvalues H         -0.59569    -0.59441    -0.59289    -0.59118    -0.58801
+            eV         -16.2097    -16.1750    -16.1335    -16.0870    -16.0007
+
+    irrep                416a        417a        418a        419a        420a   
+ eigenvalues H         -0.57722    -0.56951    -0.56763    -0.56712    -0.56439
+            eV         -15.7070    -15.4971    -15.4461    -15.4323    -15.3580
+
+    irrep                421a        422a        423a        424a        425a   
+ eigenvalues H         -0.56129    -0.55663    -0.55421    -0.55310    -0.55199
+            eV         -15.2737    -15.1467    -15.0809    -15.0508    -15.0204
+
+    irrep                426a        427a        428a        429a        430a   
+ eigenvalues H         -0.54797    -0.54092    -0.53677    -0.52817    -0.52768
+            eV         -14.9112    -14.7192    -14.6064    -14.3722    -14.3589
+
+    irrep                431a        432a        433a        434a        435a   
+ eigenvalues H         -0.52447    -0.52322    -0.52183    -0.51400    -0.51045
+            eV         -14.2717    -14.2375    -14.1999    -13.9867    -13.8902
+
+    irrep                436a        437a        438a        439a        440a   
+ eigenvalues H         -0.50670    -0.50486    -0.50421    -0.49464    -0.49208
+            eV         -13.7882    -13.7379    -13.7202    -13.4600    -13.3903
+
+    irrep                441a        442a        443a        444a        445a   
+ eigenvalues H         -0.49148    -0.48914    -0.48798    -0.48274    -0.47188
+            eV         -13.3740    -13.3104    -13.2787    -13.1361    -12.8406
+
+    irrep                446a        447a        448a        449a        450a   
+ eigenvalues H         -0.46621    -0.46187    -0.45974    -0.45800    -0.45512
+            eV         -12.6863    -12.5682    -12.5103    -12.4628    -12.3847
+
+    irrep                451a        452a        453a        454a        455a   
+ eigenvalues H         -0.45322    -0.45164    -0.45138    -0.44721    -0.44463
+            eV         -12.3328    -12.2897    -12.2828    -12.1692    -12.0990
+
+    irrep                456a        457a        458a        459a        460a   
+ eigenvalues H         -0.44182    -0.43999    -0.43734    -0.42827    -0.42251
+            eV         -12.0227    -11.9727    -11.9009    -11.6540    -11.4972
+
+    irrep                461a        462a        463a        464a        465a   
+ eigenvalues H         -0.42204    -0.42159    -0.41275    -0.40911    -0.40052
+            eV         -11.4844    -11.4722    -11.2315    -11.1325    -10.8988
+
+    irrep                466a        467a        468a        469a        470a   
+ eigenvalues H         -0.39854    -0.39795    -0.39482    -0.38924    -0.37292
+            eV         -10.8449    -10.8289    -10.7436    -10.5918    -10.1479
+
+    irrep                471a        472a        473a        474a        475a   
+ eigenvalues H         -0.37148    -0.36989    -0.36916    -0.36760    -0.36495
+            eV         -10.1086    -10.0652    -10.0453    -10.0029     -9.9309
+
+    irrep                476a        477a        478a        479a        480a   
+ eigenvalues H         -0.35570    -0.34556    -0.34460    -0.34439    -0.33898
+            eV          -9.6793     -9.4032     -9.3772     -9.3715     -9.2242
+
+    irrep                481a        482a        483a        484a        485a   
+ eigenvalues H         -0.33571    -0.33409    -0.33112    -0.32254    -0.32133
+            eV          -9.1351     -9.0911     -9.0102     -8.7769     -8.7439
+
+    irrep                486a        487a        488a        489a        490a   
+ eigenvalues H         -0.30899    -0.30177    -0.29768    -0.29229    -0.29182
+            eV          -8.4080     -8.2117     -8.1004     -7.9537     -7.9410
+
+    irrep                491a        492a        493a        494a        495a   
+ eigenvalues H         -0.28787    -0.28717    -0.28293    -0.28033    -0.26888
+            eV          -7.8333     -7.8143     -7.6990     -7.6284     -7.3166
+
+    irrep                496a        497a        498a        499a        500a   
+ eigenvalues H         -0.26622    -0.26376    -0.26252    -0.24302    -0.23966
+            eV          -7.2444     -7.1773     -7.1435     -6.6129     -6.5215
+
+    irrep                501a        502a        503a        504a        505a   
+ eigenvalues H         -0.23353    -0.21329    -0.19719    -0.19571    -0.17695
+            eV          -6.3546     -5.8039     -5.3658     -5.3255     -4.8150
+
+    irrep                506a        507a        508a        509a        510a   
+ eigenvalues H         -0.17642    -0.16980    -0.14560    -0.13980    -0.12337
+            eV          -4.8007     -4.6205     -3.9621     -3.8041     -3.3571
+
+    irrep                511a        512a        513a        514a        515a   
+ eigenvalues H         -0.11700    -0.08546    -0.07564    -0.02130    -0.01965
+            eV          -3.1838     -2.3255     -2.0582     -0.5795     -0.5346
+
+    irrep                516a        517a        518a        519a        520a   
+ eigenvalues H         -0.00038     0.03308     0.05044     0.09321     0.09979
+            eV          -0.0105      0.9001      1.3726      2.5365      2.7155
+
+    irrep                521a        522a        523a        524a        525a   
+ eigenvalues H          0.10721     0.11405     0.12519     0.12723     0.27994
+            eV           2.9174      3.1035      3.4066      3.4620      7.6175
+
+    irrep                526a        527a        528a        529a        530a   
+ eigenvalues H          0.30266     0.30872     0.30933     0.32328     0.32399
+            eV           8.2358      8.4008      8.4173      8.7970      8.8164
+
+    irrep                531a        532a        533a        534a        535a   
+ eigenvalues H          0.36388     0.37618     0.59908     0.63655     0.71111
+            eV           9.9018     10.2365     16.3019     17.3215     19.3503
+
+    irrep                536a        537a        538a        539a        540a   
+ eigenvalues H          0.78353     0.88943     1.29797     1.32522     1.40067
+            eV          21.3212     24.2027     35.3200     36.0613     38.1144
+
+    irrep                541a        542a        543a        544a        545a   
+ eigenvalues H          1.40592     1.42726     1.43102     1.55090     1.80370
+            eV          38.2574     38.8379     38.9403     42.2024     49.0815
+
+    irrep                546a        547a        548a        549a        550a   
+ eigenvalues H          1.88504     1.89185     1.95049     2.31294     2.33759
+            eV          51.2949     51.4803     53.0759     62.9387     63.6097
+
+    irrep                551a        552a        553a        554a        555a   
+ eigenvalues H          2.41409     2.48164     3.02621    18.92448    18.95655
+            eV          65.6914     67.5294     82.3480    514.9654    515.8381
+
+    irrep                556a        557a        558a        559a        560a   
+ eigenvalues H         39.80567    39.98274    40.00718    40.02287    40.06145
+            eV        1083.1759   1087.9942   1088.6594   1089.0862   1090.1361
+
+    irrep                561a        562a        563a        564a        565a   
+ eigenvalues H         40.20730    40.20778    40.21367    40.23586    40.29538
+            eV        1094.1048   1094.1181   1094.2783   1094.8820   1096.5016
+
+    irrep                566a        567a        568a        569a        570a   
+ eigenvalues H         40.33385    40.34077    40.34273    40.41204    40.41610
+            eV        1097.5486   1097.7369   1097.7903   1099.6763   1099.7867
+
+    irrep                571a   
+ eigenvalues H         40.60645
+            eV        1104.9666
+ 
+
+                                             _ _ _ 
+  IRREP     alpha occ.     beta occ.      tr(D*D-D)
+
+
+ a        169.00000000   168.00000000    -0.74352299
+
+   -------------------------------------------------
+
+   sum    169.00000000   168.00000000    -0.74352299
+
+ <S*S>     1.73704598
+
+ 
+ 
+ 
+ ==============================================================================
+                           electrostatic moments
+ ==============================================================================
+ 
+              nuc           elec       ->  total
+ ------------------------------------------------------------------------------
+                          charge      
+ ------------------------------------------------------------------------------
+         369.000000    -337.000000      32.000000
+ a-b                                     1.000000
+ 
+ ------------------------------------------------------------------------------
+                       dipole moment  
+ ------------------------------------------------------------------------------
+   x    5869.083926   -5359.906808     509.177118
+   y    7335.810213   -6699.696785     636.113429
+   z    5330.591470   -4892.408185     438.183286
+ 
+   | dipole moment | =   925.1520 a.u. =  2351.5196 debye 
+ 
+ ------------------------------------------------------------------------------
+                     quadrupole moment
+ ------------------------------------------------------------------------------
+  xx   99301.909386  -90108.795987    9193.113400
+  yy  151789.675866 -138052.453993   13737.221873
+  zz   82697.785258  -76169.740870    6528.044389
+  xy  116417.921146 -106316.865525   10101.055621
+  xz   84788.839695  -77817.061719    6971.777976
+  yz  105974.399924  -97263.762439    8710.637484
+ 
+     1/3  trace=    9819.459887
+     anisotropy=   26821.605692
+ 
+ ==============================================================================
+ 
+
+
+    ------------------------------------------------------------------------
+         total  cpu-time :  3 hours  6 minutes and  6 seconds
+         total wall-time :  3 hours  7 minutes and  6 seconds
+    ------------------------------------------------------------------------
+
+
+   ****  ridft : all done  ****
+
+
+    2011-02-15 20:46:53.118 
+

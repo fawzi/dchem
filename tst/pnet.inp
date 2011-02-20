@@ -23,8 +23,8 @@ poorM:{
         projName:"test1",
     },
     maxContexts:1,
-    executeDefaultE:"sh calcE.sh",
-    executeDefaultEF:"sh calcE.sh"
+    executeE:"sh calcE.sh",
+    executeEF:"sh calcE.sh"
     startConfig:{ class:Ref name:startConfig}
 }
 

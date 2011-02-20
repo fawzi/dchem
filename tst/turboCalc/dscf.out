@@ -1,0 +1,18 @@
+ operating system is UNIX !
+ hostname is         hexa11
+
+ data group $actual step is not empty 
+ due to the abend of ridft
+
+
+ check reason for abend ... 
+
+ use the command  'actual -r'  to get rid of that 
+
+ 
+ MODTRACE: no modules on stack
+
+  CONTRL dead = actual step 
+ dscf ended abnormally
+ dscf ended abnormally
+program stopped.

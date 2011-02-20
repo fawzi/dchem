@@ -1,0 +1,461 @@
+ operating system is UNIX !
+ hostname is         hexa11
+
+ rdgrad(hexa11) : TURBOMOLE 26 Sep 2007 at 15:07:04
+ Copyright (C) 2007 University of Karlsruhe
+
+
+    2011-02-16 05:18:49.088 
+
+
+ UHF modus switched on !
+
+
+                                 r d g r a d
+
+                          gradient for ridft program 
+
+                        by K.Eichkorn, O.Treutler, H.Oehm, 
+                             M.Haeser and R.Ahlrichs
+                  (Chemical Physics Letters 242 (1995) 652-660)
+                    parallel version: M.v.Arnim  &  R.Ahlrichs
+                            quantum chemistry group
+                             university  karlsruhe
+                                   germany
+
+
+
+
+                          References             
+                                                 
+          Density Functional:                              
+              O. Treutler and R. Ahlrichs                      
+              Efficient Molecular Numerical Integration Schemes
+              J. chem. Phys. 102: 346 (1995)                   
+          Parallel Version:                                
+              Performance of parallel TURBOMOLE for Density    
+              Functional Calculations                          
+              M. v.Arnim and R. Ahlrichs                      
+              J. comp. Chem. 19: 1746 (1998)                   
+          RI-J Method:                                     
+              Auxiliary Basis Sets to approximate Coulomb      
+              Potentials                                       
+              Chem. Phys. Lett. 240: 283 (1995)                
+              K. Eichkorn, O. Treutler, H. Oehm, M. Haeser     
+              and R. Ahlrichs                                  
+              Chem. Phys. Lett. 242: 652 (1995)                
+                                                           
+              Auxiliary Basis Sets for Main Row Atoms and their
+              Use to approximate Coulomb Potentials            
+              K. Eichkorn, F. Weigend, O. Treutler and         
+              R. Ahlrichs                                      
+              Theo. Chem. Acc. 97: 119 (1997)                   
+                                         
+
+
+
+ W A R N I N G : BASIS SET NICKNAME none DOES NOT CONTAIN ATOMIC SYMBOL mg !
+
+
+  WARNING : no basis functions have been specified for 
+
+        29   mg f    
+        30   mg f    
+        31   mg f    
+        32   mg f    
+        33   mg f    
+        34   mg f    
+        35   mg f    
+        36   mg f    
+        37   mg f    
+        38   mg f    
+        39   mg f    
+        40   mg f    
+        41   mg f    
+        42   mg f    
+        43   mg f    
+        44   mg f    
+
+
+              +--------------------------------------------------+
+              | Atomic coordinate, charge and isotop information |
+              +--------------------------------------------------+
+
+
+              atomic coordinates              atom shells charge pseudo isotop
+     7.95196757   19.87991892   15.90393513    o      9    8.000    0     0
+    11.92795135   15.90393513   15.90393513    o      9    8.000    0     0
+    11.92795135   19.87991892   15.90393513    mg     8   12.000    0     0
+    11.92795135   23.85590270   15.90393513    o      9    8.000    0     0
+    15.90393513   11.92795135   15.90393513    o      9    8.000    0     0
+    15.90393513   15.90393513   15.90393513    mg     8   12.000    0     0
+    15.90393513   19.87991892   15.90393513    o      9    8.000    0     0
+    15.90393513   23.85590270   15.90393513    mg     8   12.000    0     0
+    15.90393513   27.83188649   15.90393513    o      9    8.000    0     0
+    19.87991892   15.90393513   15.90393513    o      9    8.000    0     0
+    19.87991892   19.87991892   15.90393513    mg     8   12.000    0     0
+    19.87991892   23.85590270   15.90393513    o      9    8.000    0     0
+    23.85590270   19.87991892   15.90393513    o      9    8.000    0     0
+     7.95196757   19.87991892   11.92795135    mg     8   12.000    0     0
+    11.92795135   15.90393513   11.92795135    mg     8   12.000    0     0
+    11.92795135   19.87991892   11.92795135    o      9    8.000    0     0
+    11.92795135   23.85590270   11.92795135    mg     8   12.000    0     0
+    15.90393513   11.92795135   11.92795135    mg     8   12.000    0     0
+    15.90393513   15.90393513   11.92795135    o      9    8.000    0     0
+    15.90393513   19.87991892   11.92795135    mg     8   12.000    0     0
+    15.90393513   23.85590270   11.92795135    o      9    8.000    0     0
+    15.90393513   27.83188649   11.92795135    mg     8   12.000    0     0
+    19.87991892   15.90393513   11.92795135    mg     8   12.000    0     0
+    19.87991892   19.87991892   11.92795135    o      9    8.000    0     0
+    19.87991892   23.85590270   11.92795135    mg     8   12.000    0     0
+    23.85590270   19.87991892   11.92795135    mg     8   12.000    0     0
+    15.90393513   19.87991892    7.95196757    o      9    8.000    0     0
+    15.90393513   19.87991892    3.97598378    mg     8   12.000    0     0
+     3.97598378   19.87991892   15.90393513    mg     0   12.000    1     0
+     7.95196757   15.90393513   15.90393513    mg     0   12.000    1     0
+     7.95196757   23.85590270   15.90393513    mg     0   12.000    1     0
+    11.92795135   11.92795135   15.90393513    mg     0   12.000    1     0
+    11.92795135   27.83188649   15.90393513    mg     0   12.000    1     0
+    15.90393513    7.95196757   15.90393513    mg     0   12.000    1     0
+    15.90393513   31.80787027   15.90393513    mg     0   12.000    1     0
+    19.87991892   11.92795135   15.90393513    mg     0   12.000    1     0
+    19.87991892   27.83188649   15.90393513    mg     0   12.000    1     0
+    23.85590270   15.90393513   15.90393513    mg     0   12.000    1     0
+    23.85590270   23.85590270   15.90393513    mg     0   12.000    1     0
+    27.83188649   19.87991892   15.90393513    mg     0   12.000    1     0
+    11.92795135   19.87991892    7.95196757    mg     0   12.000    1     0
+    15.90393513   15.90393513    7.95196757    mg     0   12.000    1     0
+    15.90393513   23.85590270    7.95196757    mg     0   12.000    1     0
+    19.87991892   19.87991892    7.95196757    mg     0   12.000    1     0
+    15.91037111   19.87872736   19.89199790    cu    13   29.000    0     0
+    13.68092573   22.11654603   21.44476100    c      9    6.000    0     0
+    12.37323062   23.43223838   22.58347085    o      9    8.000    0     0
+    18.14753756   17.64949119   21.44579961    c      9    6.000    0     0
+    19.46234716   16.34228591   22.58615826    o      9    8.000    0     0
+ 
+
+     center of nuclear mass  :   15.90496000   19.88013676   14.30579486
+
+     center of nuclear charge:   15.90494054   19.88014601   14.28571340
+
+
+              +--------------------------------------------------+
+              |               basis set information              |
+              +--------------------------------------------------+
+
+
+              we will work with the  1s 3p 5d  7f  9g ... basis set
+              ...i.e. with spherical basis functions...
+
+
+   type   atoms  prim   cont   basis
+   ---------------------------------------------------------------------------
+    o       16     34     19   def-TZVP   [5s3p1d|11s6p1d]
+    mg      14     35     14   def-TZVP   [5s3p|14s7p]
+    cu       1     80     33   def-TZVP   [6s4p3d|17s11p6d]
+    c        2     34     19   def-TZVP   [5s3p1d|11s6p1d]
+   ---------------------------------------------------------------------------
+   total:   49   1182    571
+   ---------------------------------------------------------------------------
+
+   total number of primitive shells          :   91
+   total number of contracted shells         :  287
+   total number of cartesian basis functions :  592
+   total number of SCF-basis functions       :  571
+
+
+ integral neglect threshold       :  0.56E-11
+ integral storage threshold THIZE :  0.10E-04
+ integral storage threshold THIME :         5
+
+ number of unique ecp types :           1
+ Becke-3-Parameter hybrid functional: B3-LYP
+ exchange:    0.8*LDA + 0.72*B88 + 0.2*HF
+ correlation: 0.19*LDA(VWN) + 0.81*LYP
+ A Hybrid-DFT calculation using the RI-J approximation will be carried out.
+  
+  
+ AUXILIARY BASIS SET information:
+
+ W A R N I N G : BASIS SET NICKNAME none DOES NOT CONTAIN ATOMIC SYMBOL mg !
+
+
+  WARNING : no basis functions have been specified for 
+
+        29   mg f    
+        30   mg f    
+        31   mg f    
+        32   mg f    
+        33   mg f    
+        34   mg f    
+        35   mg f    
+        36   mg f    
+        37   mg f    
+        38   mg f    
+        39   mg f    
+        40   mg f    
+        41   mg f    
+        42   mg f    
+        43   mg f    
+        44   mg f    
+
+   we will work with the  1s 3p 5d  7f  9g 11h 13i auxiliary basis set
+   ...i.e. with spherical basis functions...
+
+   type   atoms  prim   cont   basis
+   ---------------------------------------------------------------------------
+    o       16     40     38   def-TZVP   [7s3p3d1f|9s3p3d1f]
+    mg      14     51     28   def-TZVP   [5s2p2d1f|12s4p4d1f]
+    cu       1    106     68   def-TZVP   [7s4p2d3f2g|17s4p4d3f4g]
+    c        2     40     38   def-TZVP   [7s3p3d1f|9s3p3d1f]
+   ---------------------------------------------------------------------------
+   total:   49   1540   1144
+   ---------------------------------------------------------------------------
+
+   total number of primitive shells          :   85
+   total number of contracted shells         :  410
+   total number of cartesian basis functions : 1345
+   total number of SCF-basis functions       : 1144
+
+
+ symmetry group of the molecule :   c1 
+
+ the group has the following generators :
+   c1(z)
+
+    1 symmetry operations found
+
+ there are 1 real representations :   a   
+
+ maximum number of shells which are related by symmetry :  1
+
+
+    mo occupation :
+   irrep   mo's   occupied
+    a      571      169
+ 
+ number of basis functions   :          571
+ number of occupied orbitals :          169
+ 
+
+ biggest AO integral is expected to be    17.830051868
+
+ cpu time for 2e-integral bound :      0.08 sec
+
+  
+           ------------------
+           density functional
+           ------------------
+ Becke-3-Parameter hybrid functional: B3-LYP
+ exchange:    0.8*LDA + 0.72*B88 + 0.2*HF
+ correlation: 0.19*LDA(VWN) + 0.81*LYP
+ iterations will be done with small grid
+  
+ spherical integration : Lebedev's spherical grid
+ spherical gridsize    :           3
+    i.e. gridpoints    :         302
+ value for diffuse not defined
+ radial integration    : Chebyshev 2nd kind (scaling 3)
+ radial gridsize       :           3
+ integration cells     :          49
+ partition function    : becke
+ partition sharpness   :           3
+  
+  
+           ------------------------
+             RDGRAD - INFORMATION
+           ------------------------
+  
+ Threshold for integral neglect (rithr2): 1E-10
+ Threshold for integral neglect (rithr1): 1E-10
+ Contributions to RI integral batches: 
+  neglected integral batches:       16528
+  direct contribution:              24800
+     
+ 
+    +---------------- Multipole Accelerated RI-J ---------------+
+    -------------------------------------------------------------
+      Number of bins for density partition        :  8
+      Maximum multipole moment used               : 14
+      Multipole precision parameter               :  1.0000E-08
+      Threshold for moment summation              :  1.0000E-24
+      Minimum separation between boxes            :  0.0000E+00
+      Maximum allowed extent                      :  2.0000E+01
+    +-----------------------------------------------------------+
+ 
+ Extensions and centers of shell-pairs:
+  number of shells with a single center:        23936
+  number of shells with double centers:           864
+ ****************************************
+ Memory allocated for RDGRAD: 17 MiB
+ ****************************************
+                                            
+     
+
+ cpu-time elapsed before start of lpzwei:        0.160 sec
+
+ nuclear repulsion energy  :   8251.07214727    
+
+ 
+          -----------------
+          -S- integrals
+          -----------------
+
+ 1e-integrals will be neglected if expon. factor < 0.564521E-12
+scanning $energy in file energy
+     1 -5683.578600790      5704.698857586     -11388.27745838
+$end
+  MOs are in ASCII format !
+
+
+ reading orbital data $uhfmo_alpha  from file alpha . 
+
+ orbital characterization : scfconv=7
+ 
+
+ reading orbital data $uhfmo_beta  from file beta . 
+
+ orbital characterization : scfconv=7
+ 
+  Deviation of MOs from orthonormality   1.201304240274186E-013
+  Deviation of MOs from orthonormality   8.721246381321324E-014
+
+    ----------------------------------------
+     S+T+V CONTRIBUTIONS TO ENERGY GRADIENT 
+    ----------------------------------------
+
+ 1e-integral 1st. derivatives will be neglected if expon. factor < 0.113094E-13
+
+ ECP: maximum angular momentum =           2
+ ECP: maximum angular projector=           1
+  cpu time for cartesian ECP gradient :      7.55 sec
+
+
+ setting up bound for integral derivative estimation
+
+ increment for numerical differentiation : 0.00050000
+
+ biggest AO integral is expected to be    17.830051868
+ biggest cartesian 1st derivative AO integral is expected to be    62.393861485
+
+ cpu time for 2e-integral derivative bound :      1.02 sec
+
+
+ biggest 1-particle AO density matrix element is expected to be    2.5901227528
+
+ core memory to be involved in 2e-gradient :
+   symmetry shell pair data              :         1
+   one and two particle density          :    393680
+   derivative integrals                  :      8496
+   ij-primitive data                     :       576
+   derivative integral bound             :    123984
+   totally                               :    526736
+
+
+ setting up bound for integral derivative estimation
+
+ increment for numerical differentiation : 0.00050000
+
+ biggest AO integral is expected to be    17.830051868
+ biggest cartesian 1st derivative AO integral is expected to be    62.393861485
+
+ cpu time for 2e-integral derivative bound :      0.94 sec
+
+
+ 2e-integral 1st. derivatives will be neglected if expon. factor < 0.100000E-06
+ outer boundary for 2e-integral derivative neglection is 0.248432E-08
+
+          Overall gridpoints after grid construction =        363514
+
+ Integrated ground state density     :   337.0042132685402    
+
+ Integrated ground state spin density:  0.9999673370537187    
+
+
+          ------------------------------------------------
+           cartesian gradient of the energy (hartree/bohr)
+          ------------------------------------------------
+
+  ATOM      1 o           2 o           3 mg          4 o           5 o 
+ dE/dx  0.0000000D+00 0.0000000D+00 0.0000000D+00 0.0000000D+00 0.0000000D+00
+ dE/dy  0.0000000D+00 0.0000000D+00 0.0000000D+00 0.0000000D+00 0.0000000D+00
+ dE/dz  0.0000000D+00 0.0000000D+00 0.0000000D+00 0.0000000D+00 0.0000000D+00
+
+  ATOM      6 mg          7 o           8 mg          9 o          10 o 
+ dE/dx  0.0000000D+00 0.0000000D+00 0.0000000D+00 0.0000000D+00 0.0000000D+00
+ dE/dy  0.0000000D+00 0.0000000D+00 0.0000000D+00 0.0000000D+00 0.0000000D+00
+ dE/dz  0.0000000D+00 0.0000000D+00 0.0000000D+00 0.0000000D+00 0.0000000D+00
+
+  ATOM     11 mg         12 o          13 o          14 mg         15 mg
+ dE/dx  0.0000000D+00 0.0000000D+00 0.0000000D+00 0.0000000D+00 0.0000000D+00
+ dE/dy  0.0000000D+00 0.0000000D+00 0.0000000D+00 0.0000000D+00 0.0000000D+00
+ dE/dz  0.0000000D+00 0.0000000D+00 0.0000000D+00 0.0000000D+00 0.0000000D+00
+
+  ATOM     16 o          17 mg         18 mg         19 o          20 mg
+ dE/dx  0.0000000D+00 0.0000000D+00 0.0000000D+00 0.0000000D+00 0.0000000D+00
+ dE/dy  0.0000000D+00 0.0000000D+00 0.0000000D+00 0.0000000D+00 0.0000000D+00
+ dE/dz  0.0000000D+00 0.0000000D+00 0.0000000D+00 0.0000000D+00 0.0000000D+00
+
+  ATOM     21 o          22 mg         23 mg         24 o          25 mg
+ dE/dx  0.0000000D+00 0.0000000D+00 0.0000000D+00 0.0000000D+00 0.0000000D+00
+ dE/dy  0.0000000D+00 0.0000000D+00 0.0000000D+00 0.0000000D+00 0.0000000D+00
+ dE/dz  0.0000000D+00 0.0000000D+00 0.0000000D+00 0.0000000D+00 0.0000000D+00
+
+  ATOM     26 mg         27 o          28 mg         29 mg         30 mg
+ dE/dx  0.0000000D+00 0.0000000D+00 0.0000000D+00 0.0000000D+00 0.0000000D+00
+ dE/dy  0.0000000D+00 0.0000000D+00 0.0000000D+00 0.0000000D+00 0.0000000D+00
+ dE/dz  0.0000000D+00 0.0000000D+00 0.0000000D+00 0.0000000D+00 0.0000000D+00
+
+  ATOM     31 mg         32 mg         33 mg         34 mg         35 mg
+ dE/dx  0.0000000D+00 0.0000000D+00 0.0000000D+00 0.0000000D+00 0.0000000D+00
+ dE/dy  0.0000000D+00 0.0000000D+00 0.0000000D+00 0.0000000D+00 0.0000000D+00
+ dE/dz  0.0000000D+00 0.0000000D+00 0.0000000D+00 0.0000000D+00 0.0000000D+00
+
+  ATOM     36 mg         37 mg         38 mg         39 mg         40 mg
+ dE/dx  0.0000000D+00 0.0000000D+00 0.0000000D+00 0.0000000D+00 0.0000000D+00
+ dE/dy  0.0000000D+00 0.0000000D+00 0.0000000D+00 0.0000000D+00 0.0000000D+00
+ dE/dz  0.0000000D+00 0.0000000D+00 0.0000000D+00 0.0000000D+00 0.0000000D+00
+
+  ATOM     41 mg         42 mg         43 mg         44 mg         45 cu
+ dE/dx  0.0000000D+00 0.0000000D+00 0.0000000D+00 0.0000000D+00 0.5124232D-03
+ dE/dy  0.0000000D+00 0.0000000D+00 0.0000000D+00 0.0000000D+00 0.2913856D-03
+ dE/dz  0.0000000D+00 0.0000000D+00 0.0000000D+00 0.0000000D+00-0.4048297D-01
+
+  ATOM     46 c          47 o          48 c          49 o 
+ dE/dx  0.2686061D-01 0.1615430D-01-0.2613971D-01-0.1688670D-01
+ dE/dy -0.2643299D-01-0.1654767D-01 0.2659467D-01 0.1644694D-01
+ dE/dz -0.8299360D-01-0.5182882D-01-0.8263741D-01-0.5214925D-01
+ 
+ resulting FORCE  (fx,fy,fz) = (0.501D-03,0.352D-03,-.310D+00)
+ resulting MOMENT (mx,my,mz) = (-.617D+01,0.494D+01,-.448D-02)
+
+
+ exx =      -0.227514 eyy =      -0.228400 ezz =      -6.705616
+ eyz =      -3.079216 exz =      -2.463195 exy =       0.243223
+
+
+ **********************************************************************
+  |maximum component of gradient| : 0.82993601E-01  (atom 46 c )       
+   gradient norm                  : 0.15704482    
+ **********************************************************************
+
+ <getgrd> : data group $grad  is missing 
+
+   ***  cartesian gradients written onto <gradient>  ***
+
+
+     --- calculation of the energy gradient finished ---
+
+
+
+    ------------------------------------------------------------------------
+         total  cpu-time :  3 minutes and 51 seconds
+         total wall-time :  3 minutes and 52 seconds
+    ------------------------------------------------------------------------
+
+
+   ****  rdgrad : all done  ****
+
+
+    2011-02-16 05:22:40.682 
+
