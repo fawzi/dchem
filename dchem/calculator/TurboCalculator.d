@@ -58,11 +58,7 @@ struct GradInPSys{
         p.skipString("$grad");
         p.newlineIsSpace=false;
         p.skipString("cartesian gradients");
-        p.parserPos(sout.call);
-        sout("(pre skipLines)\n");
         p.skipLines(1);
-        p.parserPos(sout.call);
-        sout("(post skipLines)\n");
     }
     
     /// helper error message
@@ -73,15 +69,9 @@ struct GradInPSys{
 
     /// load a configuration in the given pSys 
     ParticleSys!(T) configInPSys(T)(ParticleSys!(T)pSys,long minCycle=0){
-        p.parserPos(sout.call);
-        sout("(pre skipWhitespace)\n");
         p.skipWhitespace();
-        p.parserPos(sout.call);
-        sout("(post skipWhitespace)\n");
         {
             auto tok=p.nextToken();
-            p.parserPos(sout.call);
-            sout("(post nextToken)\n");
             if (tok=="$end") return null;
             if (tok!="cycle") {
                 throw new Exception(collectAppender(delegate void(CharSink s){
@@ -212,10 +202,12 @@ struct GradInPSys{
                 p(pos.x)(pos.y)(pos.z);
                 p.skipWhitespace();
                 tok=p.nextToken();
-            } while (tok!is null);
+            } while (tok.length!=0);
             --iParticle;
         } catch(Exception e){
-            throw new Exception("error trying to find the start of the gradient part",__FILE__,__LINE__,e);
+            throw new Exception(collectAppender(delegate void(CharSink s){
+                dumper(s)("error trying to find the start of the gradient part ")(p);
+            }),__FILE__,__LINE__,e);
         }
         long iParticle2=0;
         if (subset.length!=0){
@@ -229,7 +221,10 @@ struct GradInPSys{
         if (gradOp==Op.Load) pSys.checkMddx();
         auto maxFDiff2=pow2(maxGradDiff);
         SegmentedArray!(Vector!(T,3)) f=pSys.dynVars.mddx.pos;
+        bool readPos=false;
         foreach (idx;externalOrder.gSortedLocalPIndex.sLoop){
+            if (readPos) p(pos.x)(pos.y)(pos.z);
+            readPos=true;
             ++iParticle2;
             if (gradOp==Op.Load) {
                 f[idx,0]=-pos;
@@ -242,12 +237,12 @@ struct GradInPSys{
                             }),__FILE__,__LINE__);
                 }
             }
-            p(pos.x)(pos.y)(pos.z);
             p.skipLines(1);
         }
         while (iParticle2<iParticle){
             ++iParticle2;
-            p(pos.x);
+            if (readPos) p(pos.x);
+            readPos=true;
             p.skipLines(1);
         }
         p.skipWhitespace();
@@ -331,7 +326,6 @@ class TurboContext:ExecuterContext{
             scope inF=toReaderChar(templateH.targetDir.file(inputTurbo.gradFile).input);
             scope(exit){ inF.shutdownInput(); }
             scope p=new TextParser!(char)(inF);
-    //        p.sourceName=inputTurbo.gradFile; // pippo
             auto gParser=GradInPSys(p);
             gParser.energyOp=GradInPSys.Op.Check;
             gParser.posOp=GradInPSys.Op.Check;
@@ -373,7 +367,6 @@ class TurboContext:ExecuterContext{
             scope inF=toReaderChar(templateH.targetDir.file(inputTurbo.enerFile).input);
             scope(exit){ inF.shutdownInput(); }
             scope p=new TextParser!(char)(inF);
-//            p.sourceName=inputTurbo.enerFile;// pippo
             p.skipString("$energy");
             p.newlineIsSpace=false;
             p.skipLines(1);
@@ -419,7 +412,6 @@ class TurboContext:ExecuterContext{
                 scope inF=toReaderChar(templateH.targetDir.file(inputTurbo.eErrorFile).input);
                 scope(exit){ inF.shutdownInput(); }
                 scope p=new TextParser!(char)(inF);
-    //            p.sourceName=inputTurbo.eErrorFile;// pippo
                 Real errFock,errFiaBlock;
                 while(true){
                     if (p.skipString("max. resid. ",false)){
