@@ -339,7 +339,7 @@ class TemplateHandler{
         log(getOutput(opInProgress,status));
         if (status!=0){
             char[256] buf;
-            auto arr=lGrowableArray(buf,0);
+            auto arr=lGrowableArray(buf,0,GASharing.Local);
             arr("command failed with status ");
             writeOut(&arr.appendArr,status);
             throw new Exception(arr.takeData,__FILE__,__LINE__);
