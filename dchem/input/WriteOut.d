@@ -31,17 +31,19 @@ void writeXyz(T)(CharSink sink,SysStruct sysStruct,SegmentedArray!(Vector!(T,3))
     }
 }
 
-/// writes a turbomole style coordinate file
+/// writes a turbomole style coordinates.
+/// skips the last newline
 void writeTurboCoord(T)(CharSink sink,SysStruct sysStruct,SegmentedArray!(Vector!(T,3))pos){
     auto s=dumper(sink);
-    s("$coord\n");
+    bool newLine=false;
     foreach(p;sysStruct.externalOrder.gSortedLocalPIndex){
+        if (newLine) s("\n");
+        newLine=true;
         auto k=sysStruct.kinds[cast(size_t)p.kind];
-        s(k.name)(" ");
+        // s(k.name)(" ");
         auto posAtt=pos[PIndex(p),0];
-        s(posAtt.x)(" ")(posAtt.y)(" ")(posAtt.z)(" ")(k.symbol)("\n");
+        s(posAtt.x)(" ")(posAtt.y)(" ")(posAtt.z)(" ")(k.symbol);
     }
-    s("$end\n");
 }
 
 /// structure to dump out a segmented array
