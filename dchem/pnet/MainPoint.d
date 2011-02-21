@@ -544,7 +544,7 @@ class MainPoint(T):MainPointI!(T){
     /// returns the number of dimensions
     uint ndim(){
         auto g=pos.dynVars.dVarStruct.dualDxGroup;
-        return g.posStruct.length+g.orientStruct.length+g.dofStruct.length;
+        return 3*g.posStruct.length+4*g.orientStruct.length+g.dofStruct.length;
     }
     /// returns the number of directions (counting also 0, the core dir)
     uint ndirs(){
@@ -1265,8 +1265,8 @@ class MainPoint(T):MainPointI!(T){
         typeof(_gFlags) newFlags;
         synchronized(this){
             if (isNaN(energy) || (gFlags&GFlags.EnergyEvaluated)==0) {
-                assert((gFlags&GFlags.EnergyInfo)==GFlags.InProgress,collectAppender(delegate void(CharSink s){
-                    dumper(s)("invalid energy and not in progress in point ")(this); }));
+                /+assert((gFlags&GFlags.EnergyInfo)==GFlags.InProgress,collectAppender(delegate void(CharSink s){
+                    dumper(s)("invalid energy and not in progress in point ")(this); }));+/
                 logMsg(delegate void(CharSink s){
                     dumper(s)("skipping energy info (")(eAndMin)(") of neighbor ")(neigh)
                         (" as this point doesn't have a calculated energy yet");
@@ -1499,8 +1499,8 @@ class MainPoint(T):MainPointI!(T){
         typeof(_gFlags) newFlags;
         synchronized(this){
             if (isNaN(energy) || (gFlags&GFlags.EnergyEvaluated)==0) {
-                assert((gFlags&GFlags.EnergyInfo)==GFlags.InProgress,collectAppender(delegate void(CharSink s){
-                    dumper(s)("invalid energy and not in progress in point ")(this); }));
+                /+assert((gFlags&GFlags.EnergyInfo)==GFlags.InProgress,collectAppender(delegate void(CharSink s){
+                    dumper(s)("invalid energy and not in progress in point ")(this); }));+/
                 logMsg(delegate void(CharSink s){
                     dumper(s)("skipping energy info (")(eAndMin)(") of neighbor ")(neigh)
                         (" as this point doesn't have a calculated energy yet");
