@@ -167,7 +167,6 @@ struct SegArrWriter(T){
         }
         auto aStruct=new SegmentedArrayStruct(name,sysStruct.fullSystem,kRange,kDims,flags);
         auto aMap=new SegArrMemMap!(V)(aStruct);
-        auto dData=BulkArray!(V)((cast(V*)data.ptr)[0..data.length/dimMult],data.guard);
         if (steal && data.guard!is null){
             auto baseOffset=data.ptr-data.guard.dataPtr;
             bool compatible=true;
@@ -180,6 +179,7 @@ struct SegArrWriter(T){
             }
             // can be stolen:
             if (compatible && atomicCASB(ownsData,false,true)){
+                auto dData=BulkArray!(V)((cast(V*)data.ptr)[0..data.length/dimMult],data.guard);
                 return aMap.newArray(dData);
             }
         }
@@ -188,8 +188,9 @@ struct SegArrWriter(T){
             auto ik=k-kRange.kStart;
             assert(kindOffsets[ik]%dimMult==0);
             assert((kindOffsets[ik]+kindStarts[ik+1]-kindStarts[ik])%dimMult==0);
-            res[k][]=dData[kindOffsets[ik]/dimMult..
-                (kindOffsets[ik]+kindStarts[ik+1]-kindStarts[ik])/dimMult];
+            assert(kindOffsets[ik]>=0&&kindOffsets[ik]+kindStarts[ik+1]-kindStarts[ik]<=data.length);
+            auto dData=BulkArray!(V)((cast(V*)(data.ptr+kindOffsets[ik]))[0..(kindStarts[ik+1]-kindStarts[ik])/dimMult],data.guard);
+            res[k][]=dData;
         }
         return res;
     }
@@ -220,10 +221,10 @@ struct SegArrWriter(T){
         auto res=aMap.newArray(kRange);
         foreach (k;kRange){
             auto ik=k-kRange.kStart;
-            assert(kindOffsets[ik]%dimMult==0);
             assert((kindOffsets[ik]+kindStarts[ik+1]-kindStarts[ik])%dimMult==0);
-            res[k][]=dData[kindOffsets[ik]/dimMult..
-                (kindOffsets[ik]+kindStarts[ik+1]-kindStarts[ik])/dimMult];
+            assert(kindOffsets[ik]>=0&&kindOffsets[ik]+kindStarts[ik+1]-kindStarts[ik]<=data.length);
+            auto dData=BulkArray!(V)((cast(V*)(data.ptr+kindOffsets[ik]))[0..(kindStarts[ik+1]-kindStarts[ik])/dimMult],data.guard);
+            res[k][]=dData;
         }
         return res;
     }
@@ -232,11 +233,11 @@ struct SegArrWriter(T){
         if (s is null) stdlib.abort();
         assert(s!is null,"copy to only to allocated arrays");
         uint dimMult=V.sizeof/T.sizeof;
-        auto dData=BulkArray!(V)((cast(V*)data.ptr)[0..data.length/dimMult],data.guard);
         foreach (k;kRange){
             auto ik=k-kRange.kStart;
-            s[k][]=dData[kindOffsets[ik]*dimMult..
-                (kindOffsets[ik]+kindStarts[ik+1]-kindStarts[ik])*dimMult];
+            assert(kindOffsets[ik]>=0&&kindOffsets[ik]+kindStarts[ik+1]-kindStarts[ik]<=data.length);
+            auto dData=BulkArray!(V)((cast(V*)(data.ptr+kindOffsets[ik]))[0..(kindStarts[ik+1]-kindStarts[ik])/dimMult],data.guard);
+            s[k][]=dData;
         }
     }
 }
