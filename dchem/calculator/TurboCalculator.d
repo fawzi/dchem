@@ -343,7 +343,7 @@ class TurboContext:ExecuterContext{
                     pSysNew=gParser.configInPSys(pSys,expectedGPos);
                 }
             } else {
-                if (pSysRes is null || pSysRes.iteration!=expectedGPos){
+                if (pSysRes is null || pSysRes.iteration!=expectedGPos && expectedGPos!=0){
                     throw new Exception(collectAppender(delegate void(CharSink s){
                                 dumper(s)("could not find cycle ")(expectedGPos)(&gParser.fileMsg);
                             }),__FILE__,__LINE__);
@@ -385,8 +385,10 @@ class TurboContext:ExecuterContext{
                     p(cycle)(eAtt);
                 }
             } else {
-                if (cycle!=expectedEPos){
-                    
+                if (cycle!=expectedEPos && expectedEPos!=0){
+                    throw new Exception(collectAppender(delegate void(CharSink s){
+                                dumper(s)("could not find cycle ")(expectedEPos)(&p.parserPos);
+                            }),__FILE__,__LINE__);
                 }
                 if (inputTurbo.shouldBeLast){
                     p.skipLines(1);
