@@ -10,6 +10,7 @@ import dchem.input.RootInput;
 import blip.sync.UniqueNumber;
 import blip.serialization.Serialization;
 import tango.sys.Process;
+import tango.io.stream.Data;
 import blip.container.GrowableArray;
 import Path=tango.io.Path;
 import blip.io.Console;
@@ -102,6 +103,7 @@ class TemplateExecuter: Method {
         if (setupCommand.length>0 && setupCommand!="NONE"){
             auto templateH=new TemplateHandler(templateDirectory(),new FileFolder(ProcContext.instance.baseDirectory.toString(),true)); // to fix
             addFullSubs(templateH.subs);
+            templateH.shouldWriteReplacementsDict=writeReplacementsDict;
             templateH.subs["templateDirectory"]=templateDirectory.toString;
             templateH.subs["workingDirectory"]=templateH.targetDir.toString;
             auto opInProgress=templateH.processForCmd(setupCommand,log);
@@ -202,6 +204,7 @@ class ExecuterContext:CalcContext{
     static TemplateHandler initialTH(TemplateExecuter input,char[] contextId){
         auto templateH=new TemplateHandler(input.templateDirectory(),new FileFolder(ProcContext.instance.baseDirectory.toString()~"/"~contextId,true)); // to fix
         input.addFullSubs(templateH.subs);
+        templateH.shouldWriteReplacementsDict=input.writeReplacementsDict;
         templateH.subs["templateDirectory"]=input.templateDirectory.toString;
         templateH.subs["workingDirectory"]=templateH.targetDir.toString;
         return templateH;
@@ -283,7 +286,7 @@ class TemplateHandler{
     VfsFolder targetDir;
     size_t maxKeywordLen=128;
     bool shouldWriteReplacementsDict;
-    char[] rDictFilename;
+    char[] rDictFilename="repl.dict";
     
     this(VfsFolder sourceDir,VfsFolder targetDir,char[][char[]] subs=null){
         this.sourceDir=sourceDir;
@@ -398,11 +401,11 @@ class TemplateHandler{
             {
                 auto lFile=cast(int)(f.name[$-1]-'0');
                 auto newName=f.name()[0..$-7]; // should I use toString??
-                if ((lFile==level || (lFile<level && 
-                     (!targetDir.file(f.toString()[0..$-8]~(cast(char)('0'+level))).exists)) &&
-                    !targetDir.file(newName).exists()))
+                if (lFile==level || (lFile>level && 
+                        (!targetDir.file(f.toString()[0..$-8]~(cast(char)('0'+level))).exists)) ||
+                    (!targetDir.file(newName).exists()))
                 {
-                    auto fIn=f.input;
+                    auto fIn=new DataInput(f.input);
                     scope(exit){
                         fIn.close();
                     }
@@ -418,7 +421,6 @@ class TemplateHandler{
                 (!targetDir.file(f.toString()).exists()))
             {
                 auto newF=targetDir.file(f.name).create(f.input);
-                auto output=newF.output;
             }
         }
     }
@@ -446,13 +448,13 @@ class TemplateHandler{
             for(size_t i=0;i<data.length;++i){
                 if (data[i]=='['){
                     if (i==0){
-                        for(size_t j=i;j<data.length;++j){
+                        for(size_t j=i+1;j<data.length;++j){
                             if(data[j]=='['){
                                 outF(data[0..j]);
                                 return j;
                             }
                             if(data[j]==']'){
-                                if (!maybeReplace(data[i..(j+1)],outF)) outF(data[i..(j+1)]);
+                                if (!maybeReplace(data[(i+1)..j],outF)) outF(data[i..(j+1)]);
                                 return j+1;
                             }
                         }
@@ -478,6 +480,7 @@ class TemplateHandler{
                 }
             }
             switch (slice){
+            default: assert(0);
             case SliceExtent.Partial:
                 if (data.length==0)
                     return Eof;
@@ -488,10 +491,9 @@ class TemplateHandler{
                 break;
             case SliceExtent.ToEnd:
                 iterate=false;
-                outF(data);
-                return data.length;
-            default: assert(0);
             }
+            outF(data);
+            return data.length;
         });
     }
 }
