@@ -406,6 +406,9 @@ class ContextLimiterClient:Method{
     
     void setup(LinearComm pEnv,CharSink log){
         _log=log;
+        if (method !is null){
+            method.contentT!(Method)().setup(pEnv,log);
+        }
     }
     
     /// gets a calculator to perform calculations with this method, if possible reusing the given history
