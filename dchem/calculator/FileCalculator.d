@@ -31,10 +31,18 @@ class TemplateExecuter: Method {
     bool writeReplacementsDict;
     bool overwriteUnchangedPaths;
     bool makeReplacementsInCommands=true;
-    int maxContexts=1;
     VfsFolder _templateDirectory;
     CharSink logger;
     
+    this(){
+    }
+    
+    TemplateExecuter sTemplate(){
+        if (superTemplate!is null) {
+            return superTemplate.contentT!(TemplateExecuter)();
+        }
+        return null;
+    }
     VfsFolder templateDirectory(){
         if (_templateDirectory is null){
             if (templateDir) _templateDirectory=new FileFolder(templateDir);
@@ -45,7 +53,7 @@ class TemplateExecuter: Method {
         bool res=true;
         auto s=dumper(sink);
         if (superTemplate !is null){
-            if ((cast(TemplateExecuter)superTemplate.content)is null){
+            if ((cast(TemplateExecuter)(superTemplate.contentObj()))is null){
                 s("Error: superTemplate should be of type dchem.TemplateExecuter in field "~myFieldName);
                 res=false;
             }
@@ -58,28 +66,19 @@ class TemplateExecuter: Method {
     }
     char[] setupCommand(){
         if (setupCmd.length==0 && superTemplate!is null){
-            auto te=cast(TemplateExecuter)superTemplate;
-            if (te!is null){
-                return te.setupCommand();
-            }
+            sTemplate().setupCommand();
         }
         return setupCmd;
     }
     char[] setupCtxCommand(){
         if (setupCtxCmd.length==0 && superTemplate!is null){
-            auto te=cast(TemplateExecuter)superTemplate;
-            if (te!is null){
-                return te.setupCtxCommand();
-            }
+            sTemplate().setupCtxCommand();
         }
         return setupCtxCmd;
     }
     char[] stopCtxCommand(){
         if (stopCtxCmd.length==0 && superTemplate!is null){
-            auto te=cast(TemplateExecuter)superTemplate;
-            if (te!is null){
-                return te.stopCtxCommand();
-            }
+            sTemplate().stopCtxCommand();
         }
         return stopCtxCmd;
     }
@@ -89,16 +88,16 @@ class TemplateExecuter: Method {
     void addFullSubs(char[][char[]] sub){
         assert(sub!is subs,"cannot add directly to own subs");
         if (superTemplate!is null){
-            auto te=cast(TemplateExecuter)superTemplate;
-            if (te!is null){
-                te.addFullSubs(sub);
-            }
+            sTemplate().addFullSubs(sub);
         }
         foreach (k,v;subs){
             sub[k]=v;
         }
     }
     void setup(LinearComm pEnv,CharSink log){
+        if (sTemplate()!is null){
+            sTemplate().setup(pEnv,log);
+        }
         logger=log;
         if (setupCommand.length>0 && setupCommand!="NONE"){
             auto templateH=new TemplateHandler(templateDirectory(),new FileFolder(ProcContext.instance.baseDirectory.toString(),true)); // to fix
@@ -121,7 +120,6 @@ class TemplateExecuter: Method {
     stopCtxCmd: a command that should be executed to stop the context
     writeReplacementsDict: if a dictionary with the replacements performed should be written (default is false)
     overwriteUnchangedPaths: if paths that are already there should be overwitten (default is false)
-    maxContexts: maximum number of contexts per calculation instance (default is 1)
     makeReplacementsInCommands: if replacements should be performed on the commands to be executed (default is true)
     `));
     mixin printOut!();
@@ -155,20 +153,14 @@ class CmdTemplateExecuter:TemplateExecuter {
         }
         if (res.length==0) res=executeEF;
         if (res.length==0 && superTemplate !is null){
-            auto te=cast(TemplateExecuter)superTemplate.content;
-            if (te!is null){
-                res=te.commandFor(energy,force,changeLevel,change);
-            }
+            sTemplate().commandFor(energy,force,changeLevel,change);
         }
         return res;
     }
     void addFullSubs(char[][char[]] sub){
         assert(sub!is subs,"cannot add directly to own subs");
         if (superTemplate!is null){
-            auto te=cast(TemplateExecuter)superTemplate;
-            if (te!is null){
-                te.addFullSubs(sub);
-            }
+            sTemplate().addFullSubs(sub);
         }
         foreach (k,v;subs){
             sub[k]=v;
