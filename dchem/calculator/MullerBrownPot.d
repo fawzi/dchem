@@ -12,6 +12,7 @@ import blip.serialization.Serialization;
 import dchem.input.ReadIn2PSys: artificialPSys;
 import blip.math.Math;
 import blip.parallel.mpi.MpiModels;
+import blip.core.Thread;
 
 const Real[4] MBPreFactor = [-200.0,-100.0,-170.0,15.0];
 const Real[4] MBa = [-1.0,-1.0,-6.5,0.7];
@@ -23,6 +24,7 @@ const Real[4] MBy0 = [0.0,0.5,1.5,1.0];
 class MullerBrownPot: Method {
     Real[] a=MBa,b=MBb,c=MBc,x0=MBx0,y0=MBy0,preFactor=MBPreFactor;
     Real startX=0,startY=0;
+    Real sleepSome=0;
     CharSink logger;
     
     this(){}
@@ -70,7 +72,8 @@ class MullerBrownPot: Method {
     void clearHistory() { }
     // serialization stuff
     mixin(serializeSome("dchem.MullerBrownPot",
-    `a|b|c|x0|y0|preFactor|startX|startY`));
+    `a|b|c|x0|y0|preFactor|startX|startY
+    sleepSome: artificially slows down the evaluation by sleeping the given amount of seconds`));
     mixin printOut!();
     mixin myFieldMixin!();
 }
@@ -96,6 +99,9 @@ class MullerBrownPotContext:CalcContext{
         auto sys=LocalPIndex(0,0);
         auto x=pSysReal.dynVars.x.dof[sys,0];
         auto y=pSysReal.dynVars.x.dof[sys,1];
+        if (pot.sleepSome>0){
+            Thread.sleep(pot.sleepSome);
+        }
         if (updateF){
             pSysReal.checkMddx();
             Real dx,dy;
