@@ -61,13 +61,13 @@ class FileConfig:Config{
         if (pSysReal is null){
             pSysReal=readIn2PSys!(Real)(readSystem());
         }
-        return pSysReal;
+        return pSysReal.dup(PSDupLevel.All);
     }
     ParticleSys!(LowP) particleSysLowP(){
         if (pSysLowP is null){
             pSysLowP=readIn2PSys!(LowP)(readSystem());
         }
-        return pSysLowP;
+        return pSysLowP.dup(PSDupLevel.All);
     }
     /// drops the cached readSystem/particleSys
     void clear(){
