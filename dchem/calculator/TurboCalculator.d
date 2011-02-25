@@ -416,6 +416,7 @@ class TurboContext:ExecuterContext{
                 scope p=new TextParser!(char)(inF);
                 Real errFock,errFiaBlock;
                 while(true){
+                    p.skipWhitespace();
                     if (p.skipString("max. resid. ",false)){
                         if (p.skipString("norm for Fia-block",false)&&p.skipString("=",false))
                             p(errFiaBlock);

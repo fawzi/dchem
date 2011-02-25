@@ -169,7 +169,7 @@ class GoUpExplorer(T):EmptyExplorer!(T){
                 if (lowestPoints[0].point.isValid){
                     availableCalled=true;
                 }
-                double minE=double.min;
+                double minE=double.max;
                 iMin=0;
                 foreach(i,pEn;lowestPoints){
                     if (minE>=pEn.energy && pEn.point.isValid){

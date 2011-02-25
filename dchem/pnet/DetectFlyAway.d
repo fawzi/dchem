@@ -21,7 +21,7 @@ import blip.io.FileStream;
 import blip.core.Array;
 
 /// detects fly away, at the moment it is convex, should I also implement the better connectivity based solution?
-class DetectFlyAwayGen:SilosWorkerGen{
+class DetectFlyAwayGen:ExplorationObserverGen{
     bool earlyDetect=true;
     char[] logBaseName;
     bool flushEachPoint=true;
@@ -46,32 +46,30 @@ class DetectFlyAwayGen:SilosWorkerGen{
         return res;
     }
     
-    SilosWorkerI!(Real) silosWorkerReal(){
-        auto res=new DetectFlyAway!(Real)(this);
+    ExplorationObserverI!(Real) observerReal(LocalSilosI!(Real) silos){
+        auto res=new DetectFlyAway!(Real)(this,silos);
         return res;
     }
-    SilosWorkerI!(LowP) silosWorkerLowP(){
-        auto res=new DetectFlyAway!(LowP)(this);
+    
+    ExplorationObserverI!(LowP) observerLowP(LocalSilosI!(LowP) silos){
+        auto res=new DetectFlyAway!(LowP)(this,silos);
         return res;
     }
 }
 
 /// an explorer that does nothing (useful as base class)
-class DetectFlyAway(T):EmptyObserver!(T),SilosWorkerI!(T){
+class DetectFlyAway(T):EmptyObserver!(T){
     DetectFlyAwayGen input;
     size_t lastNParticles=0;
     LocalSilosI!(T) silos;
     OutStreamI log;
     
-    this(DetectFlyAwayGen input){
+    this(DetectFlyAwayGen input,LocalSilosI!(T) silos){
         this.input=input;
+        this.silos=silos;
         if (input.logBaseName.length>0){
             log=outfileStrSync(input.logBaseName~"-"~silos.name~"-Filtred.Log",WriteMode.WriteAppend);
         }
-    }
-    
-    void workOn(LocalSilosI!(T) silos){
-        silos=silos;
     }
     
     bool isFlyingAway(U=T)(SKey sKey,Point point,ParticleSys!(T) pSys,DynPVector!(U,XType)xV){
@@ -94,7 +92,7 @@ class DetectFlyAway(T):EmptyObserver!(T),SilosWorkerI!(T){
         auto toSort=empty!(U)([3,xyz.length]);
         U[][3] xyzSplit;
         for (int idim=0;idim<3;++idim){
-            xyzSplit[idim]=toSort[Range(0,-1),idim].data;
+            xyzSplit[idim]=toSort[idim].data;
             assert(xyzSplit[idim].length==xyz.length);
         }
         auto dirs=default3SphereDirs.asType!(U)();

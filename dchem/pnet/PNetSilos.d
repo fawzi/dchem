@@ -252,28 +252,28 @@ class SilosGen:Sampler {
         foreach(e;explorers){
             auto o=cast(Object)e.content;
             if (cast(ExplorationObserverGen)o is null){
-                log("explorers should be of either explorers or observer, not '")(o.classinfo.toString())("' in field ")(myFieldName)("\n");
+                log("explorers should be of either explorers or observer, not '")(o.classinfo.name)("' in field ")(myFieldName)("\n");
                 res=false;
             }
         }
         foreach(l;loaders){
             auto o=cast(Object)l.content;
             if (cast(SilosWorkerGen)o is null){
-                log("loaders should be a SilosWorker not '")(o.classinfo.toString())("' in field ")(myFieldName)("\n");
+                log("loaders should be a SilosWorker not '")(o.classinfo.name)("' in field ")(myFieldName)("\n");
                 res=false;
             }
         }
         foreach(m;monitors){
             auto o=cast(Object)m.content;
             if (cast(SilosWorkerGen)o is null){
-                log("monitors should be a SilosWorker not '")(o.classinfo.toString())("' in field ")(myFieldName)("\n");
+                log("monitors should be a SilosWorker not '")(o.classinfo.name)("' in field ")(myFieldName)("\n");
                 res=false;
             }
         }
         foreach(f;finishers){
             auto o=cast(Object)f.content;
             if (cast(SilosWorkerGen)o is null){
-                log("finishers should be a SilosWorker not '")(o.classinfo.toString())("' in field ")(myFieldName)("\n");
+                log("finishers should be a SilosWorker not '")(o.classinfo.name)("' in field ")(myFieldName)("\n");
                 res=false;
             }
         }

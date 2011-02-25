@@ -448,7 +448,7 @@ const char[] calcCtxMethodsStr=
 `activePrecision|contextId|pSysWriterReal|pSysWriterLowP|pSysWriterRealSet|pSysWriterLowPSet|`~
 `refPSysReal|refPSysLowP|constraintGen|sysStruct|changeLevel|changeLevelSet|changedDynVars|`~
 `potentialEnergy|potentialEnergyError|posSet|pos|dposSet|dpos|mddposSet|mddpos|updateEF|activate|deactivate|`~
-`giveBack|stop|method|storeHistory|exportedUrl|executeLocally|logMsg1`;
+`giveBack|stop|method|storeHistory|exportedUrl|executeLocally|logMsg1|externalRef|externalRefSet`;
 
 /// represent a calculation that might have been aready partially setup, in particular the
 /// number of elements,... cannot change
@@ -465,6 +465,7 @@ class CalcContext:LocalCalculationContext{
     CharSink _logger;
     SymmNeighLooper _symmNeighLooper;
     DistOps _distOps;
+    string _externalRef;
     
     void logMsg1(char[]m){
         _logger(m);
@@ -580,6 +581,14 @@ class CalcContext:LocalCalculationContext{
     }
     Real potentialEnergyError(){
         mixin(withPSys("return pSys.dynVars.potentialEnergyError;"));
+    }
+    /// the current external ref
+    string externalRef(){
+        return _externalRef;
+    }
+    ///sets the current external ref
+    void externalRefSet(string r){
+        _externalRef=r;
     }
     void posSet(SegmentedArray!(Vector!(Real,3)) newPos){
         mixin(withPSys("pSys.dynVars.x.pos[]=newPos;"));

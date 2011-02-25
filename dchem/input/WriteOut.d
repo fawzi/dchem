@@ -12,9 +12,11 @@ import blip.container.BulkArray;
 import blip.util.Grow;
 import stdlib=blip.stdc.stdlib;
 import dchem.sys.Cell;
+import blip.container.GrowableArray;
+import blip.text.Utils: cEscapeString;
 
 /// writes out an xyz file
-void writeXyz(T)(CharSink sink,SysStruct sysStruct,SegmentedArray!(Vector!(T,3))pos,char[] comments){
+void writeXyz(T)(CharSink sink,SysStruct sysStruct,SegmentedArray!(Vector!(T,3))pos,char[] comments,T scale=cast(T)angstrom){
     // angstrom*...
     auto nAtoms=sysStruct.particles[sysStruct.levels[0]].length;
     auto s=dumper(sink);
@@ -27,7 +29,7 @@ void writeXyz(T)(CharSink sink,SysStruct sysStruct,SegmentedArray!(Vector!(T,3))
         auto k=sysStruct.kinds[cast(size_t)p.kind];
         s(k.name)(" ");
         auto posAtt=pos[PIndex(p),0];
-        s(posAtt.x*angstrom)(" ")(posAtt.y*angstrom)(" ")(posAtt.z*angstrom)("\n");
+        s(posAtt.x*scale)(" ")(posAtt.y*scale)(" ")(posAtt.z*scale)("\n");
     }
 }
 
@@ -374,3 +376,69 @@ struct PSysWriter(T){
 PSysWriter!(T) pSysWriter(T)(ParticleSys!(T) pSys){
     return PSysWriter!(T)(pSys);
 }
+
+const char[][] writeConfigFormats=["xyz","xyzForces","energy","json","sbin",
+    "jsonFull","sbinFull"];
+
+/// writes a configuration (or part of it) in various formats
+void writeConfig(T)(OutStreamI outF,ParticleSys!(T) pSys, char[] format,
+    string extRef,string[string] comments=null)
+{
+    char[128] buf;
+    auto arr=lGrowableArray(buf,0);
+    if (format=="xyz" || format=="xyzForces"){
+        dumper(&arr.appendArr)("extRef: ")(extRef)(" energy: ")(pSys.dynVars.potentialEnergy)(" energyError: ")(pSys.dynVars.potentialEnergyError);
+        foreach (k,v;comments){
+            arr(k); arr(": ");
+            cEscapeString(&arr.appendArr,v);
+        }
+    }
+    switch(format){
+    case "xyz":
+        writeXyz(outF.charSink(),pSys.sysStruct,pSys.dynVars.x.pos,arr.data);
+        break;
+    case "xyzForces":
+        writeXyz(outF.charSink(),pSys.sysStruct,pSys.dynVars.mddx.pos,arr.data,cast(T)(evolt/angstrom));
+        break;
+    case "energy":
+        dumper(outF.charSink())(extRef)("\t ")(pSys.dynVars.potentialEnergy)("\t ")(pSys.dynVars.potentialEnergyError)("\n");
+        break;
+    case "json":
+    {
+        auto jOut=new JsonSerializer!(char)(&outF.desc,outF.charSink());
+        jOut(extRef);
+        jOut(comments);
+        jOut(pSysWriter(pSys));
+    }
+        break;
+    case "sbin":
+    {
+        scope bOut=new SBinSerializer(&outF.desc,outF.binSink());
+        bOut(extRef);
+        bOut(comments);
+        bOut(pSysWriter(pSys));
+    }
+        break;
+    case "jsonFull":
+    {
+        scope jOut=new JsonSerializer!(char)(&outF.desc,outF.charSink());
+        jOut(extRef);
+        jOut(comments);
+        jOut(pSys.sysStruct);
+        jOut(pSysWriter(pSys));
+    }
+        break;
+    case "sbinFull":
+    {
+        scope bOut=new SBinSerializer(&outF.desc,outF.binSink());
+        bOut(extRef);
+        bOut(comments);
+        bOut(pSys.sysStruct);
+        bOut(pSysWriter(pSys));
+    }
+        break;
+    default:
+        assert(0,"unknown format "~format);
+    }
+}
+

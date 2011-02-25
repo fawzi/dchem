@@ -227,6 +227,10 @@ interface CalculationContext{
     void mddposSet(SegmentedArray!(Vector!(Real,3)) newDdpos);
     /// gets the forces (utility method)
     SegmentedArray!(Vector!(Real,3)) mddpos();
+    /// the current external ref
+    string externalRef();
+    ///sets the current external ref
+    void externalRefSet(string);
     /// updates energy and/or forces
     void updateEF(bool updateE=true,bool updateF=true);
     /// called automatically after creation, but before any energy evaluation

@@ -574,7 +574,13 @@ class MainPoint(T):MainPointI!(T){
         fromDir(dir,rDir,neg);
         T val=(neg?-1:1);
         v0[rDir]=val;
+        sinkTogether(sout,delegate void(CharSink s){
+            dumper(s)("pippo")("pre rotating ")(dynPVectorWriter(v0));
+        });
         auto newDir=rotateEiV(0,minDir,v0);
+        sinkTogether(sout,delegate void(CharSink s){
+            dumper(s)("pippo")("post rotating ")(dynPVectorWriter(v0));
+        });
         return newDir;
     }
     /// energy of the current point
@@ -603,7 +609,8 @@ class MainPoint(T):MainPointI!(T){
     /// returns null if the position is *really* too close
     ParticleSys!(T) createPosInDir(uint dir){
         version (TrackPNet) logMsg(delegate(CharSink s){
-            dumper(s)("called createPosInDir(")(dir)(")");
+            dumper(s)("called createPosInDir(")(dir)(")\n");
+            dumper(s)("minDir:")(dynPVectorWriter(minDir));
         });
         auto newDir=createDualDir(dir);
         version (TrackPNet) logMsg(delegate(CharSink s){
@@ -1150,7 +1157,14 @@ class MainPoint(T):MainPointI!(T){
             Real eErr=pos.dynVars.potentialEnergyError;
             mixin(withPSys(`
             pSys.checkX();
-            pSys.dynVars.x[]=pos.dynVars.x;`,"c."));
+            pSys.dynVars.x[]=pos.dynVars.x;
+            `,"c."));
+            c.changedDynVars(ChangeLevel.SmallPosChange,0);
+            char[64] buf;
+            auto arr=lGrowableArray(buf,0,GASharing.Local);
+            writeOut(&arr.appendArr,point.data);
+            auto extRef=arr.takeData;
+            c.externalRefSet(extRef);
             version(TrackPNet) logMsg(delegate void(CharSink s){ dumper(s)("will calculate EF(")(calcE)(",")(calcF)(")"); });
             c.updateEF(calcE,calcF);
             version(TrackPNet) logMsg(delegate void(CharSink s){ s("did calculate EF"); });

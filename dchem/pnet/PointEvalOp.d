@@ -54,7 +54,6 @@ class PointEvalOp(T):EvalOp!(T){
             } else {
                 updateStatus(Status.Failure);
                 silos.updateEvalStatus(owner,id,null,Status.Failure);
-                silos.evaluationFailed(SKeyVal.All,point);
             }
         } else {
             silos.logMsg(delegate void(CharSink s){
@@ -64,18 +63,6 @@ class PointEvalOp(T):EvalOp!(T){
     }
     /// tries to stop the operation early
     void stopOp(){ }
-    /// update the status
-    bool updateStatus(Status status){
-        synchronized(this){
-            if (status==Status.Failure){
-                ++attempts;
-            }
-            if (status>=this.status){
-                this.status=status;
-            }
-        }
-        return (attempts<=maxAttempts);
-    }
     
     mixin(serializeSome("PointEvalOp!("~T.stringof~")",`point`));
 }
