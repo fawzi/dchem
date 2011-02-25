@@ -1,0 +1,38 @@
+selfHostnames:[hexa11]
+bind to a00:c350:: on port 50000 failed
+local rpc server started with url stcp://hexa11:50000
+tango.core.Exception.AssertException@/users/famo/d/blip/blip/serialization/JsonSerialization.d(490): could not find meta info for 'dchem.DetectFlyAwayGen'
+----------------
+[ 161b675]  400000+18986613 tango.core.tools.StackTrace.defaultAddrBacktrace                                 @161b660+21 /users/famo/d/dchem/Sampler.dbg:0 
+[ 161b880]  400000+18987135 tango.core.tools.StackTrace.basicTracer                                          @161b810+111 /users/famo/d/dchem/Sampler.dbg:0 
+[ 1611f78]  400000+18947959 object.Exception._ctor                                                           @1611f40+55 /users/famo/d/dchem/Sampler.dbg:0 
+[ 1609401]  400000+18912256 onAssertErrorMsg                                                                 @1609350+176 /users/famo/d/dchem/Sampler.dbg:0 
+[  a2f467]  400000+6485094 blip.serialization.JsonSerialization.JsonUnserializer!(char).JsonUnserializer.maybeReadProxy @a2ef90+1238 JsonSerialization.d:490 
+[  51ae9a]  400000+1158809 blip.serialization.SerializationBase.Unserializer.field!(blip.serialization.SerializationBase.Serializable).field @51ac50+585 SerializationBase.d:1272 
+[ 1131e0b]  400000+13835786 blip.serialization.SerializationBase.Unserializer.field!(dchem.input.RootInput.InputElement).field @1131ca0+362 SerializationBase.d:1257 
+[ 1131c46]  400000+13835333 blip.serialization.SerializationBase.Unserializer.opCall!(dchem.input.RootInput.InputElement).opCall @1131b90+181 SerializationBase.d:1171 
+[ 113001e]  400000+13828125 dchem.input.RootInput.RootInput.readInput                                        @112f750+2253 RootInput.d:241 
+[  415c0c]  400000+89099   _Dmain                                                                           @415960+683 Sampler.d:41 
+[ 1616160]  400000+18964831 rt.dmain2.main.runMain                                                           @1616150+15 /users/famo/d/dchem/Sampler.dbg:0 
+[ 16160e0]  400000+18964703 rt.dmain2.main.tryExec                                                           @16160d0+15 /users/famo/d/dchem/Sampler.dbg:0 
+[ 1616197]  400000+18964886 rt.dmain2.main.runAll                                                            @1616170+38 /users/famo/d/dchem/Sampler.dbg:0 
+[ 16160e0]  400000+18964703 rt.dmain2.main.tryExec                                                           @16160d0+15 /users/famo/d/dchem/Sampler.dbg:0 
+[ 1616085]  400000+18964612 main                                                                             @1615fe0+164 /users/famo/d/dchem/Sampler.dbg:0 
+[7ff8d21edd8e]7ff8d21cf000+126349  __libc_start_main                                                                @7ff8d21edc90+253 /lib/libc.so.6:0 
+[  415819]  400000+88088   ???                                                                                 @0+0 /users/famo/d/dchem/Sampler.dbg:0 
+Interrupt encountered at:
+[7ff8d29f3285]7ff8d29eb000+33413   pthread_join                                                                     @7ff8d29f3170+277 /lib/libpthread.so.0:0 
+ Stacktrace:
+[ 161b675]  400000+18986613 tango.core.tools.StackTrace.defaultAddrBacktrace                                 @161b660+21 /users/famo/d/dchem/Sampler.dbg:0 
+[ 161b880]  400000+18987135 tango.core.tools.StackTrace.basicTracer                                          @161b810+111 /users/famo/d/dchem/Sampler.dbg:0 
+[ 161bab0]  400000+18987695 tango_stacktrace_fault_handler                                                   @161b930+383 /users/famo/d/dchem/Sampler.dbg:0 
+[7ff8d29fab40]7ff8d29eb000+64319   ???                                                                                 @0+0 /lib/libpthread.so.0:0 
+[7ff8d29f3285]7ff8d29eb000+33412   pthread_join                                                                     @7ff8d29f3170+276 /lib/libpthread.so.0:0 
+[ 160af64]  400000+18919267 tango.core.Thread.Thread.join                                                    @160af30+51 /users/famo/d/dchem/Sampler.dbg:0 
+[ 160bdca]  400000+18922953 thread_joinAll                                                                   @160bda0+41 /users/famo/d/dchem/Sampler.dbg:0 
+[ 16161a3]  400000+18964898 rt.dmain2.main.runAll                                                            @1616170+50 /users/famo/d/dchem/Sampler.dbg:0 
+[ 16160e0]  400000+18964703 rt.dmain2.main.tryExec                                                           @16160d0+15 /users/famo/d/dchem/Sampler.dbg:0 
+[ 1616085]  400000+18964612 main                                                                             @1615fe0+164 /users/famo/d/dchem/Sampler.dbg:0 
+[7ff8d21edd8e]7ff8d21cf000+126349  __libc_start_main                                                                @7ff8d21edc90+253 /lib/libc.so.6:0 
+[  415819]  400000+88088   ???                                                                                 @0+0 /users/famo/d/dchem/Sampler.dbg:0 
+Stacktrace signal handler abort().

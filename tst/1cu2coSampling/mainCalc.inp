@@ -1,0 +1,87 @@
+{
+startConfig:{
+    class:"dchem.FileConfig",
+    fileName:"1Cu2Co.xyz",
+    format:"xyz",
+    cell:[[8.45,0,0],
+        [0,24.0,0],
+        [0,0,8.45]]
+}
+
+turboM:{
+    class:"dchem.TurboExecuter",
+    templateDir:"template",
+    maxContexts:1,
+    executeE:"sh calc.sh --e-only",
+    executeEF:"sh calc.sh"
+    executeF0:"sh calc.sh --f.only",
+    startConfig:{ class:Ref name:startConfig}
+    subset:[44,49]
+}
+
+cLimiter:{
+    class:"dchem.ContextLimiter",
+    maxContexts:1
+}
+
+limitedTM:{
+    class:"dchem.ContextLimiterClient",
+    contextLimiter:{ class:Ref, name:cLimiter}
+    method:{ class:Ref, name:turboM}
+}
+
+flyAway:{
+    class:dchem.DetectFlyAway
+    earlyDetect:false
+    logBaseName:flownAway
+    threshold:3.5
+}
+
+MinE:{
+    class:"dchem.MinEExplorer"
+    nEval:500
+}
+
+workAsker:{
+    class:dchem.WorkAsker,
+    evaluator:{ class:Ref, name:limitedTM}
+}
+
+journal:{
+    class:dchem.PNetJournal
+    journalFormat:json
+}
+
+initialPos:{
+    class:dchem.AddRefPos
+}
+
+posELog:{
+    class:dchem.PosELogger,
+    baseFileName:"posELog",
+    flushEachLine:true
+}
+
+spLogger:{
+    class:dchem.TrackSpecialPoints
+}
+
+printAttractors:{
+    class:dchem.PrintAttractors,
+}
+
+pnetSilos:{
+    class:dchem.Silos,
+    discretizationStep:0.30
+    evaluator:{ class:Ref, name:limitedTM}
+    evaluatorTask:{ class:Ref, name:workAsker}
+    explorers:[ { class:Ref, name:MinE },{ class:Ref, name:journal },{ class:Ref, name:posELog }
+	#,{class:Ref, name:flyAway }
+	 ]
+    loaders:[{ class:Ref, name:initialPos },{ class:Ref, name: spLogger }]
+    finishers:[{ class:Ref, name: printAttractors }]
+}
+
+main:{class:Ref, name:pnetSilos}
+
+}

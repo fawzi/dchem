@@ -1,0 +1,99 @@
+{
+startConfig:{
+    class:"dchem.FileConfig",
+    fileName:"1Cu2Co.xyz",
+    format:"xyz",
+    cell:[[8.45,0,0],
+        [0,24.0,0],
+        [0,0,8.45]]
+}
+
+turboM:{
+    class:"dchem.TurboExecuter",
+    templateDir:"templateP",
+    subs:{
+        cutoff:"800",
+        projName:"test1",
+    },
+    maxPosDiff:100
+    incrementCycle:0
+    executeE:"sh calcP.sh --e-only",
+    executeEF:"sh calcP.sh"
+    executeF0:"sh calcP.sh --f.only",
+    startConfig:{ class:Ref name:startConfig}
+    subset:[44,49]
+}
+
+cLimiter:{
+    class:"dchem.ContextLimiter",
+    maxContexts:1
+}
+
+limitedTM:{
+    class:"dchem.ContextLimiterClient",
+    contextLimiter:{ class:Ref, name:cLimiter}
+    method:{ class:Ref, name:turboM}
+}
+
+flyAway:{
+    class:dchem.DetectFlyAway
+    earlyDetect:false
+    logBaseName:flownAway
+    threshold:3.5
+}
+
+singleP:{
+    class:dchem.SinglePoint,
+    calcE:1,
+    calcF:1,
+    method:{ class:Ref, name:limitedTM}
+}
+
+MinE:{
+    class:"dchem.MinEExplorer"
+    nEval:3
+}
+
+workAsker:{
+    class:dchem.WorkAsker,
+    evaluator:{ class:Ref, name:limitedTM}
+}
+
+journal:{
+    class:dchem.PNetJournal
+    journalFormat:json
+}
+
+initialPos:{
+    class:dchem.AddRefPos
+}
+
+posELog:{
+    class:dchem.PosELogger,
+    baseFileName:"posELog",
+    flushEachLine:true
+}
+
+spLogger:{
+    class:dchem.TrackSpecialPoints
+}
+
+printAttractors:{
+    class:dchem.PrintAttractors,
+}
+
+pnetSilos:{
+    class:dchem.Silos,
+    discretizationStep:0.30
+    evaluator:{ class:Ref, name:limitedTM}
+    evaluatorTask:{ class:Ref, name:workAsker}
+    explorers:[ { class:Ref, name:MinE },{ class:Ref, name:journal },{ class:Ref, name:posELog }
+    #,{class:Ref, name:flyAway }
+	 ]
+    loaders:[{ class:Ref, name:initialPos },{ class:Ref, name: spLogger }]
+    finishers:[{ class:Ref, name: printAttractors }]
+}
+
+main:{class:Ref, name:pnetSilos}
+
+}

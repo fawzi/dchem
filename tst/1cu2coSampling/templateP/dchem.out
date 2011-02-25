@@ -1,0 +1,4 @@
+selfHostnames:[hexa11]
+bind to a00:c350:: on port 50000 failed
+local rpc server started with url stcp://hexa11:50000
+Expected a single argument (inputfile)
