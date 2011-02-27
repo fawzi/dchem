@@ -158,12 +158,13 @@ class ParticleKind: Serializable,CopiableObjectI,DerivTransfer{
                 assert(nElements==nDelements);
                 alias typeof(arr.basicData[0]) ArrBData;
                 scope a1=NArray!(ArrBData,2)([cast(index_type)(T.sizeof*blockSizeDarr),ArrBData.sizeof],
-                    [arr.basicData.length/(T.sizeof/ArrBData.sizeof*((blockSizeDarr==0)?1:blockSizeDarr)),nElements],0,arr.basicData,0);
+                    [arr.length/((blockSizeDarr==0)?1:blockSizeDarr),nElements*T.sizeof/ArrBData.sizeof],0,arr.basicData,0);
                 alias typeof(darr.basicData[0]) DarrBData;
                 scope a2=NArray!(DarrBData,2)([cast(index_type)(V.sizeof*blockSizeArr),DarrBData.sizeof],
-                    [darr.basicData.length/(V.sizeof/DarrBData.sizeof*((blockSizeArr==0)?1:blockSizeArr)),nDelements],0,darr.basicData,0);
+                    [darr.length/((blockSizeArr==0)?1:blockSizeArr),nDelements*V.sizeof/DarrBData.sizeof],0,darr.basicData,0);
                 a2+=a1;
             } else {
+                alias typeof(darr.basicData[0]) DarrBData;
                 assert(el2DelMap.length>1&&(el2DelMap.length-2)%3==0,"unexpected el2DelMap length");
                 index_type resEl=blockSizeArr-nElements;
                 index_type resDel=blockSizeDarr-nDelements;
@@ -176,13 +177,15 @@ class ParticleKind: Serializable,CopiableObjectI,DerivTransfer{
                         p+=el2DelMap[iseg*3];
                         dp+=el2DelMap[iseg*3+1];
                         for (index_type i=0;i!=el2DelMap[iseg*3+2];--i){
-                            static if(is(typeof((*dp)+=*p))){
-                                (*dp)+=(*p);
-                            } else {
-                                *dp=(*dp)+(*p);
+                            for (size_t iEl=0;iEl<V.sizeof/DarrBData.sizeof;++iEl){
+                                static if(is(typeof((*dp)+=*p))){
+                                    (*dp)+=(*p);
+                                } else {
+                                    *dp=(*dp)+(*p);
+                                }
+                                ++dp;
+                                ++p;
                             }
-                            ++dp;
-                            ++p;
                         }
                     }
                     p+=resEl;
@@ -197,13 +200,14 @@ class ParticleKind: Serializable,CopiableObjectI,DerivTransfer{
             if (derivMap==DerivMap.SimpleMap){
                 assert(nElements==nDelements);
                 alias typeof(darr.basicData[0]) DarrBData;
-                scope a1=NArray!(DarrBData,2)([cast(index_type)(DarrBData.sizeof*blockSizeDarr),DarrBData.sizeof],
-                    [darr.basicData.length/(V.sizeof/DarrBData.sizeof*((blockSizeDarr==0)?1:blockSizeDarr)),nDelements],0,darr.basicData,0);
+                scope a1=NArray!(DarrBData,2)([cast(index_type)(V.sizeof*blockSizeDarr),DarrBData.sizeof],
+                    [darr.length/((blockSizeDarr==0)?1:blockSizeDarr),nDelements*(V.sizeof/DarrBData.sizeof)],0,darr.basicData,0);
                 alias typeof(arr.basicData[0]) ArrBData;
                 scope a2=NArray!(ArrBData,2)([cast(index_type)(T.sizeof*blockSizeArr),ArrBData.sizeof],
-                    [arr.basicData.length/(T.sizeof/ArrBData.sizeof*((blockSizeArr==0)?1:blockSizeArr)),nElements],0,arr.basicData,0);
+                    [arr.length/((blockSizeArr==0)?1:blockSizeArr),nElements*(T.sizeof/ArrBData.sizeof)],0,arr.basicData,0);
                 a2+=a1;
             } else {
+                alias typeof(arr.basicData[0]) ArrBData;
                 assert(el2DelMap.length>1&&(el2DelMap.length-2)%3==0,"unexpected el2DelMap length");
                 index_type resEl=blockSizeArr-nElements;
                 index_type resDel=blockSizeDarr-nDelements;
@@ -216,13 +220,15 @@ class ParticleKind: Serializable,CopiableObjectI,DerivTransfer{
                         p+=el2DelMap[iseg*3];
                         dp+=el2DelMap[iseg*3+1];
                         for (index_type i=0;i!=el2DelMap[iseg*3+2];--i){
-                            static if(is(typeof((*dp)+=*p))){
-                                (*p)+=(*dp);
-                            } else {
-                                (*p)=(*p)+(*dp);
+                            for (size_t iEl=0;iEl<T.sizeof/ArrBData.sizeof;++iEl){
+                                static if(is(typeof((*dp)+=*p))){
+                                    (*p)+=(*dp);
+                                } else {
+                                    (*p)=(*p)+(*dp);
+                                }
+                                ++dp;
+                                ++p;
                             }
-                            ++dp;
-                            ++p;
                         }
                     }
                     p+=resEl;

@@ -574,13 +574,7 @@ class MainPoint(T):MainPointI!(T){
         fromDir(dir,rDir,neg);
         T val=(neg?-1:1);
         v0[rDir]=val;
-        sinkTogether(sout,delegate void(CharSink s){
-            dumper(s)("pippo")("pre rotating ")(dynPVectorWriter(v0));
-        });
         auto newDir=rotateEiV(0,minDir,v0);
-        sinkTogether(sout,delegate void(CharSink s){
-            dumper(s)("pippo")("post rotating ")(dynPVectorWriter(v0));
-        });
         return newDir;
     }
     /// energy of the current point
