@@ -20,6 +20,7 @@ import dchem.input.ReadCoordFile;
 import blip.parallel.mpi.MpiModels;
 import dchem.Common;
 import blip.io.FileStream;
+import blip.core.Array;
 
 /// helper for defining things to log to special files
 struct EvalLog{
