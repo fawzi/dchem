@@ -22,7 +22,6 @@ poorM:{
         cutoff:"800",
         projName:"test1",
     },
-    maxContexts:1,
     executeE:"sh calcE.sh",
     executeEF:"sh calcE.sh"
     startConfig:{ class:Ref name:startConfig}
