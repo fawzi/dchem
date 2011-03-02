@@ -484,7 +484,11 @@ class TemplateHandler{
             } else if (overwriteUnchangedPaths || level==0 ||
                 (!targetDir.file(f.toString()).exists()))
             {
-                auto newF=targetDir.file(f.name).create(f.input);
+		auto fIn=f.input;
+		scope(exit){
+		    fIn.close();
+		}
+		auto newF=targetDir.file(f.name).create(fIn);
             }
         }
     }
