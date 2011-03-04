@@ -753,7 +753,6 @@ final class SegmentedArray(T){
             auto newMap=new SegArrMemMap!(V)(arrayStruct);
             newMap.consolidate(arrayMap);
             auto res=newMap.newArray();
-	    sout("res:")(res)(" guard:")(res.guard)("\n");
             this.dupTo(res);
             return res;
         }

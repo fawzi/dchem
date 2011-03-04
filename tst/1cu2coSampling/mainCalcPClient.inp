@@ -1,0 +1,70 @@
+{
+startConfig:{
+    class:"dchem.FileConfig",
+    fileName:"1Cu2Co.xyz",
+    format:"xyz",
+    cell:[[8.45,0,0],
+        [0,24.0,0],
+        [0,0,8.45]]
+}
+
+turboM:{
+    class:"dchem.TurboExecuter",
+    templateDir:"templateP",
+    subs:{
+        cutoff:"800",
+        projName:"test1",
+    },
+    maxPosDiff:100
+    incrementCycle:0
+    executeE:"sh calcP.sh --e-only",
+    executeEF:"sh calcP.sh"
+    executeF0:"sh calcP.sh --f.only",
+    startConfig:{ class:Ref name:startConfig}
+    subset:[44,49]
+}
+
+startConfig2:{
+    class:"dchem.FileConfig",
+    fileName:"../test.xyz",
+    format:"xyz",
+    cell:[[8.45,0,0],
+        [0,24.0,0],
+        [0,0,8.45]]
+}
+
+poorM:{
+    class:"dchem.PoorManExecuter",
+    templateDir:"templateP",
+    subs:{
+        cutoff:"800",
+        projName:"test1",
+    },
+    executeE:"sh calcP.sh --e-only",
+    executeEF:"sh calcP.sh"
+    executeF0:"sh calcP.sh --f.only",
+    startConfig:{ class:Ref name:startConfig2}
+}
+
+cLimiter:{
+    class:"dchem.ContextLimiter",
+    maxContexts:1
+}
+
+limitedTM:{
+    class:"dchem.ContextLimiterClient",
+    contextLimiter:{ class:Ref, name:cLimiter}
+    method:{ class:Ref, name:turboM}
+#    method:{ class:Ref, name:poorM}
+}
+
+workAsker:{
+    class:dchem.WorkAsker,
+    evaluator:{ class:Ref, name:limitedTM}
+    connectionUrl:"stcp:hexa11:50000/obj/silos"
+    pippoConfig:{class:Ref, name:startConfig}
+}
+
+main:{class:Ref, name:workAsker}
+
+}
