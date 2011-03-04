@@ -1091,13 +1091,13 @@ class DynamicsVarsStruct(T){
         auto dualDxGroup=new DynPVectStruct!(T)("dualDxGroup",s2.dualDxGroup.posStruct,s2.dualDxGroup.orientStruct,s2.dualDxGroup.dofStruct);
         auto res=new DynamicsVarsStruct(xGroup,dxGroup,dualDxGroup);
         static if(is(T==V)) {
-            res.xGroup.allocPools(xGroup);
-            res.dxGroup.allocPools(dxGroup);
-            res.dualDxGroup.allocPools(dualDxGroup);
+            res.xGroup.allocPools(s2.xGroup);
+            res.dxGroup.allocPools(s2.dxGroup);
+            res.dualDxGroup.allocPools(s2.dualDxGroup);
         } else {
-            xGroup.allocPools();
-            dxGroup.allocPools(xGroup);
-            dualDxGroup.allocPools(dxGroup);
+            res.xGroup.allocPools();
+            res.dxGroup.allocPools(res.xGroup);
+            res.dualDxGroup.allocPools(res.dxGroup);
         }
         return res;
     }
