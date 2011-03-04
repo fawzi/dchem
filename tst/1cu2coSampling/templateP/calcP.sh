@@ -9,6 +9,7 @@ while [ $# -gt 0 ]
   case $1 in
       --help)
         echo "$self [--help|--e-only|--f-only]"
+	exit 0
         ;;
       --e-only)
 	calcF=
@@ -16,6 +17,11 @@ while [ $# -gt 0 ]
       --f-only)
         calcE=
 	;;
+      *)
+        echo "invalid argument $1"
+        echo "$self [--help|--e-only|--f-only]"
+	exit 1
+        ;;
    esac
    shift
 done

@@ -12,12 +12,18 @@ while [ $# -gt 0 ]
   case $1 in
       --help)
         echo "$self [--help|--e-only|--f-only]"
+	exit 0
         ;;
       --e-only)
 	calcF=
 	;;
       --f-only)
         calcE=
+	;;
+      *)
+	echo "unexpected argument $1"
+        echo "$self [--help|--e-only|--f-only]"
+	exit 1
 	;;
    esac
    shift
@@ -27,5 +33,5 @@ if [ -n "$calcE" ] ; then
     ridft >ridft.out
 fi
 if [ -n "$calcF" ] ; then
-    rigrad >rigrad.out
+    rdgrad >rdgrad.out
 fi
