@@ -1650,6 +1650,9 @@ final class PNetSilos(T): LocalSilosI!(T){
         this.finishers=new Deque!(SilosWorkerI!(T))();
         this.mainVendor=new DefaultVendor(this);
         ProtocolHandler.defaultProtocol.publisher.publishObject(mainVendor,"silos",true);
+	logMsg(delegate void(CharSink s){
+		dumper(s)("url: ")(silosCoreUrl());
+	    });
         foreach(l;input.loaders){
             auto swGen=cast(SilosWorkerGen)(l.contentObj());
             auto sw=silosWorkerT!(T)(swGen);
