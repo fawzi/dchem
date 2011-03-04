@@ -17,6 +17,7 @@ import blip.parallel.rpc.Rpc;
 import blip.parallel.mpi.Mpi;
 import dchem.pnet.WorkAsker;
 import blip.stdc.stdlib:exit;
+import blip.core.Thread;
 
 struct SamplerRunner{
     Sampler sampler;
@@ -29,49 +30,63 @@ struct SamplerRunner{
 }
 
 int main(char[][]args){
-    foreach_reverse (i,a;args){
-        if (a.length>7 && a[0..7]=="--port="){
-            auto stcp=cast(StcpProtocolHandler)ProtocolHandler.defaultProtocol;
-            if (stcp!is null) stcp.port=a[7..$];
-            for(size_t j=i+1;j<args.length;++j){
-                args[j-1]=args[j];
-            }
-            args=args[0..$-1];
-        }
-    }
-    ProtocolHandler.defaultProtocol.startServer(false); // starting the rpc server...
-    sout("local rpc server started with url ")(ProtocolHandler.defaultProtocol.handlerUrl)("\n");
-    if (args.length!=2){
-        sout("Expected a single argument (inputfile)\n");
+    try{
+	bool strict=false;
+	foreach_reverse (i,a;args){
+	    bool drop=true;
+	    if (a.length>7 && a[0..7]=="--port="){
+		auto stcp=cast(StcpProtocolHandler)ProtocolHandler.defaultProtocol;
+		if (stcp!is null) stcp.port=a[7..$].dup;// non aligned... thus dup
+	    } else if (a=="--strict") {
+		strict=true;
+	    } else {
+		drop=false;
+	    }
+	    if (drop){
+		for(size_t j=i+1;j<args.length;++j){ 
+		    args[j-1]=args[j]; 
+		}
+		args=args[0..$-1];
+	    }
+	}
+	ProtocolHandler.defaultProtocol.startServer(strict); // starting the rpc server...
+	sout("local rpc server started with url ")(ProtocolHandler.defaultProtocol.handlerUrl)("\n");
+	if (args.length!=2){
+	    sout("Expected a single argument (inputfile)\n");
+	    exit(1);
+	}
+	auto parser=new TextParser!(char)(toReaderT!(char)((new DataFileInput(args[1])).file.input));
+	SegmentedArray!(real) sArr;
+	auto rFile=new RootInput();
+	auto inputOk=rFile.readInput(parser,serr.call);
+	if (!inputOk){
+	    sout("error while reading input!\n");
+	    exit(1);
+	}
+	auto mainInp="main" in rFile.knownNames;
+	if (mainInp is null){
+	    sout("did not find 'main' in the input fields, nothing to do, stopping\n");
+	} else {
+	    auto mainField=*mainInp;
+	    if (mainField.inputField !is null) mainField=mainField.inputField;
+	    auto samp=mainField.sampler;
+	    if (samp is null){
+		sout("Error: 'main' should be a sampler, stopping\n");
+	    } else {
+		auto closure=new SamplerRunner;
+		closure.sampler=samp;
+		closure.paraEnv=mpiWorld;
+		closure.log=sout.call;
+		Task("mainSampler",&closure.run).autorelease.executeNow();
+		sout("mainSampler finished!\n");
+	    }
+	    noToutWatcher.stopLoop();
+	}
+    } catch (Exception e){
+        serr("Failure in main:")(e)("\n");
+        Thread.sleep(0.3);
         exit(1);
     }
-    auto parser=new TextParser!(char)(toReaderT!(char)((new DataFileInput(args[1])).file.input));
-    SegmentedArray!(real) sArr;
-    auto rFile=new RootInput();
-    auto inputOk=rFile.readInput(parser,serr.call);
-    if (!inputOk){
-        sout("error while reading input!\n");
-        exit(1);
-    }
-    auto mainInp="main" in rFile.knownNames;
-    if (mainInp is null){
-        sout("did not find 'main' in the input fields, nothing to do, stopping\n");
-    } else {
-        auto mainField=*mainInp;
-        if (mainField.inputField !is null) mainField=mainField.inputField;
-        auto samp=mainField.sampler;
-        if (samp is null){
-            sout("Error: 'main' should be a sampler, stopping\n");
-        } else {
-            auto closure=new SamplerRunner;
-            closure.sampler=samp;
-            closure.paraEnv=mpiWorld;
-            closure.log=sout.call;
-            Task("mainSampler",&closure.run).autorelease.executeNow();
-            sout("mainSampler finished!\n");
-        }
-    }
-    noToutWatcher.stopLoop();
     exit(0);
     return 0;
 }
