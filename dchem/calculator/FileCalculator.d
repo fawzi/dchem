@@ -476,6 +476,7 @@ class TemplateHandler{
                     auto newF=targetDir.file(newName).create();
                     auto fOut=newF.output;
                     scope(exit){
+                        fOut.flush();
                         fOut.close();
                     }
                     makeSubs(strReaderHandler(fIn),strDumper(fOut));
