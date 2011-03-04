@@ -29,6 +29,16 @@ struct SamplerRunner{
 }
 
 int main(char[][]args){
+    foreach_reverse (i,a;args){
+        if (a.length>7 && a[0..7]=="--port="){
+            auto stcp=cast(StcpProtocolHandler)ProtocolHandler.defaultProtocol;
+            if (stcp!is null) stcp.port=a[7..$];
+            for(size_t j=i+1;j<args.length;++j){
+                args[j-1]=args[j];
+            }
+            args=args[0..$-1];
+        }
+    }
     ProtocolHandler.defaultProtocol.startServer(false); // starting the rpc server...
     sout("local rpc server started with url ")(ProtocolHandler.defaultProtocol.handlerUrl)("\n");
     if (args.length!=2){
