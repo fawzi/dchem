@@ -377,7 +377,7 @@ final class SegmentedArray(T){
     void reset(SegArrMemMap!(T) arrayMap,ChunkGuard guard,KindRange kr){
         assert(this.arrayMap is null && this.guard is null && this.basePtr is null,"reset called on non cleared SegmentedArray");
         this.arrayMap=arrayMap;
-        this.guard=guard.retain();
+        this.guard=guard.retain(); // allow null guard???
         this.basePtr=guard.dataPtr;
         assert(kr in arrayMap.kRange,"kr out of range of map");
         this.kRange=kr;
@@ -678,7 +678,7 @@ final class SegmentedArray(T){
     void opSliceAssignT(V)(SegmentedArray!(V) val){
         static if (is(T==V)) {
             if (val is this) return;
-        }
+	}
         assert(arrayStruct==val.arrayStruct,"different structs");
         assert(kRange==val.kRange,"different kRanges");
         int kEnd=kRange.kEnd-kRange.kStart;
@@ -687,6 +687,7 @@ final class SegmentedArray(T){
             auto startPtr1=cast(T*)(basePtr+kindOffsets[ik]);
             auto startPtr2=cast(V*)(val.basePtr+val.kindOffsets[ik]);
             static if (is(T==V)){
+		assert(kindByteIncrements[ik]==val.kindByteIncrements[ik],"different particle sizes");
                 memcpy(startPtr1,startPtr2,T.sizeof*(kStarts[ik+1]-kStarts[ik]));
             } else {
                 for(size_t p=kStarts[ik+1]-kStarts[ik];p!=0;--p){
@@ -721,19 +722,18 @@ final class SegmentedArray(T){
     }
     /// copies this array to the given SegmentedArray, tryig to reuse its memory allocations
     void dupTo(V)(SegmentedArray!(V) val){
-        val.kRange=kRange;
-        val.kindOffsets=kindOffsets;
-        val.kindByteIncrements=kindByteIncrements;
-        val.mKindDims=mKindDims;
         static if(is(T==V)){
-            if (val.arrayMap.arrayStruct != arrayMap.arrayStruct){
-                val.arrayMap=arrayMap; // avoid using this mapping if it is a much smaller subset?
-                val.guard.release();
-                val.guard=arrayMap.poolChunks.getObj();
+            if (val.kRange!=kRange ||
+		val.arrayMap.arrayStruct != arrayMap.arrayStruct){
+		val.clear();
+                // avoid using this mapping if it is a much smaller subset?
+                val.reset(arrayMap,arrayMap.poolChunks.getObj());
+                if (val.guard!is null) val.guard.release();
             }
             val.opSliceAssignT!(T)(this);
         } else {
-            if (val.arrayMap.arrayStruct != arrayMap.arrayStruct){
+            if (val.kRange!=kRange||
+		val.arrayMap.arrayStruct != arrayMap.arrayStruct){
                 val.clear();
                 auto newMap=new SegArrMemMap!(V)(arrayStruct);
                 newMap.consolidate(arrayMap);
@@ -753,6 +753,7 @@ final class SegmentedArray(T){
             auto newMap=new SegArrMemMap!(V)(arrayStruct);
             newMap.consolidate(arrayMap);
             auto res=newMap.newArray();
+	    sout("res:")(res)(" guard:")(res.guard)("\n");
             this.dupTo(res);
             return res;
         }
