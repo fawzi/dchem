@@ -133,8 +133,8 @@ class TemplateExecuter: Method {
     char[] commandFor(bool energy,bool force,ChangeLevel changeLevel,Real change){
         return "";
     }
-    void addFullSubs(char[][char[]] sub){
-        assert(sub!is subs,"cannot add directly to own subs");
+    void addFullSubs(ref char[][char[]] sub){
+        assert(sub!is subs||sub is null,"cannot add directly to own subs");
         if (superTemplate!is null){
             sTemplate().addFullSubs(sub);
         }
@@ -207,8 +207,8 @@ class CmdTemplateExecuter:TemplateExecuter {
         }
         return res;
     }
-    void addFullSubs(char[][char[]] sub){
-        assert(sub!is subs,"cannot add directly to own subs");
+    void addFullSubs(ref char[][char[]] sub){
+        assert(sub!is subs||sub is null,"cannot add directly to own subs");
         if (superTemplate!is null){
             sTemplate().addFullSubs(sub);
         }
