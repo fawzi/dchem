@@ -287,6 +287,7 @@ class Cp2kServer:InputElement{
         waitConnection=new WaitCondition(&this.hasConnections);
         loop=noToutWatcher; // retain???
         log=sout.call;
+        connections=new Deque!(Cp2kConnection)();
     }
     
     bool verify(CharSink log){
@@ -310,7 +311,20 @@ class Cp2kMethod:TemplateExecuter{
     cp2kServer: the cp2k server to use to get connections to cp2k instances`));
     
     bool verify(CharSink log){
-        return true;
+        bool res=true;
+        if (initialFileToLoad.length==0){
+            dumper(log)("initialFileToLoad must be given in field ")(myFieldName)("\n");
+            res=false;
+        }
+        if (cp2kServer is null || (cast(Cp2kServer)cp2kServer.contentObj)is null){
+            dumper(log)("cp2kServer must be given and be of type dchem.Cp2kServer");
+            if (cp2kServer !is null){
+                dumper(log)(" and not ")(cp2kServer.contentObj.classinfo.name);
+            }
+            dumper(log)("in field ")(myFieldName)("\n");
+            res=false;
+        }
+        return res;
     }
     Cp2kServer serv(){
         auto res=cast(Cp2kServer)cp2kServer.contentObj;
