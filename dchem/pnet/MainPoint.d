@@ -879,6 +879,8 @@ class MainPoint(T):MainPointI!(T){
     /// checks if the point passed is a neighbor of this point, if it is checks the directions blocked by this
     /// point.
     bool checkIfNeighbor(DynPVector!(T,XType)newPos,Point newPoint,T pSize) {
+        // ignore self
+        if (newPoint==point) return false; // should return true???
         // ignore if the point is already in the neighbors
         synchronized(this){
             if (findFirstPred(neighbors.data,delegate bool(PointAndDir p){ return p.point==newPoint; })!=neighbors.length){
@@ -915,6 +917,13 @@ class MainPoint(T):MainPointI!(T){
                 writer(sink);
             });
         }
+        DirDistances!(T) dDist;
+        if (newPoint==point && !forceFullCheck) {
+            dDist.xDist=0;
+            dDist.dualDist=0;
+            dDist.cartesianDist=0;
+            return dDist;
+        }
         log(delegate void(CharSink s){s("starting");});
         bool veryClose=false;
         bool discarded=false;
@@ -922,7 +931,6 @@ class MainPoint(T):MainPointI!(T){
         
         auto diff=newPos.dup();
         diff.opBypax(pos.dynVars.x,-1,1);
-        DirDistances!(T) dDist;
         
         auto internalDiff=diff.norm2(); // diff norm in internal coordinates
         dDist.xDist=internalDiff;

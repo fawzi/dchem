@@ -837,6 +837,10 @@ final class PNetSilos(T): LocalSilosI!(T){
         foreach(sw;finishers){
             sw.workOn(this);
         }
+        // stop components
+        foreach (comp;components.dup){
+            comp.stop();
+        }
         pEnv.barrier();
         logMsg1("silos did run the finishers");
         runLevel=RunLevel.Stopped;

@@ -20,12 +20,12 @@ import blip.core.stacktrace.StackTrace;
 /// a loader of points (what is created by the input)
 class TrackSpecialPointsGen:SilosWorkerGen{
     string logfileBaseName="specialPoints";
-    bool flushEachLine=false;
+    bool flushEachLine=true;
     bool logAllGFlagsChanges=false;
     
     mixin(serializeSome("dchem.TrackSpecialPoints",`
     logfileBaseName: base path used for the file where the special points are logged, if emty no log is written (defaults to log)
-    flushEachLine: if each line should be flushed
+    flushEachLine: if each line should be flushed (true)
     logAllGFlagsChanges: if all gFlags changes should be logged (default is false)`));
     mixin printOut!();
     mixin myFieldMixin!();
