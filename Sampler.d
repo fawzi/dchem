@@ -8,6 +8,7 @@ import blip.core.stacktrace.TraceExceptions;
 import blip.util.TraceAll;
 import blip.text.TextParser;
 import dchem.sys.SegmentedArray;
+import dchem.sys.AllConstraints;
 import dchem.input.RootInput;
 import dchem.sampler.SinglePoint;
 import dchem.calculator.AllCalculators;

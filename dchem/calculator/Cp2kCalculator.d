@@ -21,6 +21,10 @@ import blip.math.random.Random;
 import blip.container.GrowableArray;
 import dchem.util.ExecCmd;
 import blip.io.SimpleBinaryProtocol;
+import blip.bindings.blas.Types;
+import blip.container.BulkArray;
+import blip.math.Math;
+import dchem.Common;
 
 /// represent a connection with an host
 class Cp2kConnection{
@@ -43,6 +47,7 @@ class Cp2kConnection{
     LoopHandlerI loop;
     ev_tstamp created; // use this to kill connections that have to wait too much??
     ev_tstamp lastUse;
+    char[] connectionId;
     
     override equals_t opEquals(Object o){
         return this is o;
@@ -81,6 +86,13 @@ class Cp2kConnection{
         version(TrackCp2kSock){
             sinkTogether(log,delegate void(CharSink s){
                 dumper(s)("created new cp2k connection to ")(targetHost)(" on socket ")(this.sock)("\n");
+            });
+        }
+        char[128] buf;
+        connectionId=recv(buf,false).dup;
+        version(TrackCp2kSock){
+            sinkTogether(log,delegate void(CharSink s){
+                dumper(s)("cp2k connection to ")(targetHost)(" on socket ")(this.sock)(" has id '")(connectionId)("'\n");
             });
         }
     }
@@ -144,13 +156,15 @@ class Cp2kServer:InputElement{
     char[] port="51000";
     char[] setupCmd;
     double maxLife=525600.0;
+    bool strict=false;
     
     mixin(serializeSome("dchem.Cp2kServer",`
     portMin: the minimum port number to use as fallback (49152)
     portMax: the maximum port number to use as fallback (65535)
     port: the port/protocol that should be used if possible (51000)
     setupCmd: the command executed on activate (might start the clients, in it "[port]" is replaced with the port of the server)
-    maxLife: the maximum life of a connection in minutes (525600 = one year)`));
+    maxLife: the maximum life of a connection in minutes (525600 = one year)
+    strict:if the port selection should be changed (false)`));
     mixin myFieldMixin!();
     mixin printOut!();
     
@@ -199,7 +213,7 @@ class Cp2kServer:InputElement{
                 } catch(BIONoBindException e){
                     bindE=e;
                 }
-                if (isBound) break;
+                if (isBound || strict) break;
                 if (portMin>=portMax) throw new Exception("could not bind to requested port, and no fallback for Cp2kServer from filed "~myFieldName,__FILE__,__LINE__);
                 auto newP=rand.uniformR2(portMin,portMax);
                 char[25] buf;
@@ -334,15 +348,23 @@ class Cp2kMethod:TemplateExecuter{
 class Cp2kContext: ExecuterContext{
     Cp2kMethod cp2kM;
     Cp2kConnection connection;
+    int[1] myCtxId;
     
+    void checkReady(){
+        char[128] buf;
+        auto res=connection.recv(buf,false);
+        if (res!="* READY") throw new Exception("unexpected reply:"~res,__FILE__,__LINE__);
+    }
+
     this(Cp2kConnection connection,Cp2kMethod input,char[] contextId,TemplateHandler th=null){
         super(input,contextId,th);
         this.connection=connection;
         connection.send("LOAD "~cp2kM.initialFileToLoad);
-        char[128] buf;
-        auto res=connection.recv(buf,false);
-        if (res!="READY") throw new Exception("unexpected reply:"~res,__FILE__,__LINE__);
+        int [1] cId;
+        myCtxId[]=connection.recv(myCtxId);
+        checkReady();
         connection.send("GET_NATOM");
+        connection.send(myCtxId);
         int[1] nat;
         connection.recv(nat);
         if (nat[0]!=pSysReal.dynVars.x.pos.dataLength) throw new Exception(collectAppender(delegate void(CharSink s){
@@ -352,9 +374,23 @@ class Cp2kContext: ExecuterContext{
     
     void updateEF(bool updateE=true,bool updateF=true){
         if (updateE || updateF){
+            checkReady();
             connection.send("SET_POS");
+            connection.send(myCtxId);
             auto pos=pSysReal.dynVars.x.pos;
-            connection.send(pos.support.basicData);  // needs reordering?
+            auto externalOrder=pSysReal.sysStruct.externalOrder;
+            auto toSend=BulkArray!(f_double)(
+                
+externalOrder.nLocalParticles(pSysReal.sysStruct.levels[0])*3+1);
+            size_t ii=0;
+            foreach (idx;externalOrder.gSortedLocalPIndex.sLoop){
+                auto p=pos[idx,0];
+                toSend[++ii]=p.x;
+                toSend[++ii]=p.y;
+                toSend[++ii]=p.z;
+            }
+            connection.send(toSend.data[1..$]);
+            checkReady();
             if (updateE && updateF){
                 connection.send("UPDATE_EF");
             } else if (updateE){
@@ -362,7 +398,9 @@ class Cp2kContext: ExecuterContext{
             } else {
                 connection.send("UPDATE_F");
             }
+            connection.send(myCtxId);
             if (updateE){
+                checkReady();
                 connection.send("GET_E");
                 double[2] e;
                 connection.recv(e);
@@ -370,12 +408,21 @@ class Cp2kContext: ExecuterContext{
                 pSysReal.dynVars.potentialEnergyError=e[1];
             }
             if (updateF){
+                checkReady();
                 connection.send("GET_F");
                 pSysReal.checkMddx();
-                double[1] fError;
-                connection.recv(fError);
-                connection.recv(pSysReal.dynVars.mddx.pos.support.basicData); // needs reordering?
+                connection.recv(toSend.data);
+                size_t ij=0;
+                pSysReal.dynVars.mddxError=toSend[0];
+                foreach (idx;externalOrder.gSortedLocalPIndex.sLoop){
+                    Vector!(Real,3) p;
+                    p.x=toSend[++ij];
+                    p.y=toSend[++ij];
+                    p.z=toSend[++ij];
+                    pos[idx,0]=p;
+                }
             }
+            toSend.guard.release();
         }
         maxChange=0;
         changeLevelSet=ChangeLevel.SmoothPosChange;

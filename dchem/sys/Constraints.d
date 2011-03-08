@@ -28,7 +28,7 @@ interface ConstraintI(T){
     /// is not restricted to the x (position) values
     /// if partial is true only one iteration is performed, so the contraint might be unfulfilled
     /// (useful when called by a llop that tries to fulfull various constraints at once)
-    real applyR(ParticleSys!(T) state,bool partial=false);
+    Real applyR(ParticleSys!(T) state,bool partial=false);
     /// removes the component of dr in state that is along a constraint, puts what is
     /// removed in diff if given. (projection state=(1-pi)state , diff=pi state, where pi
     /// is the projection in the space spanned by the gradient of the constraints).
@@ -40,12 +40,12 @@ interface ConstraintI(T){
     /// will add the derivative of the constraint with respect to x to deriv.
     /// can be used to minimize the constraint error if iterating applyR (a la shake) has problems converging
     /// the value has to be positive, with 0 being the target
-    real derivVal(ParticleSys!(T) state,ParticleSys!(T) deriv=null);
-    /// iterates on the involvedparticles, there might be double counting, or extra particles
+    Real derivVal(ParticleSys!(T) state,ParticleSys!(T) deriv=null);
+/+    /// iterates on the involvedparticles, there might be double counting, or extra particles
     /// on which the constraint is not really dependent
     FIteratorI!(PIndex)particlesInvolved();
     /// if the constraints are strictly on the positons of the particles listed
-    bool strict();
+    bool strict();+/
 }
 
 /// helper to get a constraint of type T from a constraint generator
@@ -112,15 +112,15 @@ class MultiConstraint(T): ConstraintI!(T){
         return false;
     }
     
-    real derivVal(ParticleSys!(T) state,ParticleSys!(T) deriv=null){
-        real res=0;
+    Real derivVal(ParticleSys!(T) state,ParticleSys!(T) deriv=null){
+        Real res=0;
         foreach(subC;subConstraints){
             res+=derivVal(state,deriv);
         }
         return res;
     }
     
-    real applyR(ParticleSys!(T) state,bool partial=false){
+    Real applyR(ParticleSys!(T) state,bool partial=false){
         Real maxErr,oldMaxErr;
         bool checkConflicts=false;
         auto maxShakeIter=_constraintGen.maxShakeIter;
@@ -156,7 +156,7 @@ class MultiConstraint(T): ConstraintI!(T){
         }
     }
     
-    /// loops on all particles of all constraints
+/+    /// loops on all particles of all constraints
     static class ListParticles:FIteratorI!(PIndex){
         FIteratorI!(PIndex) iterAtt;
         ConstraintI!(T)[] c;
@@ -202,7 +202,7 @@ class MultiConstraint(T): ConstraintI!(T){
             res=res&&subC.strict();
         }
         return res;
-    }
+    }+/
 }
 
 /// a constraint that applies no constraints
@@ -231,13 +231,13 @@ class NoConstraint(T):ConstraintI!(T){
         this._constraintGen=c;
     }
     ConstraintGen constraintGen(){ return _constraintGen; }
-    real applyR(ParticleSys!(T) state,bool partial=false){
+    Real applyR(ParticleSys!(T) state,bool partial=false){
         return 0;
     }
     void applyDR(ParticleSys!(T) state,ParticleSys!(T) diff=null){ }
-    real derivVal(ParticleSys!(T) state,ParticleSys!(T) deriv=null){ return 0; }
-    FIteratorI!(PIndex)particlesInvolved(){ return EmptyFIterator!(PIndex).instance; }
-    bool strict(){ return true; }
+    Real derivVal(ParticleSys!(T) state,ParticleSys!(T) deriv=null){ return 0; }
+/+    FIteratorI!(PIndex)particlesInvolved(){ return EmptyFIterator!(PIndex).instance; }
+    bool strict(){ return true; }+/
 }
 
 /// describes a function from some variables to another, the mapping should be derivable,
