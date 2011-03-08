@@ -26,6 +26,7 @@ class WorkAskerGen:RemoteCCTask,Sampler,SilosConnectorI {
     double maxDurationTot=525600.0;
     long maxEval=long.max;
     long maxWait=100;
+    long maxFail=5;
     long ownerCacheSize=10;
     string _precision="LowP";
     InputField evaluator;
@@ -35,6 +36,7 @@ class WorkAskerGen:RemoteCCTask,Sampler,SilosConnectorI {
     connectionUrl: the url to use to get the connection to the silos
     maxDuration: maximum duration in minutes for each context (one year: 525600)
     maxDurationTot: maximum duration in minutes for the workAsker (one year: 525600)
+    maxFail: maximum number of failures before stopping adding new contexts (5)
     maxEval: maximum number of evaluations
     maxWait: maximum number of retries waiting for a point to evaluate
     ownerCacheSize: amout of points whose owner is cached (10)
@@ -285,6 +287,11 @@ class WorkAsker(T){
                     }
                     --leftEvals;
                     newOp.doOp();
+                    version(TrackWorkAsker) {
+                        logMsg(delegate void(CharSink s){
+                            dumper(s)("did eval ")(newOp);
+                        });
+                    }
                 } else {
                     input.noWorkLeft();
                     break;
@@ -294,7 +301,7 @@ class WorkAsker(T){
             logMsg(delegate void(CharSink s){
                 dumper(s)("Exception in WorkAsker:")(e);
             });
-            abort();
+            if (--input.maxFail<0) input.noWorkLeft();
         }
         version(TrackWorkAsker) {
             logMsg(delegate void(CharSink s){

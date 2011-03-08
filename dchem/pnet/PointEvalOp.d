@@ -54,6 +54,7 @@ class PointEvalOp(T):EvalOp!(T){
             } else {
                 updateStatus(Status.Failure);
                 silos.updateEvalStatus(owner,id,null,Status.Failure);
+                throw new Exception("stopping evaluator as an evaluation in it failed",__FILE__,__LINE__);
             }
         } else {
             silos.logMsg(delegate void(CharSink s){
