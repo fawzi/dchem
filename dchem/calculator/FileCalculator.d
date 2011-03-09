@@ -394,6 +394,7 @@ class TemplateHandler{
             if (bDir.length>0){
                 opInProgress.workDir=bDir;
             }
+            opInProgress.copyEnv=true;
         }
         return opInProgress;
     }
