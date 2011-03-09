@@ -13,6 +13,7 @@ import tango.io.stream.DataFile;
 import tango.io.FilePath;
 import dchem.input.ReadIn2PSys;
 import dchem.sys.PIndexes;
+import blip.core.Array;
 
 /// configuration
 interface Config:InputElement{
@@ -105,13 +106,14 @@ class FileConfig:Config{
                 res=false;
             }
         } else {
-            switch(format){
-            case "xyz","car","pdb":
-                break;
-            default:
-                w("Error: unknown format '")(format)("' given in field ")(myFieldName)(", known formats are xyz,car,pdb\n");
+            if (find(readFrameFormats,format)==readFrameFormats.length){
+                w("Error: unknown format '")(format)("' given in field ")(myFieldName)(", known formats are ");
+                foreach(i,f;readFrameFormats){
+                    if (i!=0) w(", ");
+                    w(f);
+                }
+                w("\n");
                 res=false;
-                break;
             }
         }
         return res;

@@ -13,6 +13,7 @@ import blip.text.Utils:trim, contains;
 import tango.math.Math: min,max;
 import blip.io.BasicIO;
 import dchem.sys.Cell;
+import dchem.Physcon;
 
 /// a residuum particle
 struct ResiduumP{
@@ -324,7 +325,7 @@ char[] splitEndNr(char[] name,out size_t nr){
 }
 
 /// reads an xyz frame
-ReadSystem readXYZFrame(TextParser!(char) tp,ReadSystem sys=null,bool clearSys=true){
+ReadSystem readXYZFrame(TextParser!(char) tp,ReadSystem sys=null,bool clearSys=true,Real scale=bohr){
     if (sys is null) sys=new ReadSystem();
     size_t nat;
     try{
@@ -342,6 +343,7 @@ ReadSystem readXYZFrame(TextParser!(char) tp,ReadSystem sys=null,bool clearSys=t
         tp.readValue(atName,false);
         p.name=atName;
         tp(p.pos[0])(p.pos[1])(p.pos[2]);
+        p.pos[0]*=scale; p.pos[1]*=scale; p.pos[2]*=scale;
         tp.skipWhitespace();
         if (tp.next(&tp.scanString)){
             resName=splitEndNr(tp.get,resNr);
@@ -685,7 +687,7 @@ ReadSystem readPdb(TextParser!(char) tp,ReadSystem sys=null,bool clearSys=true){
 /// reads a frame from the given input
 ReadSystem readFrame(MultiReader data,char[] format,long frame=0,ReadSystem readSys=null){
     switch(format){
-    case "xyz":
+    case "xyz","xyzAu","xyzForces","xyzForcesAu":
         auto file=new TextParser!(char)(data.readerChar());
         file.newlineIsSpace=false;
         for (long iframe=1;iframe<frame;++iframe){
@@ -694,9 +696,26 @@ ReadSystem readFrame(MultiReader data,char[] format,long frame=0,ReadSystem read
             file.skipLines(nat+2);
         }
         readSys=readXYZFrame(file,readSys,true);
+        Real scale;
+        switch (format){
+            case "xyz":
+                scale=bohr;
+                break;
+            case "xyzAu":
+                scale=1;
+                break;
+            case "xyzForces":
+                scale=1.0/(evolt*bohr);
+                break;
+            case "xyzForcesAu":
+                scale=1;
+                break;
+            default:
+                assert(0);
+        }
         if (frame==-1){
             while (true){
-                auto readSys1=readXYZFrame(file,readSys,true);
+                auto readSys1=readXYZFrame(file,readSys,true,scale);
                 if (readSys1 is null) break;
                 readSys=readSys1;
             }
@@ -732,3 +751,5 @@ ReadSystem readFrame(MultiReader data,char[] format,long frame=0,ReadSystem read
     }
     return readSys;
 }
+
+const string[] readFrameFormats=["xyz","xyzAu","xyzForces","xyzForcesAu","car","pdb"];
