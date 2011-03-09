@@ -27,7 +27,7 @@ body{
 /* Left & Right alignment */
 .left{ float: left; }
 .right{ float: right; }
-
+.small{font-size: 9px}
 /* The inside class provides consistent padding. To be used often! */
 .inside{ padding: 20px; }
 
