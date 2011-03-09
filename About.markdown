@@ -17,8 +17,10 @@ For things that might be generally useful it was decided to use a very liberal a
 The more "applicative" part is the present project, dchem, and it is released as GPL v3.0, also to be able to profit without any licensing issues on my previous experience with [cp2k](http://cp2k.berlios.de/) which is GPL.
 
 The first pioneers in using dchem are
+
 - Dr Jianwen Liu
 - Dr. Sabrina Sicolo
+
 many thanks to them to put up with all the bug and contribution to make dchem a working program.
 
 enjoy
