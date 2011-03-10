@@ -44,6 +44,8 @@ class TemplateExecuter: Method {
     bool writeReplacementsDict;
     bool overwriteUnchangedPaths;
     bool makeReplacementsInCommands=true;
+    bool ignoreSetupExitStatus;
+    bool ignoreSetupCtxExitStatus;
     EvalLog[] onELog=[{targetFile:"log.energies",format:"energy"},
         {targetFile:"log.pos",format:"xyz"}];
     EvalLog[] onFLog=[{targetFile:"log.forces",format:"xyzForces"}];
@@ -154,7 +156,7 @@ class TemplateExecuter: Method {
             templateH.subs["templateDirectory"]=templateDirectory.toString;
             templateH.subs["workingDirectory"]=templateH.targetDir.toString;
             auto opInProgress=templateH.processForCmd(setupCommand,log);
-            templateH.exec(opInProgress,log);
+            templateH.exec(opInProgress,log,ignoreSetupExitStatus);
         }
     }
     // serialization stuff
@@ -169,6 +171,8 @@ class TemplateExecuter: Method {
     writeReplacementsDict: if a dictionary with the replacements performed should be written (default is false)
     overwriteUnchangedPaths: if paths that are already there should be overwitten (default is false)
     makeReplacementsInCommands: if replacements should be performed on the commands to be executed (default is true)
+    ignoreSetupExitStatus: if the exit status of the setup command should be ignored (false)
+    ignoreSetupCtxExitStatus: if the exit status of the context setup command should be ignored (false)
     onELog: what to log for each energy evaluation (by default energy and positions ad xyz)
     onFLog: what to log for each force evaluation (by default xyzForces)
     `));
@@ -234,12 +238,12 @@ class ExecuterContext:CalcContext{
     Method method(){
         return input;
     }
-    void execCmd(char[] cmd,CharSink log=null){
+    void execCmd(char[] cmd,CharSink log=null,bool ignoreExitStatus=false){
         if (log is null) log=logger;
         if (cmd.length>0 && cmd!="NONE"){
             opInProgress=templateH.processForCmd(cmd,log);
             if (opInProgress is null) throw new Exception("could not create process for command "~cmd,__FILE__,__LINE__);
-            templateH.exec(opInProgress,log);
+            templateH.exec(opInProgress,log,ignoreExitStatus);
         }
     }
     
@@ -260,7 +264,7 @@ class ExecuterContext:CalcContext{
             templateH=initialTH(input,contextId);
         }
         templateH.evalTemplates(0,true);
-        execCmd(input.setupCtxCommand());
+        execCmd(input.setupCtxCommand(),null,input.ignoreSetupCtxExitStatus);
         if (input.startConfig is null || cast(Config)input.startConfig.contentObj is null){
             throw new Exception("Error: startConfiguration in field "~input.myFieldName~" should be set to a valid configuration",__FILE__,__LINE__);
         }
@@ -332,8 +336,12 @@ class ExecuterContext:CalcContext{
     
     override void stop(){
         volatile auto op=opInProgress;
-        if (op!is null && op.isRunning)
+        auto stopC=input.stopCtxCmd;
+        if (stopC!is null && op !is null){
+            execCmd(stopC,null,true);
+        } else if (op!is null && op.isRunning){
             op.kill();
+        }
     }
     
     /// should collect the newly calculated energy
@@ -399,7 +407,7 @@ class TemplateHandler{
         return opInProgress;
     }
     /// executes the given Process
-    void exec(Process opInProgress,CharSink log=sout.call){
+    void exec(Process opInProgress,CharSink log=sout.call,bool ignoreExitStatus=false){
         int status;
         log(getOutput(opInProgress,status));
         if (status!=0){
@@ -407,7 +415,12 @@ class TemplateHandler{
             auto arr=lGrowableArray(buf,0,GASharing.Local);
             arr("command failed with status ");
             writeOut(&arr.appendArr,status);
-            throw new Exception(arr.takeData,__FILE__,__LINE__);
+            if (ignoreExitStatus){
+                arr("\n");
+                log(arr);
+            } else {
+                throw new Exception(arr.takeData,__FILE__,__LINE__);
+            }
         }
     }
     /// writes the current replacements dictionary to the given sink

@@ -75,7 +75,7 @@ class TestSampler:Sampler{
         auto d3=pSys.dynVars.dVarStruct.emptyDx();
         d3[]=0;
         d3.pos[LocalPIndex(0,0),0]=Vector!(T,3)(1,0,0);
-        d1=rotateVEi(d2,0,d1);
+        d1=rotateEiV(0,d2,d1);
         sout("after rotation:")(dynPVectorWriter(d1))("\n");
         bypax(d3,d1,cast(T)-1,cast(T)1);
         sout("diff:")(d3.norm2())("\n");
