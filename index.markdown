@@ -29,4 +29,4 @@ Dchem needs the [blip](http://fawzi.github.com/blip) library, where it is also e
 
 News
 
-- 21.2.2011: the dchem code goes public!
+- 21-2-2011: the dchem code goes public!
