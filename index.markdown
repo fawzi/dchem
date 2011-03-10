@@ -17,6 +17,7 @@ It allows you to explore the potential energy surface. It build a coarse increme
 - add constraints to force a given alignement
 - block the exploration of systems where particles "fly away"
 - keep into account permutational symmetry.
+- can guarantee not to miss important pathways
 
 This is the first release of the program, there might still be bugs.
 
@@ -28,4 +29,4 @@ Dchem needs the [blip](http://fawzi.github.com/blip) library, where it is also e
 
 News
 
-- 21.2.2011- the dchem code goes public!
+- 21.2.2011: the dchem code goes public!

@@ -12,6 +12,7 @@ To start using dchem there are two main thing that you need to understand:
 
 External programs
 =================
+
 To calculate energy and forces external programs can be used. Ideally one would like to be able to connect any program without modifying it, decouple the parallelization of the external program from the parallelization of the sampler, and minimize as much as possible the communication overhead between the two programs.
 Dchem normally communicates with external programs either though files or through sockets.
 Almost al programs have input files, can be started executing scripts and write output files.
