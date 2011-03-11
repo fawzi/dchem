@@ -47,6 +47,7 @@ class TemplateExecuter: Method {
     bool makeReplacementsInCommands=true;
     bool ignoreSetupExitStatus;
     bool ignoreSetupCtxExitStatus;
+    bool ignoreCmdExitStatus;
     EvalLog[] onELog=[{targetFile:"log.energies",format:"energy"},
         {targetFile:"log.pos",format:"xyz"}];
     EvalLog[] onFLog=[{targetFile:"log.forces",format:"xyzForces"}];
@@ -179,6 +180,7 @@ class TemplateExecuter: Method {
     makeReplacementsInCommands: if replacements should be performed on the commands to be executed (default is true)
     ignoreSetupExitStatus: if the exit status of the setup command should be ignored (false)
     ignoreSetupCtxExitStatus: if the exit status of the context setup command should be ignored (false)
+    ignoreCmdExitStatus: if the exit status of the commands to calculate energy and forces should be ignored (false)
     onELog: what to log for each energy evaluation (by default energy and positions ad xyz)
     onFLog: what to log for each force evaluation (by default xyzForces)
     constraints: the constraints to be applied to the system
@@ -338,7 +340,8 @@ class ExecuterContext:CalcContext{
         templateH.subs["evalE"]=(updateE?"T":"F");
         templateH.subs["evalF"]=(updateF?"T":"F");
         templateH.evalTemplates(changeLevel,input.overwriteUnchangedPaths);
-        execCmd(input.commandFor(updateE,updateF,changeLevel,maxChange));
+        execCmd(input.commandFor(updateE,updateF,changeLevel,maxChange),null,
+		input.ignoreCmdExitStatus);
         try{
             collectEF(updateE,updateF);
         } catch (Exception e){
