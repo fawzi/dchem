@@ -73,6 +73,7 @@ printAttractors:{
 pnetSilos:{
     class:dchem.Silos,
     discretizationStep:0.30
+    gradEagerness:Always
     evaluator:{ class:Ref, name:limitedTM}
     evaluatorTask:{ class:Ref, name:workAsker}
     explorers:[ { class:Ref, name:MinE },{ class:Ref, name:journal },{ class:Ref, name:posELog }

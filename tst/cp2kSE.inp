@@ -1,0 +1,33 @@
+{
+
+startConfig:{
+    class:"dchem.FileConfig",
+    fileName:"H2O.xyz",
+    format:"xyz",
+    cell:[[8.45,0,0],
+        [0,24.0,0],
+        [0,0,8.45]]
+}
+
+cp2kServer:{ class:dchem.Cp2kServer }
+
+cp2kCalculator:{
+	class:dchem.Cp2kMethod
+	setupCtxCmd:"sh startCp2k.sh"
+	ignoreSetupCtxExitStatus:true
+	templateDir:"templates/cp2kSE"
+	initialFileToLoad:"H2O-MNDO.inp"
+	cp2kServer:{class:Ref, name:cp2kServer}
+	startConfig:{ class:Ref name:startConfig}
+}
+
+singleP:{
+    class:dchem.SinglePoint,
+    calcE:1,
+    calcF:1,
+    method:{ class:Ref, name:cp2kCalculator}
+}
+
+main:{class:Ref, name:singleP}
+
+}
