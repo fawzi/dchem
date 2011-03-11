@@ -417,7 +417,7 @@ class TemplateHandler{
             writeOut(&arr.appendArr,status);
             if (ignoreExitStatus){
                 arr("\n");
-                log(arr);
+                log(arr.data);
             } else {
                 throw new Exception(arr.takeData,__FILE__,__LINE__);
             }
