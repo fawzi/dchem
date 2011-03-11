@@ -21,6 +21,7 @@ import blip.parallel.mpi.MpiModels;
 import dchem.Common;
 import blip.io.FileStream;
 import blip.core.Array;
+import dchem.sys.Constraints;
 
 /// helper for defining things to log to special files
 struct EvalLog{
@@ -51,6 +52,7 @@ class TemplateExecuter: Method {
     EvalLog[] onFLog=[{targetFile:"log.forces",format:"xyzForces"}];
     VfsFolder _templateDirectory;
     CharSink logger;
+    InputField constraints;
     
     this(){
     }
@@ -107,6 +109,10 @@ class TemplateExecuter: Method {
                 w(" and not '")(l.format)("' in field ")(myFieldName)("\n");
                 res=false;
             }
+        }
+        if (constraints!is null && (cast(ConstraintGen)constraints.contentObj) is null){
+            s("constraints must be a ConstraintGen and not ")(constraints.classinfo.name)(" in field ")(myFieldName)("\n");
+            res=false;
         }
         return res;
     }
@@ -175,6 +181,7 @@ class TemplateExecuter: Method {
     ignoreSetupCtxExitStatus: if the exit status of the context setup command should be ignored (false)
     onELog: what to log for each energy evaluation (by default energy and positions ad xyz)
     onFLog: what to log for each force evaluation (by default xyzForces)
+    constraints: the constraints to be applied to the system
     `));
     mixin printOut!();
     mixin myFieldMixin!();
@@ -231,6 +238,8 @@ class ExecuterContext:CalcContext{
     TemplateExecuter input;
     TemplateHandler templateH;
     Process opInProgress;
+    ConstraintI!(Real) _constraintReal;
+    ConstraintI!(LowP) _constraintLowP;
     
     VfsFolder baseDir(){
         return templateH.targetDir;
@@ -255,6 +264,13 @@ class ExecuterContext:CalcContext{
         templateH.subs["workingDirectory"]=templateH.targetDir.toString;
         return templateH;
     }
+    
+    override ConstraintI!(Real) constraintsReal(){
+        return _constraintReal;
+    }
+    override ConstraintI!(LowP) constraintsLowP(){
+        return _constraintLowP;
+    }
 
     this(TemplateExecuter input,char[] contextId,TemplateHandler th=null){
         super(contextId,input.logger);
@@ -275,7 +291,10 @@ class ExecuterContext:CalcContext{
         else
             _nCenter=pSys.nCenter;
         _pSysReal=pSys;
-        
+        if (input.constraints !is null){
+            _constraintReal=input.constraints.contentT!(ConstraintGen)()
+                .constraintReal(pSys);
+        }
         templateH.longSubs["coord.xyz"]=&writeXyz;
         templateH.longSubs["turboCoord"]=&writeTurboCoord;
         
