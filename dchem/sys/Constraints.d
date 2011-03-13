@@ -54,7 +54,7 @@ mixin(genTypeTMixin("Constraint","constraint","ParticleSys!(T) pSys","pSys"));
 class MultiConstraintGen: ConstraintGen{
     InputField[] constraints;
     uint maxShakeIter;
-    Real targetPrecision;
+    Real targetPrecision=1.0e-6;
 
     mixin myFieldMixin!();
     mixin(serializeSome("dchem.MultiConstraint",`
