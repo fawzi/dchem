@@ -16,12 +16,16 @@ import blip.util.NotificationCenter;
 import blip.core.Variant;
 import dchem.pnet.MainPoint;
 import blip.core.stacktrace.StackTrace;
+import dchem.calculator.FileCalculator;
+import dchem.calculator.Calculator;
+import blip.core.Array;
 
 /// a loader of points (what is created by the input)
 class TrackSpecialPointsGen:SilosWorkerGen{
     string logfileBaseName="specialPoints";
     bool flushEachLine=true;
     bool logAllGFlagsChanges=false;
+    EvalLog[] configLogs=[{targetFile:"specialPoints.xyz",format:"xyz"}];
     
     mixin(serializeSome("dchem.TrackSpecialPoints",`
     logfileBaseName: base path used for the file where the special points are logged, if emty no log is written (defaults to log)
@@ -33,7 +37,24 @@ class TrackSpecialPointsGen:SilosWorkerGen{
     this(){}
     
     bool verify(CharSink s){
-        return true;
+	bool res=true;
+	foreach(l;configLogs){
+            if (l.targetFile.length==0){
+                dumper(s)("missing targetFile in configLogs in field ")(myFieldName)("\n");
+                res=false;
+            }
+            if (find(WriteOut.writeConfigFormats,l.format)==WriteOut.writeConfigFormats.length){
+                auto w=dumper(s);
+                w("format in onELog has to be one of ");
+                foreach(i,f;WriteOut.writeConfigFormats){
+                    if (i!=0) w(", ");
+                    w(f);
+                }
+                w(" and not '")(l.format)("' in field ")(myFieldName)("\n");
+                res=false;
+            }
+        }
+        return res;
     }
     SilosWorkerI!(Real) silosWorkerReal(){
         auto res=new TrackSpecialPoints!(Real)(this);
@@ -127,6 +148,15 @@ class TrackSpecialPoints(T):SilosComponentI!(T){
             });
             if (input.flushEachLine) stream.flush();
         }
+	foreach(l;input.configLogs){
+	    auto f=outfileBin(l.targetFile,WriteMode.WriteAppend);
+	    scope(exit){ f.flush(); f.close(); }
+	    auto lp=silos.mainPointL(flagChange.point);
+	    auto externalRef=collectAppender(delegate void(CharSink s){
+						 dumper(s)(flagChange.point.data);
+					     });
+	    WriteOut.writeConfig(f,lp.pos,l.format,externalRef);
+	}
     }
 
     void addSpecialPoint(GFlagsChange flagChange){
