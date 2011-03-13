@@ -69,6 +69,11 @@ M rotateVEi(V,M)(V v2,size_t i,M m)
 in{
     alias typeof(dot(v2,v2)) S;
     auto err=feqrel2(norm2(v2),cast(S)1);
+    if (!(err>S.mant_dig/4*3-6)){ // pippo
+	sinkTogether(sout,delegate void(CharSink s){
+	    dumper(s)("non unit vector ")(v2)(": ")(norm2(v2))(", ")(err)("/")(S.mant_dig)("\n");
+	    });
+    }
     assert(err>S.mant_dig/4*3-6,"v2 has to be a unit vector");
 }
 body{
