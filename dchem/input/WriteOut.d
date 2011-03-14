@@ -58,7 +58,7 @@ struct SegArrWriter(T){
 
     static ClassMetaInfo metaI;
     static this(){
-        metaI=ClassMetaInfo.createForType!(typeof(*this))("SegArrWriter!("~T.mangleof~")");
+        metaI=ClassMetaInfo.createForType!(typeof(*this))("SegArrWriter!("~T.mangleof~")","an array to keep a property of type "~T.stringof~" associated wit particles");
         metaI.addFieldOfType!(KindRange)("kRange","the range of this segment");
         metaI.addFieldOfType!(index_type[])("kindStarts","the starts of each kind");
         metaI.addFieldOfType!(LazyArray!(T))("data","the actual data"); // use T[]???
@@ -252,7 +252,8 @@ struct DynPVectorWriter(T,int group){
     SegArrWriter!(T) orient;
     SegArrWriter!(T) dof;
     int cellPeriod;
-    mixin(serializeSome("dchem.DynPVectorWriter!("~T.stringof~")","cell|cellX0|cellPeriod|pos|orient|dof"));
+    mixin(serializeSome("dchem.DynPVectorWriter!("~T.stringof~")","writes out (or read) a DynPVector",
+        "cell|cellX0|cellPeriod|pos|orient|dof"));
     mixin printOut!();
     /// true if this represents a null DynPVector
     bool isDummy(){
@@ -328,7 +329,8 @@ struct PSysWriter(T){
     Real potentialEnergyError;
     Real mddxError;
     HiddenVars hVars;
-    mixin(serializeSome("dchem.PSysWriter!("~T.stringof~")","potentialEnergy|potentialEnergyError|mddxError|x|dx|mddx|hVars"));
+    mixin(serializeSome("dchem.PSysWriter!("~T.stringof~")","Writes out (or read) a particle sys",
+        "potentialEnergy|potentialEnergyError|mddxError|x|dx|mddx|hVars"));
     mixin printOut!();
     /// creates a writer for the given ParticleSys
     static PSysWriter opCall(ParticleSys!(T) pSys){

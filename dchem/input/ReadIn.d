@@ -30,7 +30,7 @@ struct ResiduumP{
         if (r==0) return cmp(resNr,o.resNr);
         return r;
     }
-    mixin(serializeSome("","resName|resNr"));
+    mixin(serializeSome("","represents a read in residuum","resName|resNr"));
 }
 /// a chain particle
 struct ChainP{
@@ -47,7 +47,7 @@ struct ChainP{
         if (r==0) return cmp(chainNr,o.chainNr);
         return r;
     }
-    mixin(serializeSome("","chainName|chainNr"));
+    mixin(serializeSome("","represents a read in chain","chainName|chainNr"));
 }
 
 /// represents a read in particle
@@ -117,7 +117,7 @@ struct Particle{
             _chainName[i]=' ';
         }
     }
-    mixin(serializeSome("",`pIndex|resIndex|chainIndex|externalIdx|resNr|name|resName|chainNr|chainName|pos|charge`));
+    mixin(serializeSome("","represents a read particle",`pIndex|resIndex|chainIndex|externalIdx|resNr|name|resName|chainNr|chainName|pos|charge`));
     mixin printOut!();
 }
 
@@ -127,7 +127,7 @@ struct Kind{
     char[] potential; // name of the potential used for the particles
     char[] symbol;
     PIndex nextParticle;
-    mixin(serializeSome("",`name|nextParticle|potential|symbol`));
+    mixin(serializeSome("","represents a read in kind",`name|nextParticle|potential|symbol`));
     static Kind opCall(char[] name,PIndex nextParticle){
         Kind res;
         res.name=name;
@@ -158,7 +158,7 @@ class ReadSystem{
 
     static ClassMetaInfo metaI;
     static this(){
-        metaI=ClassMetaInfo.createForType!(typeof(this))("dchem.sys.ReadSystem");
+        metaI=ClassMetaInfo.createForType!(typeof(this))("dchem.sys.ReadSystem","general representation of a system read in");
         metaI.addFieldOfType!(char[])("name","name of the system");
         metaI.addFieldOfType!(char[])("comments","comments");
         metaI.addFieldOfType!(Real[])("cell","cell matrix");

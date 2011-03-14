@@ -21,7 +21,7 @@ class CalculatorServerGen:Method{
     InputField startClient;
     char[] logFile;
     
-    mixin(serializeSome("dchem.CalculatorServer",`
+    mixin(serializeSome("dchem.CalculatorServer",`calculator that sets up a server to which real calculators can connect`,`
     startClient: client started when the first request comes in
     logFile: place where to log the url that can be used to access this server`));
     mixin printOut!();
@@ -110,7 +110,7 @@ class CalculatorClientGen:Sampler,CalculatorClientI{
     void run(){
         addAllContextsTo(serverUrl);
     }
-    mixin(serializeSome("dchem.CalculatorClient",`
+    mixin(serializeSome("dchem.CalculatorClient",`defines a client that will connect to a CalculatorServer`,`
     serverUrl: the url to which this client should connect
     method: the method to use for the context creation`));
     mixin printOut!();

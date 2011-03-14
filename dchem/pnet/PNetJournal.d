@@ -32,8 +32,8 @@ class PNetJournalGen:ExplorationObserverGen{
     ExplorationObserverI!(LowP) observerLowP(LocalSilosI!(LowP) silos){
         return new PNetJournal!(LowP)(this,silos);
     }
-    mixin(serializeSome("dchem.PNetJournal",`
-    fileBasePath: start of the journal filename (defaults to journal)
+    mixin(serializeSome("dchem.PNetJournal",`object that keeps a journal of the important changes (migth be used to restart an exploration)`,
+    `fileBasePath: start of the journal filename (defaults to journal)
     journalFormat: to format of the journal: 'sbin' or 'json'
     logOtherEnergies: if the energies of non local points should be logged
     logOtherStart: if the start of non local points should be logged
@@ -145,7 +145,8 @@ class PNetJournal(T):ExplorationObserverI!(T){
     
         static ClassMetaInfo metaI;
         static this(){
-            metaI=ClassMetaInfo.createForType!(typeof(*this))("dchem.JournalEntry!("~T.stringof~")");
+            metaI=ClassMetaInfo.createForType!(typeof(*this))("dchem.JournalEntry!("~T.stringof~")",
+                "encodes a change in the point network");
             metaI.addFieldOfType!(Kind)("kind","kind of the entry");
             metaI.addFieldOfType!(Point)("point","point");
             metaI.addFieldOfType!(PSysWriter!(T))("pos","position and forces");
@@ -317,8 +318,8 @@ class PNetJournalLoaderGen:SilosWorkerGen{
     SilosWorkerI!(LowP) silosWorkerLowP(){
         return new PNetJournalLoader!(LowP)(this);
     }
-    mixin(serializeSome("dchem.PNetJournalLoader",`
-    filePaths: files to load
+    mixin(serializeSome("dchem.PNetJournalLoader",`Loads one or more journals`,
+    `filePaths: files to load
     journalFormat: to format of the journal: 'sbin' or 'json'
     journalAccuracy: Real or LowP, by default the current accuracy of the silos
     parallelLoad: if when there are several files they should be loaded in parallel (true)`));

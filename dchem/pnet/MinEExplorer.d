@@ -23,8 +23,8 @@ class MinEExplorerDef:ExplorerGen{
     this(){
     }
     mixin myFieldMixin!();
-    mixin(serializeSome("dchem.MinEExplorer",`
-    nEval : number of evaluations to perform (long.max)`));
+    mixin(serializeSome("dchem.MinEExplorer",`explorer thet explores always the lowest energy point`,
+    `nEval : number of evaluations to perform (long.max)`));
     mixin printOut!();
     bool verify(CharSink s){
         return true;

@@ -27,8 +27,8 @@ class TrackSpecialPointsGen:SilosWorkerGen{
     bool logAllGFlagsChanges=false;
     EvalLog[] configLogs=[{targetFile:"specialPoints.xyz",format:"xyz"}];
     
-    mixin(serializeSome("dchem.TrackSpecialPoints",`
-    logfileBaseName: base path used for the file where the special points are logged, if emty no log is written (defaults to log)
+    mixin(serializeSome("dchem.TrackSpecialPoints",`Writes out the special points found so far`,
+    `logfileBaseName: base path used for the file where the special points are logged, if emty no log is written (defaults to log)
     flushEachLine: if each line should be flushed (true)
     logAllGFlagsChanges: if all gFlags changes should be logged (default is false)`));
     mixin printOut!();

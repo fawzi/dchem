@@ -28,8 +28,8 @@ class PosELoggerGen:ExplorationObserverGen{
     ExplorationObserverI!(LowP) observerLowP(LocalSilosI!(LowP) silos){
         return new PosELogger!(LowP)(this,silos);
     }
-    mixin(serializeSome("dchem.PosELogger",`
-    baseFileName: base filename used for the logs
+    mixin(serializeSome("dchem.PosELogger",`Logs position and energy`,
+    `baseFileName: base filename used for the logs
     posFormat: format string to format the positions
     eFormat: format string to format the energy
     flushEachLine: if each line should be flushed (defaults to 0)`));

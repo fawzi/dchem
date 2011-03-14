@@ -46,7 +46,8 @@ struct Atom{
     _name[0..v.length]=v;
     _name[v.length..$]=' ';
   }
-     mixin(serializeSome("","_symbol|_name|number|amass|mass|covalent_radius|vdw_radius|e_conv|heat_of_formation|eht_param"));
+     mixin(serializeSome("dchem.Atom","structure that describes an atom",
+         "_symbol|_name|number|amass|mass|covalent_radius|vdw_radius|e_conv|heat_of_formation|eht_param"));
 }
 
 private const real z=0.0;

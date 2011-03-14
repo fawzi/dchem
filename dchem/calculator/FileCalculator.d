@@ -27,7 +27,7 @@ import dchem.sys.Constraints;
 struct EvalLog{
     string targetFile;
     string format;
-    mixin(serializeSome("dchem.EvalLog",`
+    mixin(serializeSome("input.EvalLog",`logs position forces or energies (depending on format) to the given file`,`
     targetFile: file where to log the things
     format: the format (xyz,xyzForces,energy,jsonDynMddx,sbinDynMddx,jsonDynX,sbinDynX,jsonFull,sbinFull)`));
     mixin printOut!();
@@ -167,11 +167,11 @@ class TemplateExecuter: Method {
         }
     }
     // serialization stuff
-    mixin(serializeSome("dchem.TemplateExecuter",
+    mixin(serializeSome("dchem.TemplateExecuter",`Executes an external program using a template directory to generate the directory where to run. The user can define extra substitutions.`,
     `superTemplate: a template where to take default values
     startConfig: the initial configuration
     templateDir: where to find the definition of the template (tipically a directory)
-    subs: keyword and their substitutions to apply to the templates (as dictionary string -> string)
+    subs: keyword and their substitutions to apply to the templates (as dictionary string -> string), a->b will replace "[a]" with "b"
     setupCmd: a command that should be executed when the method is setup
     setupCtxCmd: a command that should be executed to set up the context
     stopCtxCmd: a command that should be executed to stop the context
@@ -230,7 +230,7 @@ class CmdTemplateExecuter:TemplateExecuter {
         }
     }
     // serialization stuff
-    mixin(serializeSome("dchem.CmdTemplateExecuter",`
+    mixin(serializeSome("dchem.CmdTemplateExecuter",`a template executer (like dchem.TemplateExecuter) that uses a command also to calculate energy and forces, not only to set up things`,`
     executeE: command executed to calculate the energy alone (optional)
     executeEF: command executed to calculate the energy and forces (this is required)
     executeF0: command executed do calculate the forces immediately after the energy (optional)`));
@@ -306,7 +306,7 @@ class ExecuterContext:CalcContext{
     void writeXyz(CharSink s){
         mixin(withPSys("WriteOut.writeXyz(s,pSys.sysStruct,pSys.dynVars.x.pos,pSys.name);"));
     }
-
+    
     void writeTurboCoord(CharSink s){
         mixin(withPSys("WriteOut.writeTurboCoord(s,pSys.sysStruct,pSys.dynVars.x.pos);"));
     }

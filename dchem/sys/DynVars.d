@@ -832,7 +832,7 @@ struct DynPVector(T,int group){
         res.dof=p.newDof();
         return res;
     }
-    mixin(serializeSome("dchem.sys.DynamicsVars("~T.stringof~")","cell|pos|orient|dof"));
+    mixin(serializeSome("dchem.sys.DynPVector("~T.stringof~","~ctfe_i2a(group)~")","Structure that keeps all dynamic variables together (depending on group these might be int the real, tangential or dual tangential space).","cell|pos|orient|dof"));
     mixin printOut!();
 }
 
@@ -1339,7 +1339,8 @@ struct DynamicsVars(T){
         mddx.giveBack();
         potentialEnergy=T.init;
     }
-    mixin(serializeSome("dchem.sys.DynamicsVars("~T.stringof~")","potentialEnergy|x|dx|mddx"));
+    mixin(serializeSome("dchem.sys.DynamicsVars("~T.stringof~")","Structure that keeps all dynamic variables an integrator might worry about together (x,dx,mddx).",
+        "potentialEnergy|x|dx|mddx"));
     mixin printOut!();
 }
 // to have minimal compiletime checks when compiling this module alone

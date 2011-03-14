@@ -41,12 +41,13 @@ struct ParticleDynvarsSelect{
     uint selection;
     ulong[] dofIdxs;
     index_type posDofs,posDDofs;
-    mixin(serializeSome("dchem.ParticleDynvarsSelect",`selection|dofIdxs|posDofs|posDDofs`));
+    mixin(serializeSome("dchem.ParticleDynvarsSelect",`selects a subset of the degrees of freedom of some particles`,
+        `selection|dofIdxs|posDofs|posDDofs`));
     mixin printOut!();
 }
 /// uses the SymmNeighLooper of the full system
 class FullSysNeighLooperGen:SymmNeighLooperGen{
-    mixin(serializeSome("dchem.FullSysNeighLooper",""));
+    mixin(serializeSome("dchem.FullSysNeighLooper","neighbor looper for a subsys that uses the one of the full system",""));
     mixin myFieldMixin!();
     mixin printOut!();
     this(cstring s=""){
@@ -128,8 +129,8 @@ struct SubsetSelection{
     
     InputField[] particleRanges;
     
-    mixin(serializeSome("dchem.SubsetSelection",`
-    x: select x component (true)
+    mixin(serializeSome("dchem.SubsetSelection",`Select a subset of degrees of freedom from agroup of particles`,
+    `x: select x component (true)
     y: select y component (true)
     z: select z component (true)
     orient: select the orientation (true)
@@ -242,8 +243,8 @@ class SubsetCalculator: Method{
         assert(m!is null);
         return m;
     }
-    mixin(serializeSome("dchem.SubsetCalculator",`
-    selections: the selected degrees of freedom
+    mixin(serializeSome("dchem.SubsetCalculator",`selects some particles and degrees of and input calculator and generates a calculator using only those`,
+    `selections: the selected degrees of freedom
     method: the method to subset
     trimUnspecifiedSuperParticles: if unspecified superparticle should have their degrees of freedom removed (true)
     singleSys: if there is a single system for all the contexts, and thus the mapping and new sysStruct can be cached (true)`));
@@ -309,14 +310,14 @@ class SubsetContext:CalcContext{
             res.pKindNew=pKindNew;
             return res;
         }
-        mixin(serializeSome("schem.SubsetContext.PK","isub|pKind|pKindNew"));
+        mixin(serializeSome("schem.SubsetContext.PK","","isub|pKind|pKindNew"));
         mixin printOut!();
     }
     static struct PKV{
         PK pk;
         PIndex[] subP;
         size_t nParticles;
-        mixin(serializeSome("schem.SubsetContext.PK","pk|subP|nParticles"));
+        mixin(serializeSome("schem.SubsetContext.PKV","","pk|subP|nParticles"));
         mixin printOut!();
     }
     

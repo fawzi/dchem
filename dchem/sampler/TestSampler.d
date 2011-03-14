@@ -20,7 +20,7 @@ class TestSampler:Sampler{
     InputField method;
     mixin myFieldMixin!();
 
-    mixin(serializeSome("dchem.TestSampler",
+    mixin(serializeSome("dchem.TestSampler","A sampler that just performs some tests",
     `method: the method to use`));
     mixin printOut!();
     

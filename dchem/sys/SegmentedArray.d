@@ -47,7 +47,8 @@ final class SegmentedArrayStruct{
     index_type[]   kindIncrements; /// when looping the increment to add for each particle of the given kind
     index_type[]   mKindDims; /// minimum number of basic elements (this is max(1,_kindDims) if Min1, otherwise _kindDims)
     Flags flags;
-    mixin(serializeSome("dchem.sys.SegmentedArrayStruct","submapping|kRange|_kindDims|kindStarts"));
+    mixin(serializeSome("dchem.sys.SegmentedArrayStruct","Describes the structure of a SegmentedArray",
+        "submapping|kRange|_kindDims|kindStarts"));
     mixin printOut!();
     /// allocates a new SegmentedArray with the given kind dimensions
     /// if the Min1 flag is set (default) then at least one value per kind is stored 
@@ -280,7 +281,8 @@ class SegArrMemMap(T):PoolI!(SegmentedArray!(T)){
         return (flags&Flags.StandardBlock)!=0;
     }
     // fully disallow serialization, as it is useful mostly for debugging purposes...
-    mixin(serializeSome("dchem.SegArrMemMap",`arrayStruct
+    mixin(serializeSome("dchem.SegArrMemMap",`Describes the memory mapping of a SegmentedArray`,
+        `arrayStruct
         kindOffsets
         kindByteIncrements
         allocSize
@@ -363,7 +365,8 @@ final class SegmentedArray(T){
     static size_t defaultOptimalBlockSize=32*1024/T.sizeof;
     PoolI!(SegmentedArray) pool;
     
-    mixin(serializeSome("dchem.sys.SegmentedArray","kRange|kindOffsets|kindByteIncrements|mKindDims|arrayMap|guard"));
+    mixin(serializeSome("dchem.sys.SegmentedArray","A segmented array i.e some particle associated property.",
+        "kRange|kindOffsets|kindByteIncrements|mKindDims|arrayMap|guard"));
     mixin printOut!();
     
     /+BulkArray!(T) data(){

@@ -7,7 +7,7 @@ struct EnergyRequests{
     bool energy;
     bool force;
     int high_e_deriv;
-    mixin(serializeSome("dchem.sys.Requests.EnergyRequests",
+    mixin(serializeSome("dchem.sys.Requests.EnergyRequests","pippo delete this file",
         `energy: the energy of the system
         force: derivatives with respect to position
         high_e_deriv: higher derivatives, meaningful only if larger than 1`));

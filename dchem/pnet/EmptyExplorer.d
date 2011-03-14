@@ -15,7 +15,7 @@ class EmptyExplorerDef:SilosWorkerGen{
     this(){
     }
     mixin myFieldMixin!();
-    mixin(serializeSome("dchem.EmptyExplorer",``));
+    mixin(serializeSome("dchem.EmptyExplorer",`an explorer that does nothing (not really useful by itself)`,``));
     mixin printOut!();
     bool verify(CharSink s){
         return true;

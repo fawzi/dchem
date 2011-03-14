@@ -20,7 +20,7 @@ typedef ushort KindIdx=0xFFFF; /// indexes the kind of the particle, kind 65535 
 
 static this(){
     {
-        auto metaI=ClassMetaInfo.createForType!(ParticleIdx)("dchem.sys.PIndexes.ParticleIdx");
+        auto metaI=ClassMetaInfo.createForType!(ParticleIdx)("dchem.sys.PIndexes.ParticleIdx","index of a particle (within those of the same kind)");
         metaI.kind=TypeKind.CustomK;
         auto extH=new ExternalSerializationHandlers;
         metaI.externalHandlers=extH;
@@ -32,7 +32,7 @@ static this(){
         };
     }
     {
-        auto metaI=ClassMetaInfo.createForType!(LevelIdx)("dchem.sys.PIndexes.LevelIdx");
+        auto metaI=ClassMetaInfo.createForType!(LevelIdx)("dchem.sys.PIndexes.LevelIdx","index of a level of the particles (0 are the atoms)");
         metaI.kind=TypeKind.CustomK;
         auto extH=new ExternalSerializationHandlers;
         metaI.externalHandlers=extH;
@@ -44,7 +44,7 @@ static this(){
         };
     }
     {
-        auto metaI=ClassMetaInfo.createForType!(KindIdx)("dchem.sys.PIndexes.KindIdx");
+        auto metaI=ClassMetaInfo.createForType!(KindIdx)("dchem.sys.PIndexes.KindIdx","index identifying a kind of particles");
         metaI.kind=TypeKind.CustomK;
         auto extH=new ExternalSerializationHandlers;
         metaI.externalHandlers=extH;
@@ -61,7 +61,7 @@ static this(){
 struct KindRange{
     KindIdx kStart; // start of the range (inclusive)
     KindIdx kEnd; // end of the range (exclusive)
-    mixin(serializeSome("dchem.sys.KindRange","kStart|kEnd"));
+    mixin(serializeSome("dchem.sys.KindRange","A range of kinds (types of particles).","kStart|kEnd"));
     
     static KindRange opCall(KindIdx kStart, KindIdx kEnd){
         KindRange res;
@@ -333,7 +333,8 @@ struct PIndex{
     alias particleT!(ulong) particle;
     static ClassMetaInfo metaI;
     static this(){
-        metaI=ClassMetaInfo.createForType!(typeof(*this))("dchem.sys.PIndexes.PIndex");
+        metaI=ClassMetaInfo.createForType!(typeof(*this))("dchem.sys.PIndexes.PIndex",
+            "a global index of a particle");
         metaI.addFieldOfType!(ushort)("kind","the kind of the particle");
         metaI.addFieldOfType!(uint)("particle","the index of the particle");
     }
@@ -480,7 +481,8 @@ struct LocalPIndex{
     alias particleT!(ulong) particle;
     static ClassMetaInfo metaI;
     static this(){
-        metaI=ClassMetaInfo.createForType!(typeof(*this))("dchem.sys.PIndexes.LocalPIndex");
+        metaI=ClassMetaInfo.createForType!(typeof(*this))("dchem.sys.PIndexes.LocalPIndex",
+            "a local index of a particle");
         metaI.addFieldOfType!(ushort)("kind","the kind of the particle");
         metaI.addFieldOfType!(uint)("particle","the index of the particle");
     }

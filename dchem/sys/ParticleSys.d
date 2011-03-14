@@ -135,7 +135,8 @@ class ParticleKind: Serializable,CopiableObjectI,DerivTransfer{
         index_type[] el2DelMap; /// mapping of the contiguous sequences
         DerivMap derivMap=DerivMap.SimpleMap; /// how the derivatives are mapped
         Object _lockObj;
-        mixin(serializeSome("dchem.SegAElements",`nElements: number of elements in position array
+        mixin(serializeSome("dchem.SegAElements",`describes the elements of a single particle in a segmented array`,
+            `nElements: number of elements in position array
             nDelements: number of elements in derivative arrays
             skipElements: ranges to skip in the array
             skipDelements: ranges to skip derivatives array
@@ -366,7 +367,7 @@ class ParticleKind: Serializable,CopiableObjectI,DerivTransfer{
     
     static ClassMetaInfo metaI;
     static this(){
-        metaI=ClassMetaInfo.createForType!(typeof(this))("ParticleKind");
+        metaI=ClassMetaInfo.createForType!(typeof(this))("ParticleKind","represents a kind of particles");
         metaI.addFieldOfType!(char[])("name","name of this particle kind",
             SerializationLevel.debugLevel);
         metaI.addFieldOfType!(ubyte)("level","level of the particle",
@@ -593,7 +594,7 @@ class SysKind: ParticleKind{
     this(LevelIdx pLevel,KindIdx kindIdx){
         super("_SYSTEM_",pLevel,kindIdx,"","");
     }
-    mixin(serializeSome("dchem.SysKind",""));
+    mixin(serializeSome("dchem.SysKind","Kind of the particle tht represents the whole system.",""));
 }
 
 /// represent the structure of a system of particles
@@ -656,7 +657,7 @@ class SysStruct: CopiableObjectI,Serializable
         if (dV.dVarStruct !is null) dV.dVarStruct.flush(); // call stopCaching ?
         dV.dVarStruct=new DynamicsVarsStruct!(T)(fullSystem,KindRange(levels[0].kStart,levels[$-1].kEnd));
     }
-    mixin(serializeSome("dchem.sys.SysStruct",
+    mixin(serializeSome("dchem.sys.SysStruct",`Structure of a system of particles: kinds, particles, molecules, mapping to initial order,...`,
         `name: the name of the system
         fullSystem: sub mapping to the whole system
         externalOrder: order of the particles in the external files
@@ -1101,7 +1102,7 @@ class ParticleSys(T): CopiableObjectI,Serializable
         particlePropertiesPools.giveBack();
     }
     mixin RefCountMixin!();
-    mixin(serializeSome("dchem.sys.ParticleSys",
+    mixin(serializeSome("dchem.sys.ParticleSys",`Represents a system of particles: its structure and position,velocity,forces,energy,... if known.`,
         `sysStruct: structure of the system (particle, particle kinds,...)
         dynVars: dynamic variables (position,cell,velocities,forces,...)
         hVars: hidden degrees of freedom`));

@@ -32,7 +32,8 @@ class SubMapping: BasicObjectI{
     BulkArray!(PIndex) lSortedPIndex;
     MappingKind mappingKind;
 
-    mixin(serializeSome("dchem.sys.SubMapping","name|lKRange|kindStarts|sortedPIndex|gSortedLocalPIndex|lSortedPIndex"));
+    mixin(serializeSome("dchem.sys.SubMapping","mapping from a system to a subsystem.",
+        "name|lKRange|kindStarts|sortedPIndex|gSortedLocalPIndex|lSortedPIndex"));
     mixin printOut!();
 
     ParticleIdx nLocalParticles(KindIdx k){

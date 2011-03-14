@@ -62,7 +62,7 @@ class PointToOwner{
         Point point;
         size_t idx;
         SKey owner;
-        mixin(serializeSome("dchem.PointToOwner.PIdxOwn",`point|idx|owner`));
+        mixin(serializeSome("dchem.PointToOwner.PIdxOwn",``,`point|idx|owner`));
         mixin printOut!();
     }
     /// returns a PointToOwner that contains the points extracted with getPnt ordered by owner and point
@@ -258,7 +258,8 @@ struct GFlagsChange{
     uint oldGFlags;
     uint newGFlags; // avoid storing??
     Point point;
-    mixin(serializeSome("dchem.GFlagsChange","oldGFlags|newGFlags|point"));
+    long refId;
+    mixin(serializeSome("dchem.GFlagsChange",`describes a change of flags of a point`,"oldGFlags|newGFlags|point|refId"));
     mixin printOut!();
 }
 
@@ -268,7 +269,7 @@ struct PointNeighbors(T){
     PointAndDir[] neighbors;
     DirDistances!(T)[] dirDist;
     Time time;
-    mixin(serializeSome("dchem.PointNeighbors!("~T.stringof~")","point|neighbors|dirDist"));
+    mixin(serializeSome("dchem.PointNeighbors!("~T.stringof~")","describes a new neighbor","point|neighbors|dirDist"));
     mixin printOut!();
 }
 

@@ -29,8 +29,8 @@ class PrintAttractorsGen:SilosWorkerGen{
     SilosWorkerI!(LowP) silosWorkerLowP(){
         return new PrintAttractors!(LowP)(this);
     }
-    mixin(serializeSome("dchem.PrintAttractors",`
-    baseFileName: base filename used for the logs
+    mixin(serializeSome("dchem.PrintAttractors",`Prints the attractor of each point`,
+    `baseFileName: base filename used for the logs
     posFormat: format string to format the positions
     eFormat: format string to format the energy
     printPos: if the position of the point should be printed (false)

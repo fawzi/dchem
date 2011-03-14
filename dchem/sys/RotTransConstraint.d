@@ -89,8 +89,8 @@ class RotTransConstraintGen:ConstraintGen {
     InputField particles;
 
     mixin myFieldMixin!();
-    mixin(serializeSome("dchem.RotTransConstraint",`
-    particles: the three or more particles used to remove translations and rotations
+    mixin(serializeSome("dchem.RotTransConstraint",`Constraints that removes rotation and translation by keeping three particles (p0,p1,p2) fixed (p0 in the origin, second so that p1-p0 is along x, and the third (or following if perfectly aligned) so that p2-p0 is in the x,y plane wiht positive y)`,
+    `particles: the three or more particles used to remove translations and rotations
     `));
     mixin printOut!();
     
@@ -108,15 +108,16 @@ class RotTransConstraintGen:ConstraintGen {
         }
         return res;
     }
+    
+    RotTransConstraint!(T) constraintT(T)(ParticleSys!(T)templatePos){
+        return new RotTransConstraint!(T)(this,templatePos);
+    }
+
     ConstraintI!(Real) constraintReal(ParticleSys!(Real)templatePos){
         return constraintT!(Real)(templatePos);
     }
     ConstraintI!(LowP) constraintLowP(ParticleSys!(LowP)templatePos){
         return constraintT!(LowP)(templatePos);
-    }
-    
-    RotTransConstraint!(T) constraintT(T)(ParticleSys!(T)templatePos){
-        return new RotTransConstraint!(T)(this,templatePos);
     }
 }
 

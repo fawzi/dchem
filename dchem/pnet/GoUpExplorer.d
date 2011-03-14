@@ -23,8 +23,8 @@ class GoUpExplorerDef:ExplorerGen{
     this(){
     }
     mixin myFieldMixin!();
-    mixin(serializeSome("dchem.GoUpExplorer",`
-    nEval : number of evaluations to perform (long.max)`));
+    mixin(serializeSome("dchem.GoUpExplorer",`explorer that stays in the basin of attraction of the given point`,
+    `nEval : number of evaluations to perform (long.max)`));
     mixin printOut!();
     bool verify(CharSink s){
         return true;

@@ -59,7 +59,7 @@ struct Point{
     bool isValid(){
         return (data&0x0000_0FFF_FFFF_F000UL)!=0;
     }
-    mixin(serializeSome("dchem.Point","data"));
+    mixin(serializeSome("dchem.Point","identifies an exploration point","data"));
     mixin printOut!();
     hash_t toHash(){
         static if(hash_t.sizeof==4){
@@ -114,7 +114,7 @@ struct PointAndDir{
     void point(Point k){
         data=(0xFFFF_F000_0000_0000 & data)|(k.data & 0x0000_0FFF_FFFF_FFFFUL);
     }
-    mixin(serializeSome("dchem.PointAndDir","data"));// split in Point and dir???
+    mixin(serializeSome("dchem.PointAndDir","identifies a new exploration direction (encodes existing point and direction)","data"));
     void desc(CharSink s){
         dumper(s)("Point")(data);
     }
@@ -132,7 +132,7 @@ struct PointAndDir{
         void point(Point p){
             pDir.point=p;
         }
-        mixin(serializeSome("dchem.PointDir","point|dir"));// split in Point and dir???
+        mixin(serializeSome("dchem.PointDirExp","identifies a new exploration direction (existing point and direction) in a more explicit way","point|dir"));// split in Point and dir???
         mixin printOut!();
     }
     ExpandedPointAndDir expanded(){
@@ -152,7 +152,7 @@ struct PointAndDir{
 struct PointAndEnergy{
     Point point;
     Real energy;
-    mixin(serializeSome("PointAndEnergy","point|energy"));
+    mixin(serializeSome("PointAndEnergy","","point|energy"));
     mixin printOut!();
     int opCmp(PointAndEnergy p2){
         return ((energy<p2.energy)?-1:((energy>p2.energy)?1:point.opCmp(p2.point)));
@@ -169,7 +169,7 @@ struct Attractor{
     Real energyThroughPoint; /// energy of the throughPoint
     ulong id; /// a number to be able to identify subsequent updates
     ulong idThroughPoint; /// the id of throughpoint (to have the correct result even with out of order updates)
-    mixin(serializeSome("dchem.Attractor","minimum|throughPoint|energyThroughPoint|id|idThroughPoint"));
+    mixin(serializeSome("dchem.Attractor","describes an attractor","minimum|throughPoint|energyThroughPoint|id|idThroughPoint"));
     mixin printOut!();
 }
 
@@ -179,9 +179,8 @@ struct PointEMin{
     Real energy; /// energy of the current point
     Point minimum; /// the minimum of this attractor
     ulong id; /// a number to be able to identify subsequent updates
-    mixin(serializeSome("dchem.PointEMin","point|energy|minimum|id"));
+    mixin(serializeSome("dchem.PointEMin","a point and its minimum (to update the attractor)","point|energy|minimum|id"));
     mixin printOut!();
-    
 }
 /// structure to encode a main point efficienly (useful to transfer it o another context)
 struct DriedPoint(T){
@@ -195,7 +194,8 @@ struct DriedPoint(T){
     T explorationSize;
     uint gFlags;
     
-mixin(serializeSome("dchem.DriedPoint!("~T.stringof~")","point|pos|minDir|exploredDirs|neighbors|attractor|minDirScale|explorationSize|gFlags"));
+    mixin(serializeSome("dchem.DriedPoint!("~T.stringof~")","structure to transfer one point from a silos to another",
+        "point|pos|minDir|exploredDirs|neighbors|attractor|minDirScale|explorationSize|gFlags"));
     mixin printOut!();
 }
 
@@ -233,8 +233,8 @@ struct DirDistances(T){
         }
         return true;
     }
-    mixin(serializeSome("dchem.DirDistances!("~T.stringof~")",`
-        xDist: internal (x space) distance
+    mixin(serializeSome("dchem.DirDistances!("~T.stringof~")",`distances of a point fom another (and direction in which it lies)`,
+        `xDist: internal (x space) distance
         dualDist: distance in the dual space
         cartesianDist: cartesianDistance (in the TS)
         minDirProj: projection along the minimum distance
@@ -594,7 +594,7 @@ class LazyMPLoader(T):Serializable{
         maxTime=ev_time(); // reset time as it cannot be assumed to be synchronized between different computers
         return this;
     }
-    mixin(serializeSome("dchem.LazyMPLoader!("~T.stringof~")",`point|weakUpdate|maxTime`));
+    mixin(serializeSome("dchem.LazyMPLoader!("~T.stringof~")","lazy main point loader",`point|weakUpdate|maxTime`));
     mixin printOut!();
     
     static PoolI!(LazyMPLoader) gPool;
@@ -738,7 +738,8 @@ class EvalOp(T):Serializable{
         return (attempts<=maxAttempts);
     }
     
-    mixin(serializeSome("EvalOp!("~T.stringof~")",`id|owner|started|attempts|status`));
+    mixin(serializeSome("EvalOp!("~T.stringof~")","An operation to perform by a client (WorkAsker)",
+        `id|owner|started|attempts|status`));
     mixin printOut!();
 }
 

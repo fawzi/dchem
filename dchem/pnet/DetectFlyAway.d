@@ -22,7 +22,7 @@ import blip.core.Array;
 
 /// detects fly away, at the moment it is convex, should I also implement the better connectivity based solution?
 class DetectFlyAwayGen:ExplorationObserverGen{
-    bool earlyDetect=true;
+    bool earlyDetect=false;
     char[] logBaseName;
     bool flushEachPoint=true;
     Real threshold=3.0;
@@ -30,8 +30,8 @@ class DetectFlyAwayGen:ExplorationObserverGen{
     this(){
     }
     mixin myFieldMixin!();
-    mixin(serializeSome("dchem.DetectFlyAway",`
-    earlyDetect: if the configurations detected should be removed early (before trying to calculate them) (true)
+    mixin(serializeSome("dchem.DetectFlyAway",`observer that detects when a system breaks apart and stop its exploration`,
+    `earlyDetect: if the configurations detected should be removed early (before trying to calculate them) (false)
     logBaseName: if given logs the points that have "flown away" to a file that starts with logBaseName
     flushEachPoint: if each point should be immediately flushed (true)
     threshold: threshold that detects particles flying away (3.0)

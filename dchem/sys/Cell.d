@@ -241,7 +241,7 @@ class Cell(T)
         return res;
     }
     alias dupT!(T) dup;
-    mixin(serializeSome("","periodicFlags|h|x0"));
+    mixin(serializeSome("Cell!("~T.stringof~")","describes a cel for periodic boundary conditions.","periodicFlags|h|x0"));
     mixin printOut!();
 }
 

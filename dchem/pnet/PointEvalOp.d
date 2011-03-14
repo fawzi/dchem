@@ -65,5 +65,5 @@ class PointEvalOp(T):EvalOp!(T){
     /// tries to stop the operation early
     void stopOp(){ }
     
-    mixin(serializeSome("PointEvalOp!("~T.stringof~")",`point`));
+    mixin(serializeSome("PointEvalOp!("~T.stringof~")",`Operation that evaluates a single point`,`point`));
 }

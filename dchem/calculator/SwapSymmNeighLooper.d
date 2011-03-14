@@ -25,8 +25,8 @@ import blip.util.LocalMem;
 class SwapSymmNeighLooperGen:SymmNeighLooperGen{
     bool useFirstNeigh=true;
     InputField[] groups;
-    mixin(serializeSome("dchem.SwapSymmNeighLooper",`
-    useFirstNeigh: if first image convention should be used for periodic dimensions (default is true)
+    mixin(serializeSome("dchem.SwapSymmNeighLooper",`handles permutational symmetry of groups of particles`,
+    `useFirstNeigh: if first image convention should be used for periodic dimensions (default is true)
     groups: the groups that should be swapped (ParticleRange), all permutations within one group are checked`));
     mixin myFieldMixin!();
     mixin printOut!();

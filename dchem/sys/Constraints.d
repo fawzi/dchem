@@ -57,8 +57,8 @@ class MultiConstraintGen: ConstraintGen{
     Real targetPrecision=1.0e-6;
 
     mixin myFieldMixin!();
-    mixin(serializeSome("dchem.MultiConstraint",`
-    maxShakeIter: maximum iteration of "shake" (immediate partial inverse) before switching to direct optimization
+    mixin(serializeSome("dchem.MultiConstraint",`Constraint that Handles a group of constraints.`,
+    `maxShakeIter: maximum iteration of "shake" (immediate partial inverse) before switching to direct optimization
     targetPrecision: the target precision that should be reached by the constraint loop
     constraints: the constraints to apply
     `));
@@ -208,7 +208,7 @@ class MultiConstraint(T): ConstraintI!(T){
 /// a constraint that applies no constraints
 class NoConstraintGen:ConstraintGen {
     mixin myFieldMixin!();
-    mixin(serializeSome("dchem.NoConstraint",""));
+    mixin(serializeSome("dchem.NoConstraint","Empty constraint.",""));
     mixin printOut!();
     this(){}
     bool verify(CharSink s){

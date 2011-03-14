@@ -127,8 +127,8 @@ class InputField:InputElement{
     // serialization stuff
     static ClassMetaInfo metaI;
     static this(){
-        metaI=ClassMetaInfo.createForType!(typeof(this))("Ref");
-        metaI.addFieldOfType!(char[])("name","name of the reference");
+        metaI=ClassMetaInfo.createForType!(typeof(this))("Ref","reference to another input field");
+        metaI.addFieldOfType!(char[])("name","name of the referenced object");
     }
     ClassMetaInfo getSerializationMetaInfo(){
         return metaI;

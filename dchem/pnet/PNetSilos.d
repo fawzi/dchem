@@ -51,7 +51,7 @@ struct CachedPoint(T){
 struct LoadStats{
     Real load;
     SKey silosKey;
-    mixin(serializeSome("LoadStats","load|silosKey"));
+    mixin(serializeSome("LoadStats","statistic about the load (usage) of a silos","load|silosKey"));
     mixin printOut!();
     int opCmp(LoadStats l2){
         return ((load<l2.load)?-1:((load==l2.load)?cmp(cast(long)silosKey,cast(long)l2.silosKey):1));
@@ -81,33 +81,6 @@ class SilosRegistry(T){
         auto prx=ProtocolHandler.proxyForUrl(url);
         auto silos=cast(PNetSilosI!(T))cast(Object)prx;
     }
-}
-
-
-class RemotePointEval(T):RemoteCCTask{
-    Point point;
-    char[] silosCoreUrl;
-    CalculationContext ctx;
-    LocalSilosI!(T) localSilos;
-    mixin(serializeSome("dchem.minEE.RemotePointEval!("~T.stringof~")","point|silosCoreUrl"));
-    mixin printOut!();
-    
-    this(){}
-    this(Point p,char[]oUrl){
-        point=p;
-        silosCoreUrl=oUrl;
-    }
-    void workOn(CalculationContext ctx){
-        //localSilos=
-        //auto ctx=cast(CalculationContext)cast(Object)ProtocolHandler.proxyForUrl(ownerUrl);
-        //auto pPos=ctx.pointPos(point); // get real point
-        //ctx=args.get!(CalculationContext)();
-    }
-    void stop(){
-        if (ctx!is null) ctx.stop();
-        ctx=null;
-    }
-    
 }
 
 class SilosGen:Sampler {
@@ -200,8 +173,8 @@ class SilosGen:Sampler {
     Real inDirCartesianScale2=0.5;
     
     mixin myFieldMixin!();
-    mixin(serializeSome("dchem.Silos",`
-        noTaskWaitTime: the number of seconds to wait when no task is available (10)
+    mixin(serializeSome("dchem.Silos",`A silos, the place where all points are stored and observers and explorers live.`,
+        `noTaskWaitTime: the number of seconds to wait when no task is available (10)
         evaluator: the method to perform energy evaluations
         evaluatorTask: the task to execute (normally to start clients that will perform evaluations, if a SilosConnectorI then it is passed silos and accuracy before starting)
         precision: the precision with which the points are stored

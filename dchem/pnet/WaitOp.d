@@ -34,5 +34,5 @@ class WaitOp(T):EvalOp!(T){
         return false;
     }
     
-    mixin(serializeSome("WaitOp!("~T.stringof~")",`toWait`));
+    mixin(serializeSome("WaitOp!("~T.stringof~")",`An operation that just waits.`,`toWait`));
 }

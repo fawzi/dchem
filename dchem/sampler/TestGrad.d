@@ -39,7 +39,7 @@ class TestGrad:Sampler{
     }
     
     mixin myFieldMixin!();
-    mixin(serializeSome("dchem.TestGrad",
+    mixin(serializeSome("dchem.TestGrad",`Sampler that tests the gradient using finite differences at the start configuration.`,
     `dx: the discretization amount (derivatives are approximated with +dx/2..dx/2)
     maxDxFact: maximum distance between the two evaluation points (needs to be larger than 1)
     maxOffsetCFact: maximum distance from the central point to accept a point evaluation as fraction of dx (needs to be larger than 1)

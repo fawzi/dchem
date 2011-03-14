@@ -3,9 +3,6 @@ startConfig:{
     class:"dchem.FileConfig",
     fileName:"1Cu2Co.xyz",
     format:"xyz",
-    cell:[[8.45,0,0],
-        [0,24.0,0],
-        [0,0,8.45]]
 }
 
 turboM:{
@@ -76,9 +73,7 @@ pnetSilos:{
     gradEagerness:Always
     evaluator:{ class:Ref, name:limitedTM}
     evaluatorTask:{ class:Ref, name:workAsker}
-    explorers:[ { class:Ref, name:MinE },{ class:Ref, name:journal },{ class:Ref, name:posELog }
-	#,{class:Ref, name:flyAway }
-	 ]
+    explorers:[ { class:Ref, name:MinE },{ class:Ref, name:journal },{ class:Ref, name:posELog },{class:Ref, name:flyAway } ]
     loaders:[{ class:Ref, name:initialPos },{ class:Ref, name: spLogger }]
     finishers:[{ class:Ref, name: printAttractors }]
 }
