@@ -91,3 +91,5 @@ if you want to have just a worker then
 - a work asker that actually computes things
 - a silos that coordinates and starts everything
 - main that references the silos
+
+You can check the available object classes and their field in [an automatically generated description](doc.html) of the input (using the --html-doc flag).
