@@ -92,13 +92,18 @@ s(`
     </ul>
     </p>
     <p>Unlike json most commas can be dropped. The input consists of a big dictionary, thus it begins with "{", has several key:value elements and ends with "}".</p>
-    <p>Here we list of object or structures that are understood by dchem (what you should write as class is the title, and the field values are written in bold):</p>`);
+    <p>Here we list of object or structures that are understood by dchem. What you should write as class is the title, and the field names are written in bold. <em>RootInputElement</em> can be written only at the top level of the input, and, excluding Ref, should be written just there.</p>`);
         foreach (cls;this){
             s(`
     <h3><a name="`)(cls.className)(`">`)(cls.className)(`</a></h3>`);
-            if (cls.doc.length>0){
+            bool rootInputEl=cls.ci!is null && implements(cls.ci,InputElement.classinfo);
+            if (cls.doc.length>0 || rootInputEl){
                 s(`
-        <p>`)(cls.doc)("</p>");
+        <p>`);
+                if (rootInputEl){
+                    s("<em>RootInputElement</em>. ");
+                }
+                s(cls.doc)("</p>");
             }
             if(cls.nTotFields()>0){
                 s(`
