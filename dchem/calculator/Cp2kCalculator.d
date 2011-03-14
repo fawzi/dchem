@@ -26,6 +26,10 @@ import blip.container.BulkArray;
 import blip.math.Math;
 import dchem.Common;
 
+version(TrackPNet){
+    version=TrackCp2kSock;
+}
+
 /// represent a connection with an host
 class Cp2kConnection{
     enum Status{
@@ -269,12 +273,12 @@ class Cp2kServer:InputElement{
     
     void handleConnection(ref SocketServer.Handler h){
         TargetHost th=h.otherHost();
-        auto newC=new Cp2kConnection(this,th,h.sock);
-        version(TrackRpc){
+        version(TrackCp2kSock){
             sinkTogether(log,delegate void(CharSink s){
                 dumper(s)(taskAtt.val)(" got a cp2k connection to ")(th)("\n");
             });
         }
+        auto newC=new Cp2kConnection(this,th,h.sock);
         connections.pushBack(newC);
         waitConnection.checkCondition();
     }
@@ -347,14 +351,10 @@ class Cp2kMethod:TemplateExecuter{
         return res;
     }
     CalculationContext getCalculator(bool wait,ubyte[]history){
-        auto conn=serv.getConnection(wait);
-        if (conn!is null){
-            auto ctx=new Cp2kContext(conn,this,collectAppender(delegate void(CharSink s){
-                dumper(s)("cp2k")(ProcContext.instance.id)("-")(ProcContext.instance.localId.next());
-            }));
-            return ctx;
-        }
-        return null;
+        auto ctx=Cp2kContext.createNew(this,collectAppender(delegate void(CharSink s){
+            dumper(s)("cp2k")(ProcContext.instance.id)("-")(ProcContext.instance.localId.next());
+        }));
+        return ctx;
     }
     
 }
@@ -370,14 +370,18 @@ class Cp2kContext: ExecuterContext{
         if (res!="* READY") throw new Exception("unexpected reply:"~res,__FILE__,__LINE__);
     }
 
-    this(Cp2kConnection connection,Cp2kMethod input,char[] contextId,TemplateHandler th=null){
+    this(Cp2kMethod input,char[] contextId,TemplateHandler th=null){
         super(input,contextId,th);
-        this.connection=connection;
-        connection.send("LOAD "~cp2kM.initialFileToLoad);
-        int [1] cId;
-        myCtxId[]=connection.recv(myCtxId);
+        cp2kM=input;
+    }
+    
+    void setConnection(Cp2kConnection conn){
+        connection=conn;
         checkReady();
-        connection.send("GET_NATOM");
+        connection.send("LOAD "~cp2kM.initialFileToLoad);
+        connection.recv(myCtxId);
+        checkReady();
+        connection.send("NATOM");
         connection.send(myCtxId);
         int[1] nat;
         connection.recv(nat);
@@ -385,7 +389,13 @@ class Cp2kContext: ExecuterContext{
             dumper(s)("unexpected number of atoms ")(nat[0])("vs")(pSysReal.dynVars.x.pos.dataLength);
         }));
     }
-    
+
+    static Cp2kContext createNew(Cp2kMethod input,char[] contextId,TemplateHandler th=null){
+        auto res=new Cp2kContext(input, contextId,th);
+        auto conn=input.serv.getConnection(true);
+        res.setConnection(conn);
+        return res;
+    }
     void updateEF(bool updateE=true,bool updateF=true){
         if (updateE || updateF){
             checkReady();
@@ -404,18 +414,21 @@ externalOrder.nLocalParticles(pSysReal.sysStruct.levels[0])*3+1);
                 toSend[++ii]=p.z;
             }
             connection.send(toSend.data[1..$]);
+            connection.recv(toSend.data[0..1]); // current change...
+            changedDynVars(ChangeLevel.NoChange,toSend[0]);
             checkReady();
             if (updateE && updateF){
-                connection.send("UPDATE_EF");
+                connection.send("EVAL_EF");
             } else if (updateE){
-                connection.send("UPDATE_E");
+                connection.send("EVAL_E");
             } else {
-                connection.send("UPDATE_F");
+                connection.send("EVAL_F");
             }
             connection.send(myCtxId);
             if (updateE){
                 checkReady();
                 connection.send("GET_E");
+                connection.send(myCtxId);
                 double[2] e;
                 connection.recv(e);
                 pSysReal.dynVars.potentialEnergy=e[0];
@@ -424,7 +437,9 @@ externalOrder.nLocalParticles(pSysReal.sysStruct.levels[0])*3+1);
             if (updateF){
                 checkReady();
                 connection.send("GET_F");
+                connection.send(myCtxId);
                 pSysReal.checkMddx();
+                auto f=pSysReal.dynVars.mddx.pos;
                 connection.recv(toSend.data);
                 size_t ij=0;
                 pSysReal.dynVars.mddxError=toSend[0];
@@ -433,10 +448,11 @@ externalOrder.nLocalParticles(pSysReal.sysStruct.levels[0])*3+1);
                     p.x=toSend[++ij];
                     p.y=toSend[++ij];
                     p.z=toSend[++ij];
-                    pos[idx,0]=p;
+                    f[idx,0]=p;
                 }
+                assert(++ij==toSend.length);
             }
-            toSend.guard.release();
+            //toSend.guard.release();
         }
         maxChange=0;
         changeLevelSet=ChangeLevel.SmoothPosChange;
