@@ -2,6 +2,9 @@
 module dchem.util.Rotate;
 import tango.math.IEEE;
 import blip.narray.NArray;
+import blip.io.BasicIO; // pippo
+import blip.io.Console; // pippo
+import blip.container.GrowableArray; // pippo
 
 /// rotation from one *unit* vector v1 to a *unit* vector v2, modifies m, and returns it
 M rotateVV(V,M)(V v1,V v2,M m)
