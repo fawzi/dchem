@@ -1102,7 +1102,7 @@ class ParticleSys(T): CopiableObjectI,Serializable
         particlePropertiesPools.giveBack();
     }
     mixin RefCountMixin!();
-    mixin(serializeSome("dchem.sys.ParticleSys",`Represents a system of particles: its structure and position,velocity,forces,energy,... if known.`,
+    mixin(serializeSome("dchem.sys.ParticleSys!("~T.stringof~")",`Represents a system of particles: its structure and position,velocity,forces,energy,... if known.`,
         `sysStruct: structure of the system (particle, particle kinds,...)
         dynVars: dynamic variables (position,cell,velocities,forces,...)
         hVars: hidden degrees of freedom`));

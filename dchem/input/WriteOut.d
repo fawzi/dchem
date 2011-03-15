@@ -252,7 +252,7 @@ struct DynPVectorWriter(T,int group){
     SegArrWriter!(T) orient;
     SegArrWriter!(T) dof;
     int cellPeriod;
-    mixin(serializeSome("dchem.DynPVectorWriter!("~T.stringof~")","writes out (or read) a DynPVector",
+    mixin(serializeSome("dchem.DynPVectorWriter!("~T.stringof~","~ctfe_i2a(group)~")","writes out (or read) a DynPVector",
         "cell|cellX0|cellPeriod|pos|orient|dof"));
     mixin printOut!();
     /// true if this represents a null DynPVector

@@ -281,7 +281,7 @@ class SegArrMemMap(T):PoolI!(SegmentedArray!(T)){
         return (flags&Flags.StandardBlock)!=0;
     }
     // fully disallow serialization, as it is useful mostly for debugging purposes...
-    mixin(serializeSome("dchem.SegArrMemMap",`Describes the memory mapping of a SegmentedArray`,
+    mixin(serializeSome("dchem.SegArrMemMap!("~T.stringof~")",`Describes the memory mapping of a SegmentedArray`,
         `arrayStruct
         kindOffsets
         kindByteIncrements
@@ -365,7 +365,7 @@ final class SegmentedArray(T){
     static size_t defaultOptimalBlockSize=32*1024/T.sizeof;
     PoolI!(SegmentedArray) pool;
     
-    mixin(serializeSome("dchem.sys.SegmentedArray","A segmented array i.e some particle associated property.",
+    mixin(serializeSome("dchem.sys.SegmentedArray!("~T.stringof~")","A segmented array i.e some particle associated property.",
         "kRange|kindOffsets|kindByteIncrements|mKindDims|arrayMap|guard"));
     mixin printOut!();
     
