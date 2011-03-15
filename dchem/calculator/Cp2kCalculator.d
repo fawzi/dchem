@@ -25,6 +25,7 @@ import blip.bindings.blas.Types;
 import blip.container.BulkArray;
 import blip.math.Math;
 import dchem.Common;
+import blip.core.stacktrace.StackTrace; //pippo
 
 version(TrackPNet){
     version=TrackCp2kSock;
@@ -196,7 +197,8 @@ class Cp2kServer:InputElement{
         synchronized(this){
             if (status==Status.Setup){
                 status=Status.Starting;
-                pEnv=pEnv;
+                this.pEnv=pEnv;
+                this.log=log;
                 start=true;
             } else {
                 if (pEnv !is this.pEnv) throw new Exception("different pEnv",__FILE__,__LINE__);
@@ -207,7 +209,7 @@ class Cp2kServer:InputElement{
         if (pEnv.myRank!=0) assert(0,"unimplemented");
         if (start){
             bool isBound=false;
-            this.log=sout.call;
+            if (this.log is null) this.log=sout.call;
             server=new SocketServer(port,&this.handleConnection,log);
             Exception bindE;
             for (int i=0;i<100;++i){
