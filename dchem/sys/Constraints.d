@@ -53,13 +53,13 @@ mixin(genTypeTMixin("Constraint","constraint","ParticleSys!(T) pSys","pSys"));
 
 class MultiConstraintGen: ConstraintGen{
     InputField[] constraints;
-    uint maxShakeIter;
+    uint maxShakeIter=100;
     Real targetPrecision=1.0e-6;
 
     mixin myFieldMixin!();
     mixin(serializeSome("dchem.MultiConstraint",`Constraint that Handles a group of constraints.`,
-    `maxShakeIter: maximum iteration of "shake" (immediate partial inverse) before switching to direct optimization
-    targetPrecision: the target precision that should be reached by the constraint loop
+                        `maxShakeIter: maximum iteration of "shake" (immediate partial inverse) before switching to direct optimization (100)
+                        targetPrecision: the target precision that should be reached by the constraint loop (1.0e-6)
     constraints: the constraints to apply
     `));
     mixin printOut!();
