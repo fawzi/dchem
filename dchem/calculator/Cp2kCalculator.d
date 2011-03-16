@@ -88,11 +88,6 @@ class Cp2kConnection{
         readIn=new BufferIn!(void)(&outStream.desc,&this.rawReadInto);
         localUsers=1;
         log=cp2kServ.log;
-        version(TrackCp2kSock){
-            sinkTogether(log,delegate void(CharSink s){
-                dumper(s)("created new cp2k connection to ")(targetHost)(" on socket ")(this.sock)("\n");
-            });
-        }
         char[128] buf;
         connectionId=recv(buf,false).dup;
         version(TrackCp2kSock){
@@ -457,6 +452,7 @@ externalOrder.nLocalParticles(pSysReal.sysStruct.levels[0])*3+1);
             //toSend.guard.release();
         }
         maxChange=0;
-        changeLevelSet=ChangeLevel.SmoothPosChange;
+        changeLevelSet=ChangeLevel.NoChange;
+        logAfterEval(updateE,updateF);
     }
 }
