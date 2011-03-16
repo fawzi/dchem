@@ -111,8 +111,8 @@ class TemplateExecuter: Method {
                 res=false;
             }
         }
-        if (constraints!is null && (cast(ConstraintGen)constraints.contentObj) is null){
-            s("constraints must be a ConstraintGen and not ")(constraints.classinfo.name)(" in field ")(myFieldName)("\n");
+        if (constraints!is null && (cast(MultiConstraintGen)constraints.contentObj) is null){
+            s("constraints must be a dchem.MultiConstraint and not ")(constraints.classinfo.name)(" in field ")(myFieldName)("\n");
             res=false;
         }
         return res;

@@ -19,7 +19,11 @@ body{
     scope c=dot(v1,v2);
     alias typeof(c) S;
     scope v1m=dot(v1,m);
-    scope v2Ortho=v2.dup;
+    static if (is(typeof(v2.dup))){
+        scope v2Ortho=v2.dup;
+    } else {
+        auto v2Ortho=v2;
+    }
     v2Ortho-=c*v1;
     scope v2OrthoM=dot(v2Ortho,m);
     m=outer(v2-v1,v1m,m,cast(S)1,cast(S)1);
@@ -44,10 +48,14 @@ body{
     scope c=v2[i];
     alias typeof(c) S;
     scope v1m=m[i];
-    static if(is(typeof(v1m.dup()))){
-      v1m=v1m.dup();
+    static if(is(typeof(v1m.dup))){
+        v1m=v1m.dup;
     }
-    scope v2Ortho=v2.dup;
+    static if (is(typeof(v2.dup))){
+        scope v2Ortho=v2.dup;
+    } else {
+        v2Ortho=v2;
+    }
     auto v2Val=v2Ortho[i];
     v2Ortho[i]=cast(S)0;
     scope v2OrthoM=dot(v2Ortho,m);
@@ -84,14 +92,19 @@ body{
     alias typeof(c) S;
     
     scope v1m=m[i];
-    static if(is(typeof(v1m.dup()))){
-      v1m=v1m.dup();
+    static if(is(typeof(v1m.dup))){
+      v1m=v1m.dup;
     }
-    scope v2Ortho=v2.dup;
+    static if(is(typeof(v2.dup))){
+        scope v2Ortho=v2.dup;
+    } else {
+        auto v2Ortho=v2;
+    }
     auto v2Val=v2[i];
     v2Ortho[i]=v2Ortho[i]-cast(S)1;
     scope v2M=dot(v2Ortho,m);
-    static if(is(typeof(m[i]+=v2M))){
+    static if(is(typeof(v1m.dup)) && is(typeof(m[i]+=v2M))){
+        // is kind of reference type (has dup), so += should really change m[i]...
         m[i]+=v2M;
     } else {
         m[i]=m[i]+v2M;

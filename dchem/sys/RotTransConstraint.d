@@ -83,6 +83,10 @@ struct RotTTransf(T){
         }
         return err;
     }
+    mixin(serializeSome("dchem.RotTTransf!("~T.stringof~")",
+                        "Rotation and translation, and possibly scaling (an affine transform)",
+                        "rot|transl"));
+    mixin printOut!();
 }
 
 class RotTransConstraintGen:ConstraintGen {
@@ -136,9 +140,7 @@ class RotTransConstraint(T): ConstraintI!(T){
         auto pos=pSys.dynVars.x.pos;
         bool stop=false;
         foreach (pks;_constraintGen.particles.contentT!(ParticleRange)().loopOn(pSys.sysStruct)){
-            if (stop) break;
             foreach(p;pks){
-                if (stop) break;
                 switch(i){
                 case 0:
                     res.transl= -pos[p,0];
@@ -149,7 +151,7 @@ class RotTransConstraint(T): ConstraintI!(T){
                     res.rot=rotateVEi(n,0,res.rot);
                     break;
                 default:
-                    auto nv=res.rot*pos[p,0];
+                    auto nv=res.rot*(pos[p,0]+res.transl);
                     nv.x=0;
                     if (nv.norm22>0){
                         nv.normalize();
@@ -159,7 +161,9 @@ class RotTransConstraint(T): ConstraintI!(T){
                     break;
                 }
                 ++i;
+                if (stop) break;
             }
+            if (stop) break;
         }
         if (stop) return res;
         if (pos[pSys.sysStruct.levels[0]].length>3){
