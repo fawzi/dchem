@@ -1161,6 +1161,8 @@ class MainPoint(T):MainPointI!(T){
             mixin(withPSys(`
             pSys.checkX();
             pSys.dynVars.x[]=pos.dynVars.x;
+	    pSys.dynVars.potentialEnergy=pos.dynVars.potentialEnergy;
+	    pSys.dynVars.potentialEnergyError=pos.dynVars.potentialEnergyError;
             `,"c."));
             c.changedDynVars(ChangeLevel.SmallPosChange,0);
             char[64] buf;
