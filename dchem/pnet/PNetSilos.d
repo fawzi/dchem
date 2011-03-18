@@ -769,6 +769,7 @@ final class PNetSilos(T): LocalSilosI!(T){
                 _constraints=constraintT!(T)(cGen,_refPos);
             }
         }
+        _constraints.applyR(_refPos);
         if (cInstance!is null){
             cInstance.giveBack();
         }
