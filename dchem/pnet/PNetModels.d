@@ -64,6 +64,9 @@ struct Point{
     }
     mixin(serializeSome("Point","identifies an exploration point","data"));
     mixin printOut!();
+    /+equals_t opEquals(Point p2){
+        return p2.data==data;
+    }+/
     hash_t toHash(){
         static if(hash_t.sizeof==4){
             return cast(hash_t)(0xFFFF_FFFF&(data^(data>>32)));
@@ -816,6 +819,11 @@ interface PNetSilosI(T):ExplorationObserverI!(T){
     /// activates the given explorer
     void activateExplorer(SKey key,char[] name);
     
+    /// returns the number of dimensions
+    uint ndim();
+    /// returns the number of directions (counting also 0, the core dir)
+    uint ndirs();
+    
     /// dictionary with the values of the various properties
     Real[char[]] propertiesDict(SKey s);
     // expose creation & bcast of points and update from dried points? merging should be done carefully to avoid problems... so for now you should do them via executeLocal...
@@ -825,7 +833,8 @@ const char[] silosMethodsStr=`increaseRunLevel|addEnergyEvalLocal|addGradEvalLoc
     `finishedExploringPoint|didLocalPublish|publishCollision|updateEvalStatus|prepareNextOp:oneway|getNextOp|`~
     `evaluationFailed|load|energyForPointsLocal|energyForPoints|mainPoint|mainPointLocal|`~
     `pointOwner|nextFreeSilos|addPointToLocalNeighs|addNeighDirsToLocalPoint|executeLocally|propertiesDict|`~
-    `name|addEvalOp|activateExplorer|publishedLocalPoint|shouldFilterLocalPoint|speculativeGradientLocal`;
+    `name|addEvalOp|activateExplorer|publishedLocalPoint|shouldFilterLocalPoint|speculativeGradientLocal|`~
+    `ndim|ndirs`;
 
 /// how eagerly the gradient is calculated
 enum GradEagerness:uint{

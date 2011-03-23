@@ -11,3 +11,5 @@ public import dchem.pnet.AddRefPos;
 public import dchem.pnet.PosELogger;
 public import dchem.pnet.TrackSpecialPoints;
 public import dchem.pnet.PrintAttractors;
+
+public import dchem.pnet.TopologyInfo;

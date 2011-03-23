@@ -143,6 +143,23 @@ class PNetSilosClient(T): LocalSilosI!(T){
     }
     // ExplorationObserverI
     
+    uint _ndim=uint.max;
+    uint _ndirs=uint.max;
+    /// returns the number of dimensions
+    uint ndim(){
+        if (_ndim<0){
+            _ndim=connection.ndim();
+        }
+        return _ndim;
+    }
+    /// returns the number of directions (counting also 0, the core dir)
+    uint ndirs(){
+        if (_ndirs<0){
+            _ndirs=connection.ndirs();
+        }
+        return _ndirs;
+    }
+    
     string name(){
         return "PNetSilosClient_"~input.myFieldName;
     }

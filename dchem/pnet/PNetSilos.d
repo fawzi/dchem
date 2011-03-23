@@ -673,6 +673,16 @@ final class PNetSilos(T): LocalSilosI!(T){
         }
     }
     
+    /// returns the number of dimensions
+    uint ndim(){
+        auto g=refPos.dynVars.dVarStruct.dualDxGroup;
+        return 3*g.posStruct.length+4*g.orientStruct.length+g.dofStruct.length;
+    }
+    /// returns the number of directions (counting also 0, the core dir)
+    uint ndirs(){
+        return 2*ndim+1;
+    }
+
     mixin(realFromInput(propertiesList));
     
     Real[char[]] propertiesDict(SKey s){
