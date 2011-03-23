@@ -61,7 +61,7 @@ static this(){
 struct KindRange{
     KindIdx kStart; // start of the range (inclusive)
     KindIdx kEnd; // end of the range (exclusive)
-    mixin(serializeSome("dchem.sys.KindRange","A range of kinds (types of particles).","kStart|kEnd"));
+    mixin(serializeSome("KindRange","A range of kinds (types of particles).","kStart|kEnd"));
     
     static KindRange opCall(KindIdx kStart, KindIdx kEnd){
         KindRange res;

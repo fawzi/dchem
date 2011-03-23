@@ -216,7 +216,7 @@ class FlagsArray{
     size_t length(){
         return nFlags;
     }
-    mixin(serializeSome("dchem.FlagsArray","array of 2 bits","nFlags|data"));
+    mixin(serializeSome("FlagsArray","array of 2 bits","nFlags|data"));
     void desc(CharSink sink){
         auto s=dumper(sink);
         s("{class:\"dchem.FlagsArray\",length:")(nFlags)(",data:");

@@ -173,7 +173,7 @@ class SilosGen:Sampler {
     Real inDirCartesianScale2=0.5;
     
     mixin myFieldMixin!();
-    mixin(serializeSome("dchem.Silos",`A silos, the place where all points are stored and observers and explorers live.`,
+    mixin(serializeSome("PNetSilos",`A silos, the place where all points are stored and observers and explorers live.`,
         `noTaskWaitTime: the number of seconds to wait when no task is available (10)
         evaluator: the method to perform energy evaluations
         evaluatorTask: the task to execute (normally to start clients that will perform evaluations, if a SilosConnectorI then it is passed silos and accuracy before starting)

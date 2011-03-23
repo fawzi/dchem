@@ -158,7 +158,7 @@ class Cp2kServer:InputElement{
     double maxLife=525600.0;
     bool strict=false;
     
-    mixin(serializeSome("dchem.Cp2kServer",`server to which cp2k binary shell can connect`,`
+    mixin(serializeSome("Cp2kServer",`server to which cp2k binary shell can connect`,`
     portMin: the minimum port number to use as fallback (49152)
     portMax: the maximum port number to use as fallback (65535)
     port: the port/protocol that should be used if possible (51000)
@@ -307,7 +307,7 @@ class Cp2kMethod:TemplateExecuter{
     char[] initialFileToLoad;
     InputField cp2kServer;
     
-    mixin(serializeSome("dchem.Cp2kMethod",`method that calculates energies and forces using cp2k connected through a socket`,`
+    mixin(serializeSome("Cp2kMethod",`method that calculates energies and forces using cp2k connected through a socket`,`
     initialFileToLoad: the file to load when the setup is complete
     cp2kServer: the cp2k server to use to get connections to cp2k instances`));
     

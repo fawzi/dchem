@@ -365,7 +365,7 @@ final class SegmentedArray(T){
     static size_t defaultOptimalBlockSize=32*1024/T.sizeof;
     PoolI!(SegmentedArray) pool;
     
-    mixin(serializeSome("dchem.sys.SegmentedArray!("~T.stringof~")","A segmented array i.e some particle associated property.",
+    mixin(serializeSome("SegmentedArray!("~T.stringof~")","A segmented array i.e some particle associated property.",
         "kRange|kindOffsets|kindByteIncrements|mKindDims|arrayMap|guard"));
     mixin printOut!();
     

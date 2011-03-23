@@ -1,6 +1,6 @@
 {
 startConfig:{
-    class:"dchem.FileConfig",
+    class:FileConfig,
     fileName:"test.xyz",
     format:"xyz",
     cell:[[8.45,0,0],
@@ -9,7 +9,7 @@ startConfig:{
 }
 
 poorM:{
-    class:"dchem.PoorManExecuter",
+    class:PoorManExecuter,
     templateDir:"templates/cp2k1",
     subs:{
         cutoff:"800",
@@ -22,24 +22,24 @@ poorM:{
 }
 
 mullerB:{
-    class:"dchem.MullerBrownPot"
+    class:MullerBrownPot
     startX:0.45
     startY:0.1
 }
 
 cLimiter:{
-    class:"dchem.ContextLimiter",
+    class:ContextLimiter
     maxContexts:1
 }
 
 limitedMB:{
-    class:"dchem.ContextLimiterClient",
+    class:ContextLimiterClient,
     contextLimiter:{ class:Ref, name:cLimiter}
     method:{ class:Ref, name:mullerB}
 }
 
 workAsker:{
-    class:dchem.WorkAsker,
+    class:WorkAsker,
     connectionUrl:"stcp://icaro-2.local:50000/obj/silos"
     evaluator:{ class:Ref, name:limitedMB}
 }

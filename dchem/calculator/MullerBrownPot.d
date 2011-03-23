@@ -71,7 +71,7 @@ class MullerBrownPot: Method {
     /// clears all history
     void clearHistory() { }
     // serialization stuff
-    mixin(serializeSome("dchem.MullerBrownPot",`evaluator that calculates the muller brown potential`,
+    mixin(serializeSome("MullerBrownPot",`evaluator that calculates the muller brown potential`,
     `a|b|c|x0|y0|preFactor|startX|startY
     sleepSome: artificially slows down the evaluation by sleeping the given amount of seconds`));
     mixin printOut!();

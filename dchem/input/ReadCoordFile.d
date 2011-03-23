@@ -118,7 +118,7 @@ class FileConfig:Config{
         }
         return res;
     }
-    mixin(serializeSome("dchem.FileConfig",`a configuration that is read from a file`,
+    mixin(serializeSome("FileConfig",`a configuration that is read from a file`,
     `fileName: the filename where to reat the configuration
     format: the format of the file(xyz,car,pdb)
     frame: if a frame different from the first one should be read (-1 means the last one)

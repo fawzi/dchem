@@ -32,7 +32,7 @@ class PNetJournalGen:ExplorationObserverGen{
     ExplorationObserverI!(LowP) observerLowP(LocalSilosI!(LowP) silos){
         return new PNetJournal!(LowP)(this,silos);
     }
-    mixin(serializeSome("dchem.PNetJournal",`object that keeps a journal of the important changes (migth be used to restart an exploration)`,
+    mixin(serializeSome("PNetJournal",`object that keeps a journal of the important changes (migth be used to restart an exploration)`,
     `fileBasePath: start of the journal filename (defaults to journal)
     journalFormat: to format of the journal: 'sbin' or 'json'
     logOtherEnergies: if the energies of non local points should be logged
@@ -318,7 +318,7 @@ class PNetJournalLoaderGen:SilosWorkerGen{
     SilosWorkerI!(LowP) silosWorkerLowP(){
         return new PNetJournalLoader!(LowP)(this);
     }
-    mixin(serializeSome("dchem.PNetJournalLoader",`Loads one or more journals`,
+    mixin(serializeSome("PNetJournalLoader",`Loads one or more journals`,
     `filePaths: files to load
     journalFormat: to format of the journal: 'sbin' or 'json'
     journalAccuracy: Real or LowP, by default the current accuracy of the silos

@@ -252,7 +252,7 @@ struct DynPVectorWriter(T,int group){
     SegArrWriter!(T) orient;
     SegArrWriter!(T) dof;
     int cellPeriod;
-    mixin(serializeSome("dchem.DynPVectorWriter!("~T.stringof~","~ctfe_i2a(group)~")","writes out (or read) a DynPVector",
+    mixin(serializeSome("DynPVectorWriter!("~T.stringof~","~ctfe_i2a(group)~")","writes out (or read) a DynPVector",
         "cell|cellX0|cellPeriod|pos|orient|dof"));
     mixin printOut!();
     /// true if this represents a null DynPVector
@@ -329,7 +329,7 @@ struct PSysWriter(T){
     Real potentialEnergyError;
     Real mddxError;
     HiddenVars hVars;
-    mixin(serializeSome("dchem.PSysWriter!("~T.stringof~")","Writes out (or read) a particle sys",
+    mixin(serializeSome("PSysWriter!("~T.stringof~")","Writes out (or read) a particle sys",
         "potentialEnergy|potentialEnergyError|mddxError|x|dx|mddx|hVars"));
     mixin printOut!();
     /// creates a writer for the given ParticleSys

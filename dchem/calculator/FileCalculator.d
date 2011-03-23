@@ -167,7 +167,7 @@ class TemplateExecuter: Method {
         }
     }
     // serialization stuff
-    mixin(serializeSome("dchem.TemplateExecuter",`Executes an external program using a template directory to generate the directory where to run. The user can define extra substitutions.`,
+    mixin(serializeSome("TemplateExecuter",`Executes an external program using a template directory to generate the directory where to run. The user can define extra substitutions.`,
     `superTemplate: a template where to take default values
     startConfig: the initial configuration
     templateDir: where to find the definition of the template (tipically a directory)
@@ -230,7 +230,7 @@ class CmdTemplateExecuter:TemplateExecuter {
         }
     }
     // serialization stuff
-    mixin(serializeSome("dchem.CmdTemplateExecuter",`a template executer (like dchem.TemplateExecuter) that uses a command also to calculate energy and forces, not only to set up things`,`
+    mixin(serializeSome("CmdTemplateExecuter",`a template executer (like dchem.TemplateExecuter) that uses a command also to calculate energy and forces, not only to set up things`,`
     executeE: command executed to calculate the energy alone (optional)
     executeEF: command executed to calculate the energy and forces (this is required)
     executeF0: command executed do calculate the forces immediately after the energy (optional)`));

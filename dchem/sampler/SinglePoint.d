@@ -19,7 +19,7 @@ class SinglePoint:Sampler{
     InputField method;
     mixin myFieldMixin!();
 
-    mixin(serializeSome("dchem.SinglePoint",`Sampler that performs a single point evaluation.`,
+    mixin(serializeSome("SinglePoint",`Sampler that performs a single point evaluation.`,
     `calcE: the energy should be calculated
     calcF: the forces should be calculated
     method: the method to use`));

@@ -39,7 +39,7 @@ struct CachedPoint(T){
 class PNetSilosClientGen:InputElement {
     char[] connectionUrl;
     long ownerCacheSize=10;
-    mixin(serializeSome("dchem.PNetSilosClient",`a silos that connets to another main silos for all important operations`,
+    mixin(serializeSome("PNetSilosClient",`a silos that connets to another main silos for all important operations`,
     `connectionUrl: the url to use to get the connection to the silos
     ownerCacheSize: amount of points whose owner is cached (10)`));
     mixin printOut!();

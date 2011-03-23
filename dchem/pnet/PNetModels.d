@@ -62,7 +62,7 @@ struct Point{
     bool isValid(){
         return (data&0x0000_0FFF_FFFF_F000UL)!=0;
     }
-    mixin(serializeSome("dchem.Point","identifies an exploration point","data"));
+    mixin(serializeSome("Point","identifies an exploration point","data"));
     mixin printOut!();
     hash_t toHash(){
         static if(hash_t.sizeof==4){

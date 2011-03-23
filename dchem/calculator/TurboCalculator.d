@@ -287,7 +287,7 @@ class TurboExecuter:CmdTemplateExecuter{
         }));
         return ctx;
     }
-    mixin(serializeSome("dchem.TurboExecuter",`performs a calculation with TurboMole`,
+    mixin(serializeSome("TurboExecuter",`performs a calculation with TurboMole`,
         `enerFile: file where the energy is stored (energy)
         eErrorFile: file where to read the convergence error (ridft.out)
         gradFile: file where to read the gradient(gradient)

@@ -30,7 +30,7 @@ class DetectFlyAwayGen:ExplorationObserverGen{
     this(){
     }
     mixin myFieldMixin!();
-    mixin(serializeSome("dchem.DetectFlyAway",`observer that detects when a system breaks apart and stop its exploration`,
+    mixin(serializeSome("DetectFlyAway",`observer that detects when a system breaks apart and stop its exploration`,
     `earlyDetect: if the configurations detected should be removed early (before trying to calculate them) (false)
     logBaseName: if given logs the points that have "flown away" to a file that starts with logBaseName
     flushEachPoint: if each point should be immediately flushed (true)

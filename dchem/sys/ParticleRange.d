@@ -31,7 +31,7 @@ class ParticleRange:InputElement{
     long refKind=-1;
     char[] refKindName;
     
-    mixin(serializeSome("dchem.PRange",`Structure that represent some particles (subsets,...)`,
+    mixin(serializeSome("ParticleRange",`Structure that represent some particles (subsets,...)`,
     `particles: list of particles in internal notation (kind,idx)
     particleStart: first particle of a range that continues until particleEnd
     particleEnd: last particle of a range that starts at particleStart

@@ -1,6 +1,6 @@
 {
 startConfig:{
-    class:"dchem.FileConfig",
+    class:FileConfig,
     fileName:"1Cu2Co.xyz",
     format:"xyz",
     cell:[[8.45,0,0],
@@ -9,20 +9,19 @@ startConfig:{
 }
 
 singleP:{
-    class:dchem.SinglePoint,
+    class:SinglePoint,
     calcE:1,
     calcF:1,
     method:{ class:Ref, name:turboM}
 }
 
 turboM:{
-    class:"dchem.TurboExecuter",
+    class:TurboExecuter,
     templateDir:"templates/turbo",
     subs:{
         cutoff:"800",
         projName:"test1",
     },
-    maxContexts:1,
     executeE:"cp ../turboCalc/ridft.out ../turboCalc/energy .",
     executeEF:"sh calc.sh"
     executeF0:"cp ../turboCalc/gradient .",

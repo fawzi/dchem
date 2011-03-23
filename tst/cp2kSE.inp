@@ -1,7 +1,7 @@
 {
 
 startConfig:{
-    class:"dchem.FileConfig",
+    class:FileConfig,
     fileName:"H2O.xyz",
     format:"xyz",
     cell:[[8.45,0,0],
@@ -9,10 +9,10 @@ startConfig:{
         [0,0,8.45]]
 }
 
-cp2kServer:{ class:dchem.Cp2kServer }
+cp2kServer:{ class:Cp2kServer }
 
 cp2kCalculator:{
-	class:dchem.Cp2kMethod
+	class:Cp2kMethod
 	setupCtxCmd:"sh startCp2k.sh"
 	ignoreSetupCtxExitStatus:true
 	templateDir:"templates/cp2kSE"
@@ -22,7 +22,7 @@ cp2kCalculator:{
 }
 
 singleP:{
-    class:dchem.SinglePoint,
+    class:SinglePoint,
     calcE:1,
     calcF:1,
     method:{ class:Ref, name:cp2kCalculator}

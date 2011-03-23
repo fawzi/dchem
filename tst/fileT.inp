@@ -1,6 +1,6 @@
 {
 startConfig:{
-    class:"dchem.FileConfig",
+    class:FileConfig,
     fileName:"test.xyz",
     format:"xyz",
     cell:[[8.45,0,0],
@@ -9,14 +9,14 @@ startConfig:{
 }
 
 singleP:{
-    class:dchem.SinglePoint,
+    class:SinglePoint,
     calcE:1,
     calcF:1,
     method:{ class:Ref, name:poorM}
 }
 
 poorM:{
-    class:"dchem.PoorManExecuter",
+    class:PoorManExecuter,
     templateDir:"templates/cp2k1",
     subs:{
         cutoff:"800",

@@ -32,7 +32,7 @@ class WorkAskerGen:RemoteCCTask,Sampler,SilosConnectorI {
     InputField evaluator;
     bool _noWorkLeft=false;
     
-    mixin(serializeSome("dchem.WorkAsker",`A client that asks work to a silos and perform the operations it receives`,
+    mixin(serializeSome("WorkAsker",`A client that asks work to a silos and perform the operations it receives`,
     `connectionUrl: the url to use to get the connection to the silos
     maxDuration: maximum duration in minutes for each context (one year: 525600)
     maxDurationTot: maximum duration in minutes for the workAsker (one year: 525600)

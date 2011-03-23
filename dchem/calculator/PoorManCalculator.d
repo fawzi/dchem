@@ -34,7 +34,7 @@ class PoorManExecuter:CmdTemplateExecuter{
         }));
         return ctx;
     }
-    mixin(serializeSome("dchem.PoorManExecuter","executer that can be used to connect any prgram that writes its output in the correct format",`
+    mixin(serializeSome("PoorManExecuter","executer that can be used to connect any prgram that writes its output in the correct format",`
     energyFile: file where to read energy and energy error (just those numbers in Hartrees, separated by spaces)
     forceFile: file where to read the error on the forces and then the forces in the input order (just numbers in atomic units separated by whitespace)`));
 }

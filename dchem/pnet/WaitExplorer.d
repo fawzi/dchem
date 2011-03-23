@@ -16,7 +16,7 @@ class WaitExplorerDef:SilosWorkerGen{
     this(){
     }
     mixin myFieldMixin!();
-    mixin(serializeSome("dchem.WaitExplorer",`An explorer that just waits.`,
+    mixin(serializeSome("WaitExplorer",`An explorer that just waits.`,
     `time : minutes to wait (10)`));
     mixin printOut!();
     bool verify(CharSink s){

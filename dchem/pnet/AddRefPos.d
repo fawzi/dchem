@@ -18,7 +18,7 @@ class AddRefPosGen:SilosWorkerGen {
     SilosWorkerI!(LowP) silosWorkerLowP(){
         return new AddRefPos!(LowP)(this);
     }
-    mixin(serializeSome("dchem.AddRefPos","worker that adds the initial structure as point to explore",""));
+    mixin(serializeSome("AddRefPos","worker that adds the initial structure as point to explore",""));
     mixin printOut!();
     mixin myFieldMixin!();
     bool verify(CharSink s){
