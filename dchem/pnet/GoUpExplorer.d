@@ -66,6 +66,8 @@ class GoUpExplorer(T):EmptyExplorer!(T){
     /// points to explore more ordered by energy (at the moment this is replicated)
     /// this could be either distribued, or limited to a given max size + refill upon request
     MinHeapSync!(PointAndEnergy) toExploreMore;
+    Point attractorOfPoint;
+    Point minAtt;
     HashSet!(Point) removedPoints;
     void delegate(ExplorerI!(T)) available;
     LocalSilosI!(T) silos;

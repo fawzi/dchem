@@ -836,6 +836,7 @@ struct DynPVector(T,int group){
     mixin printOut!();
 }
 
+
 /// matrix going from vectors in g1 to vectors in g2
 class DynPMatrix(T,int g1,int g2){
     alias T dtype;

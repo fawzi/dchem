@@ -750,6 +750,7 @@ class ParticleSys(T): CopiableObjectI,Serializable
     ulong iteration;
     NotificationCenter nCenter;
     SysStruct sysStruct;
+    SegmentedArray!(T) mass;
     
     CommonParticleProperties particlePropertiesPools; /// pool for simple scalar properties
     DynamicsVars!(T) dynVars; /// dynamics variables

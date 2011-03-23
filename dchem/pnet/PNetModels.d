@@ -26,6 +26,9 @@ import blip.io.EventWatcher: ev_tstamp,ev_time;
 import blip.parallel.mpi.MpiModels;
 import blip.io.EventWatcher;
 import blip.container.HashMap;
+import blip.container.BatchedGrowableArray;
+
+enum { batchSize=512 }
 
 /// unique key for a point, dimensions might change
 /// key might have some special values,
@@ -861,6 +864,8 @@ interface LocalSilosI(T): PNetSilosI!(T) {
     bool rmComponentNamed(string name);
     /// returns the actual components
     HashMap!(string,SilosComponentI!(T)) components();
+    /// local keys
+    BatchedGrowableArray!(Point,batchSize) localPointsKeys();
     
     /// linear communicator (valid only inside the core silos, not in the clients)
     LinearComm paraEnv();

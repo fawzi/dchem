@@ -600,6 +600,26 @@ class MainPoint(T):MainPointI!(T){
         }
         return res;
     }
+    /// projects into the correct movement space (back & forth from the direct space).
+    /// and gets rid also of the elements in the constraint space
+    /// useful to get rid of the components in the null and constraint space
+    T projectInDualTSpace(ParticleSys!(T) pSys,DynPVector!(T,DualDxType)dualDeriv){
+        T res;
+        auto overlap=pSys.maybeDerivOverlap();
+        if (overlap!is null){
+            scope newDirDirect=pSys.dynVars.dVarStruct.emptyDx();
+            pSys.fromDualTSpace(dualDeriv,newDirDirect);
+            localContext.constraints().applyDR(pSys,newDirDirect);
+            pSys.toDualTSpace(newDirDirect,dualDeriv);
+            res=pSys.dotInTSpace(newDirDirect,dualDeriv);
+            newDirDirect.giveBack();
+        } else {
+            localContext.constraints().applyDR(pSys,dualDeriv.toGroup!(DxType)());
+            res=dualDeriv.norm2();
+        }
+        return res;
+    }
+    
     /// calculates the position exploring from here in the given direction
     /// returns null if the position is *really* too close
     ParticleSys!(T) createPosInDir(uint dir){
@@ -611,7 +631,7 @@ class MainPoint(T):MainPointI!(T){
         version (TrackPNet) logMsg(delegate(CharSink s){
             dumper(s)("pippo newDir:")(dynPVectorWriter(newDir));
         });
-        auto cartesianNorm=pos.projectInDualTSpace(newDir);
+        auto cartesianNorm=projectInDualTSpace(pos,newDir);
         version (TrackPNet) logMsg(delegate(CharSink s){
             dumper(s)("pippo proj newDir:")(dynPVectorWriter(newDir))(" cartesianNorm:")(cartesianNorm);
         });
@@ -978,9 +998,9 @@ class MainPoint(T):MainPointI!(T){
         synchronized(this) {
             fRef=hasFrameOfRef;
         }
+        uint dirMax=invalidDir;
         if (fRef){
             log((CharSink s){ dumper(s)("checking frameOfRef")(" origNorm:")(origNorm)(" localContext.minNormDual")(localContext.minNormDual)(" explorationSize")(explorationSize)(" localContext.maxNormDual")(localContext.maxNormDual); });
-            uint dirMax=invalidDir;
             size_t iMax;
             bool didCalcDualDir=false;
             
@@ -1089,9 +1109,13 @@ class MainPoint(T):MainPointI!(T){
             }
         }
         if (veryClose || origNorm<=localContext.minNormDual*explorationSize){
-            added=true;
             neighAtt(PointAndDir(newPoint,0));
             dirDist(dDist);
+            if ((!added) && dirMax!=invalidDir) {
+                neighAtt(PointAndDir(newPoint,dirMax));
+                dirDist(dDist);
+            }
+            added=true;
             log((CharSink s){ dumper(s)("adding very close direction"); });
         }
         if ((!added)){
@@ -1099,11 +1123,19 @@ class MainPoint(T):MainPointI!(T){
                 added=true;
                 neighAtt(PointAndDir(newPoint,ndirs)); // not in a specific direction
                 dirDist(dDist);
+                if (dirMax!=invalidDir) {
+                    neighAtt(PointAndDir(newPoint,dirMax));
+                    dirDist(dDist);
+                }
                 log((CharSink s){ dumper(s)("storing unspecific direction"); });
             } else if (origNorm<=localContext.maxNormDual*pSize+localContext.zeroLen()) {
                 added=true;
                 neighAtt(PointAndDir(newPoint,invalidDir)); // a neighbor of the other point
                 dirDist(dDist);
+                if (dirMax!=invalidDir) {
+                    neighAtt(PointAndDir(newPoint,dirMax));
+                    dirDist(dDist);
+                }
                 log((CharSink s){ dumper(s)("storing as neighbor of the other point only"); });
             } else {
                 log((CharSink s){ dumper(s)("not a neighbor"); });
@@ -1324,7 +1356,7 @@ class MainPoint(T):MainPointI!(T){
         }
         if (specialDir==-1&&dirDist.length>0 && (!isNaN(dirDist[0].minDirProj))){
             auto eCorr=e;
-            eCorr-=dirDist[0].minDirProj*minDirScale();
+            eCorr+=dirDist[0].minDirProj*minDirScale();
             if (eCorr<energy && (gFlags&GFlags.CorrNeighValsDecrease)==0){
                 newFlags|=GFlags.CorrNeighValsDecrease;
             }else if (eCorr>energy){
@@ -1567,7 +1599,7 @@ class MainPoint(T):MainPointI!(T){
         }
         if (specialDir==-1&&dirDist.length>0 && (!isNaN(dirDist[0].minDirProj))){
             auto eCorr=e;
-            eCorr-=dirDist[0].minDirProj*minDirScale();
+            eCorr+=dirDist[0].minDirProj*minDirScale();
             if (eCorr<energy && (gFlags&GFlags.CorrNeighValsDecrease)==0){
                 newFlags|=GFlags.CorrNeighValsDecrease;
             }else if (eCorr>energy){
@@ -1785,7 +1817,10 @@ class MainPoint(T):MainPointI!(T){
     void buildMinDir(){
         assert(!isNullT(pos.dynVars.mddx),"needs gradient");
         auto newMinDir=pos.dynVars.dVarStruct.emptyDualDx();
-        pos.toDualTSpace(pos.dynVars.mddx,newMinDir);
+        auto mddxConstr=pos.dynVars.mddx.dup();
+        localContext.constraints().applyDR(pos,mddxConstr);
+        pos.toDualTSpace(mddxConstr,newMinDir);
+        mddxConstr.giveBack();
         auto n2=newMinDir.norm22();
         if (n2==0){
             newMinDir[0]=1;

@@ -138,7 +138,7 @@ class SilosGen:Sampler {
     // implicit topology parameters
     /// minimum norm in the real (cartesian) space for a self generated direction to be accepted before moving
     Real minRealNormSelf0(){
-        return cartesianDiffMin/4;
+        return cartesianDiffMin/2;
     }
     /// minimum norm in the real (cartesian) space to which a self generated direction should be rescaled
     Real minRealNormSelf1(){

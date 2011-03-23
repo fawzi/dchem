@@ -30,17 +30,17 @@ interface ConstraintI(T){
     /// (useful when called by a llop that tries to fulfull various constraints at once)
     Real applyR(ParticleSys!(T) state,bool partial=false);
     /// removes the component of dr in state that is along a constraint, puts what is
-    /// removed in diff if given. (projection state=(1-pi)state , diff=pi state, where pi
+    /// removed in diff if given. (projection state=(1-pi)state, where pi
     /// is the projection in the space spanned by the gradient of the constraints).
     /// if you have non olonomic constraints or constraints on the velocities the update
     /// is not restricted to the dr (first derivatives) components
-    void applyDR(ParticleSys!(T) state,ParticleSys!(T) diff=null);
+    void applyDR(ParticleSys!(T) pos,DynPVector!(T,DxType) dx);
     /// value of a global constraint value of this form: sum((f_i(x)-f0_i)**2), where
     /// f_i are the various constraints, and f0_i the values they should be constrained to.
     /// will add the derivative of the constraint with respect to x to deriv.
     /// can be used to minimize the constraint error if iterating applyR (a la shake) has problems converging
     /// the value has to be positive, with 0 being the target
-    Real derivVal(ParticleSys!(T) state,ParticleSys!(T) deriv=null);
+    Real derivVal(ParticleSys!(T) state,ParticleSys!(T) deriv);
 /+    /// iterates on the involvedparticles, there might be double counting, or extra particles
     /// on which the constraint is not really dependent
     FIteratorI!(PIndex)particlesInvolved();
@@ -150,9 +150,9 @@ class MultiConstraint(T): ConstraintI!(T){
         return maxErr;
     }
     
-    void applyDR(ParticleSys!(T) state,ParticleSys!(T) diff=null){
+    void applyDR(ParticleSys!(T) state,DynPVector!(T,DxType) dx){
         foreach(subC;subConstraints){
-            subC.applyDR(state,diff);
+            subC.applyDR(state,dx);
         }
     }
     
@@ -234,7 +234,7 @@ class NoConstraint(T):ConstraintI!(T){
     Real applyR(ParticleSys!(T) state,bool partial=false){
         return 0;
     }
-    void applyDR(ParticleSys!(T) state,ParticleSys!(T) diff=null){ }
+    void applyDR(ParticleSys!(T) state,DynPVector!(T,DxType)dx){ }
     Real derivVal(ParticleSys!(T) state,ParticleSys!(T) deriv=null){ return 0; }
 /+    FIteratorI!(PIndex)particlesInvolved(){ return EmptyFIterator!(PIndex).instance; }
     bool strict(){ return true; }+/

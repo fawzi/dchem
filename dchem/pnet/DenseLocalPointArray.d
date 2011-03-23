@@ -7,8 +7,6 @@ import dchem.pnet.PNetModels;
 import blip.util.BinSearch;
 import blip.sync.Atomic;
 
-enum { batchSize=512 }
-
 /// dense array of elements indexed by local point keys
 class DenseLocalPointArray(T){
     BatchedGrowableArray!(Point,batchSize) keys;

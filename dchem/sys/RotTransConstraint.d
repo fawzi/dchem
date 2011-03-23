@@ -197,31 +197,28 @@ class RotTransConstraint(T): ConstraintI!(T){
         return op.apply(state.dynVars.x.pos);
     }
     
-    void applyDR(ParticleSys!(T) state,ParticleSys!(T) diff=null){
+    void applyDR(ParticleSys!(T) state,DynPVector!(T,DxType)dx){
         Real a=0,b=0,c=0,d=0;
         long n=0;
-        foreach(i,pk,lk,v;state.dynVars.dx.pos.sLoop()){
-            a+=v.x-v.y;
-            b+=v.x-v.z;
-            c+=v.y-v.z;
-            d+=v.x+v.y+v.z;
+        auto pos=state.dynVars.x.pos;
+        auto m=state.mass;
+        foreach(i,pk,lk,v;dx.pos.sLoop()){
+            auto pAtt=pos[pk,i]; // use correct center???
+            a+=(v.x*pAtt.y-v.y*pAtt.x);
+            b+=(-v.x*pAtt.z+v.z*pAtt.x);
+            c+=(v.y*pAtt.z-v.z*pAtt.y);
+            d+=(v.x+v.y+v.z);
             ++n;
         }
         a/=2*n;
         b/=2*n;
         c/=2*n;
         d/=3*n;
-        foreach(i,pk,lk,ref v;state.dynVars.dx.pos.sLoop()){
-            v.x+=-a-b-d;
-            v.y+=a-c-d;
-            v.z+=b+c-d;
-        }
-        if (diff!is null){
-            foreach(i,pk,lk,ref v;diff.dynVars.dx.pos.sLoop()){
-                v.x-=-a-b-d;
-                v.y-=a-c-d;
-                v.z-=b+c-d;
-            }
+        foreach(i,pk,lk,ref v;dx.pos.sLoop()){
+            auto pAtt=pos[pk,i]; // use correct center???
+            v.x+=-a*pAtt.y+b*pAtt.z-d;
+            v.y+= a*pAtt.x-c*pAtt.z-d;
+            v.z+=-b*pAtt.x+c*pAtt.y-d;
         }
     } 
 }

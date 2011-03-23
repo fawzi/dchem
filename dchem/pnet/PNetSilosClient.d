@@ -27,6 +27,7 @@ import blip.io.EventWatcher;
 import blip.container.HashMap;
 import blip.container.GrowableArray;
 import blip.parallel.mpi.MpiModels;
+import blip.container.BatchedGrowableArray;
 
 /// help structure 
 struct CachedPoint(T){
@@ -395,7 +396,10 @@ class PNetSilosClient(T): LocalSilosI!(T){
     HashMap!(string,SilosComponentI!(T)) components(){
         return null; // throw?
     }
-    
+    /// local points
+    BatchedGrowableArray!(Point,batchSize) localPointsKeys(){
+        return null; // return an allocated BatchedGrowableArray?
+    }
     /// linear communicator (valid only inside the real silos, not in the clients)
     LinearComm paraEnv(){
         return null;
