@@ -147,7 +147,9 @@ class BorderInfo(T){
     TopologyInfo!(T) topoInfo;
     mixin(serializeSome("","information od a border between two minima","mins"));
     mixin printOut!();
-    
+    this(){
+        this(null,Mins(Point(0),Point(0)));
+    }
     this(TopologyInfo!(T) topoInfo,Mins mins){
         this.topoInfo=topoInfo;
         this.mins=mins;
