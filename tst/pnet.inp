@@ -88,6 +88,6 @@ pnetSilos:{
 }
 
 
-main:{class:Ref, @pnetSilos}
+main:{class:Ref @pnetSilos}
 
 }

@@ -162,8 +162,12 @@ class InputField:InputElement{
     /// unserialize an object
     void unserialize(Unserializer s){
         s.handlers.handle(name);
-        assert(name.length>0 && name[0]=='@');
-        name=name[1..$].dup;
+        if (name.length>0){
+            if (name[0]!='@'){
+                throw new Exception("a reference should begin with an @ and not '"~name~"'",__FILE__,__LINE__);
+            }
+            name=name[1..$].dup;
+        }
         auto rInp0="RootInput" in s.context;
         RootInput rInp;
         if (rInp0 is null){
