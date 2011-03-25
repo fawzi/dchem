@@ -9,6 +9,7 @@ import blip.util.TangoLog;
 import blip.core.Variant;
 import blip.BasicModels;
 import blip.parallel.mpi.MpiModels;
+import blip.container.GrowableArray;
 
 /// represents a task that can be sent over to another computer
 interface RemoteTask:Serializable{
@@ -64,7 +65,7 @@ class InputField:InputElement{
     
     /// constructor just for unserialization
     this(){
-        this("dummy");
+        this("");
     }
     /// constructor
     this(char[]name,TypeId typeId=TypeId.Reference,InputElement content=null){
@@ -127,8 +128,8 @@ class InputField:InputElement{
     // serialization stuff
     static ClassMetaInfo metaI;
     static this(){
-        metaI=ClassMetaInfo.createForType!(typeof(this))("Ref","reference to another input field");
-        metaI.addFieldOfType!(char[])("name","name of the referenced object");
+        metaI=ClassMetaInfo.createForType!(typeof(this))("Ref","reference to another input field. If the class is already known one should write @xyz to refer to the object with key xyz otherwise { class:Ref @xyz }");
+        metaI.kind=TypeKind.CustomK;
     }
     ClassMetaInfo getSerializationMetaInfo(){
         return metaI;
@@ -136,7 +137,13 @@ class InputField:InputElement{
     void preSerialize(Serializer s){ }
     void postSerialize(Serializer s){ }
     void serialize(Serializer s){
-        s.field(metaI[0],name);
+        char[128] buf;
+        auto arr=lGrowableArray(buf,0);
+        arr("@");
+        arr(name);
+        char[] n=arr.data;
+        s.handlers.handle(n);
+        
         auto rInp0="RootInput" in s.context;
         RootInput rInp;
         if (rInp0 is null){
@@ -154,7 +161,9 @@ class InputField:InputElement{
     }
     /// unserialize an object
     void unserialize(Unserializer s){
-        s.field(metaI[0],name);
+        s.handlers.handle(name);
+        assert(name.length>0 && name[0]=='@');
+        name=name[1..$].dup;
         auto rInp0="RootInput" in s.context;
         RootInput rInp;
         if (rInp0 is null){
@@ -167,6 +176,7 @@ class InputField:InputElement{
         }
     }
     Serializable postUnserialize(Unserializer s){
+        if (name.length==0) return null;
         return s.context["RootInput"].get!(RootInput)().makeUnique(this);
     }
     /// unify with another value
@@ -248,7 +258,7 @@ class RootInput{
         }
         bool inputOk=true;
         foreach (k,v;knownNames){
-            if (v.content is null){
+            if (v.content is null && k!=""){
                 errorLog("Error: field "~k~" is null\n");
                 inputOk=false;
             } else {

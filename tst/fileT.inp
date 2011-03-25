@@ -12,7 +12,7 @@ singleP:{
     class:SinglePoint,
     calcE:1,
     calcF:1,
-    method:{ class:Ref, name:poorM}
+    method:@poorM
 }
 
 poorM:{
@@ -23,9 +23,9 @@ poorM:{
         projName:"test1",
     },
     executeEF:"sh calcE.sh"
-    startConfig:{ class:Ref name:startConfig}
+    startConfig:@startConfig
 }
 
-main:{class:Ref, name:singleP}
+main:{class:Ref @singleP}
 
 }

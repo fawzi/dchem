@@ -12,22 +12,22 @@ startConfig:{
 cp2kServer:{ class:Cp2kServer }
 
 cp2kCalculator:{
-	class:Cp2kMethod
-	setupCtxCmd:"sh startCp2k.sh"
-	ignoreSetupCtxExitStatus:true
-	templateDir:"templates/cp2kSE"
-	initialFileToLoad:"H2O-MNDO.inp"
-	cp2kServer:{class:Ref, name:cp2kServer}
-	startConfig:{ class:Ref name:startConfig}
+    class:Cp2kMethod
+    setupCtxCmd:"sh startCp2k.sh"
+    ignoreSetupCtxExitStatus:true
+    templateDir:"templates/cp2kSE"
+    initialFileToLoad:"H2O-MNDO.inp"
+    cp2kServer:@cp2kServer
+    startConfig:@startConfig
 }
 
 singleP:{
     class:SinglePoint,
     calcE:1,
     calcF:1,
-    method:{ class:Ref, name:cp2kCalculator}
+    method:@cp2kCalculator
 }
 
-main:{class:Ref, name:singleP}
+main:{class:Ref, @singleP}
 
 }

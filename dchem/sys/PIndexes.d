@@ -20,7 +20,7 @@ typedef ushort KindIdx=0xFFFF; /// indexes the kind of the particle, kind 65535 
 
 static this(){
     {
-        auto metaI=ClassMetaInfo.createForType!(ParticleIdx)("dchem.sys.PIndexes.ParticleIdx","index of a particle (within those of the same kind)");
+        auto metaI=ClassMetaInfo.createForType!(ParticleIdx)("ParticleIdx","index of a particle (within those of the same kind)");
         metaI.kind=TypeKind.CustomK;
         auto extH=new ExternalSerializationHandlers;
         metaI.externalHandlers=extH;

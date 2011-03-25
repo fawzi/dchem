@@ -12,7 +12,7 @@ singleP:{
     class:SinglePoint,
     calcE:1,
     calcF:1,
-    method:{ class:Ref, name:poorM}
+    method:@poorM
 }
 
 poorM:{
@@ -24,7 +24,7 @@ poorM:{
     },
     executeE:"sh calcE.sh",
     executeEF:"sh calcE.sh"
-    startConfig:{ class:Ref name:startConfig}
+    startConfig:@startConfig
 }
 
 MinE:{
@@ -45,13 +45,13 @@ cLimiter:{
 
 limitedMB:{
     class:ContextLimiterClient,
-    contextLimiter:{ class:Ref, name:cLimiter}
-    method:{ class:Ref, name:mullerB}
+    contextLimiter:@cLimiter
+    method:@mullerB
 }
 
 workAsker:{
     class:WorkAsker,
-    evaluator:{ class:Ref, name:limitedMB}
+    evaluator:@limitedMB
 }
 
 journal:{
@@ -80,14 +80,14 @@ printAttractors:{
 
 pnetSilos:{
     class:PNetSilos,
-    evaluator:{ class:Ref, name:limitedMB}
-    evaluatorTask:{ class:Ref, name:workAsker}
-    explorers:[ { class:Ref, name:MinE },{ class:Ref, name:journal },{ class:Ref, name:posELog } ]
-    loaders:[{ class:Ref, name:initialPos },{ class:Ref, name: spLogger }]
-    finishers:[{ class:Ref, name: printAttractors }]
+    evaluator:@limitedMB
+    evaluatorTask:@workAsker
+    explorers:[ @MinE ,@journal , @posELog  ]
+    loaders:[ @initialPos , @spLogger ]
+    finishers:[ @printAttractors ]
 }
 
 
-main:{class:Ref, name:pnetSilos}
+main:{class:Ref, @pnetSilos}
 
 }

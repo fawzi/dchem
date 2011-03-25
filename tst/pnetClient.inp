@@ -18,7 +18,7 @@ poorM:{
     maxContexts:1,
     executeDefaultE:"sh calcE.sh",
     executeDefaultEF:"sh calcE.sh"
-    startConfig:{ class:Ref name:startConfig}
+    startConfig:@startConfig
 }
 
 mullerB:{
@@ -34,16 +34,16 @@ cLimiter:{
 
 limitedMB:{
     class:ContextLimiterClient,
-    contextLimiter:{ class:Ref, name:cLimiter}
-    method:{ class:Ref, name:mullerB}
+    contextLimiter:@cLimiter
+    method:@mullerB
 }
 
 workAsker:{
     class:WorkAsker,
     connectionUrl:"stcp://icaro-2.local:50000/obj/silos"
-    evaluator:{ class:Ref, name:limitedMB}
+    evaluator:@limitedMB
 }
 
-main:{class:Ref, name:workAsker}
+main:{class:Ref @workAsker}
 
 }

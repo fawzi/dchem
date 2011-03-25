@@ -12,7 +12,7 @@ singleP:{
     class:SinglePoint,
     calcE:1,
     calcF:1,
-    method:{ class:Ref, name:turboM}
+    method:@turboM
 }
 
 turboM:{
@@ -26,10 +26,10 @@ turboM:{
     executeEF:"sh calc.sh"
     executeF0:"cp ../turboCalc/gradient .",
     maxPosDiff:100.0
-    startConfig:{ class:Ref name:startConfig}
+    startConfig:@startConfig
     subset:[44,49]
 }
 
-main:{class:Ref, name:singleP}
+main:{class:Ref @singleP}
 
 }

@@ -12,7 +12,7 @@ singleP:{
     class:SinglePoint,
     calcE:1,
     calcF:1,
-    method:{ class:Ref, name:poorM}
+    method:@poorM
 }
 
 poorM:{
@@ -24,7 +24,7 @@ poorM:{
     },
     executeE:"sh calcE.sh",
     executeEF:"sh calcE.sh"
-    startConfig:{ class:Ref name:startConfig}
+    startConfig:@startConfig
 }
 
 mullerB:{
@@ -40,17 +40,17 @@ cLimiter:{
 
 limitedMB:{
     class:ContextLimiterClient,
-    contextLimiter:{ class:Ref, name:cLimiter}
-    method:{ class:Ref, name:mullerB}
+    contextLimiter:@cLimiter
+    method:@mullerB
 }
 
 testGrad:{
     class:TestGrad,
     dx:0.05,
     maxEDiffErr: 0.1
-    method:{ class:Ref, name:limitedMB}
+    method:@limitedMB
 }
 
-main:{class:Ref, name:testGrad}
+main:{ class:Ref @testGrad }
 
 }
