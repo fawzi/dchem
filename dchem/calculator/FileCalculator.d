@@ -48,6 +48,7 @@ class TemplateExecuter: Method {
     bool ignoreSetupExitStatus;
     bool ignoreSetupCtxExitStatus;
     bool ignoreCmdExitStatus;
+    bool ignoreExitStatus10=true;
     EvalLog[] onELog=[{targetFile:"log.energies",format:"energy"},
         {targetFile:"log.pos",format:"xyz"}];
     EvalLog[] onFLog=[{targetFile:"log.forces",format:"xyzForces"}];
@@ -160,6 +161,7 @@ class TemplateExecuter: Method {
             auto templateH=new TemplateHandler(templateDirectory(),new FileFolder(ProcContext.instance.baseDirectory.toString(),true)); // to fix
             addFullSubs(templateH.subs);
             templateH.shouldWriteReplacementsDict=writeReplacementsDict;
+	    templateH.ignoreExitStatus10=ignoreExitStatus10;
             templateH.subs["templateDirectory"]=templateDirectory.toString;
             templateH.subs["workingDirectory"]=templateH.targetDir.toString;
             auto opInProgress=templateH.processForCmd(setupCommand,log);
@@ -181,6 +183,7 @@ class TemplateExecuter: Method {
     ignoreSetupExitStatus: if the exit status of the setup command should be ignored (false)
     ignoreSetupCtxExitStatus: if the exit status of the context setup command should be ignored (false)
     ignoreCmdExitStatus: if the exit status of the commands to calculate energy and forces should be ignored (false)
+    ignoreExitStatus10: ignore exit status if it is 10
     onELog: what to log for each energy evaluation (by default energy and positions ad xyz)
     onFLog: what to log for each force evaluation (by default xyzForces)
     constraints: the constraints to be applied to the system
@@ -262,6 +265,7 @@ class ExecuterContext:CalcContext{
         auto templateH=new TemplateHandler(input.templateDirectory(),new FileFolder(ProcContext.instance.baseDirectory.toString()~"/"~contextId,true)); // to fix
         input.addFullSubs(templateH.subs);
         templateH.shouldWriteReplacementsDict=input.writeReplacementsDict;
+	templateH.ignoreExitStatus10=input.ignoreExitStatus10;
         templateH.subs["templateDirectory"]=input.templateDirectory.toString;
         templateH.subs["workingDirectory"]=templateH.targetDir.toString;
         return templateH;
@@ -379,8 +383,9 @@ class TemplateHandler{
     VfsFolder sourceDir;
     VfsFolder targetDir;
     size_t maxKeywordLen=128;
-    bool shouldWriteReplacementsDict;
     char[] rDictFilename="repl.dict";
+    bool shouldWriteReplacementsDict;
+    bool ignoreExitStatus10;
     
     this(VfsFolder sourceDir,VfsFolder targetDir,char[][char[]] subs=null){
         this.sourceDir=sourceDir;
@@ -437,7 +442,7 @@ class TemplateHandler{
             auto arr=lGrowableArray(buf,0,GASharing.Local);
             arr("command failed with status ");
             writeOut(&arr.appendArr,status);
-            if (ignoreExitStatus){
+            if (ignoreExitStatus || (status == 10 && ignoreExitStatus10)){
                 arr("\n");
                 log(arr.data);
             } else {
