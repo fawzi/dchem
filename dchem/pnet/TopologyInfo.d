@@ -28,6 +28,7 @@ import blip.container.BatchedGrowableArray;
 import blip.container.MinHeap;
 import blip.container.AtomicSLink;
 import blip.math.IEEE;
+import blip.math.Math;
 
 /// Information about a point
 struct PointTopoInfo{
