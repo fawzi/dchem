@@ -861,8 +861,8 @@ final class SegmentedArray(T){
             int result=0;
             mixin(segArrayMonoLoop(pFlags,"iterContext",["array"],
             "int delegate(ref size_t i,ref PIndex, ref LocalPIndex, ref T) dlg; int* finalRes;","",
-            "mainContext.dlg=loopBody;mainContext.finalRes=&result;","visitKind=visitKind&&(newK.pIndexPtrStart !is null);","",
-            ["if ((*finalRes)!=0) return;","size_t ii=0; if (auto returnV=dlg(ii,*pIndexPtr,localPIndex,*arrayPtr)){ *finalRes=returnV; return; }","",
+            "mainContext.dlg=loopBody;mainContext.finalRes=&result;","visitKind=visitKind&&(newK.arrayPtrStart !is null);","",
+            ["if ((*finalRes)!=0) return;",`size_t ii=0; if (auto returnV=dlg(ii,*pIndexPtr,localPIndex,*arrayPtr)){ *finalRes=returnV; return; }`,"",
             
             "if ((*finalRes)!=0) return;",`
             for (size_t ii=0;ii<arrayMKindDims;++ii){
