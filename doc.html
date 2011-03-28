@@ -21,369 +21,381 @@
     </ul>
     </p>
     <p>Unlike json most commas can be dropped. The input consists of a big dictionary, thus it begins with "{", has several key:value elements and ends with "}".</p>
-    <p>Here we list of object or structures that are understood by dchem. What you should write as class is the title, and the field names are written in bold. <em>RootInputElement</em> can be written only at the top level of the input, and, excluding Ref, should be written just there. </p>
-    <h3><a name="Ref">Ref</a></h3>
-        <p><em>RootInputElement</em>. reference to another input field</p>
-    <ul>
-        <li><a name="Ref-name"><b>name</b></a> (string):name of the referenced object</li>
-    </ul>
-    <h3><a name="dchem.AddRefPos">dchem.AddRefPos</a></h3>
+    <p>Here we list of object or structures that are understood by dchem. What you should write as class is the title, and the field names are written in bold. <em>RootInputElement</em> can be written only at the top level of the input, and, excluding Ref, should be written just there.</p>
+    <h3><a name="AddRefPos">AddRefPos</a></h3>
         <p><em>RootInputElement</em>. worker that adds the initial structure as point to explore</p>
-    <h3><a name="dchem.CmdTemplateExecuter">dchem.CmdTemplateExecuter</a></h3>
+    <h3><a name="CmdTemplateExecuter">CmdTemplateExecuter</a></h3>
         <p><em>RootInputElement</em>. a template executer (like dchem.TemplateExecuter) that uses a command also to calculate energy and forces, not only to set up things</p>
     <ul>
-        <li><a name="dchem.CmdTemplateExecuter-superTemplate"><b>superTemplate</b></a> (Ref):a template where to take default values</li>
-        <li><a name="dchem.CmdTemplateExecuter-startConfig"><b>startConfig</b></a> (Ref):the initial configuration</li>
-        <li><a name="dchem.CmdTemplateExecuter-templateDir"><b>templateDir</b></a> (string):where to find the definition of the template (tipically a directory)</li>
-        <li><a name="dchem.CmdTemplateExecuter-subs"><b>subs</b></a> (aa):keyword and their substitutions to apply to the templates (as dictionary string -> string), a->b will replace "[a]" with "b"</li>
-        <li><a name="dchem.CmdTemplateExecuter-setupCmd"><b>setupCmd</b></a> (string):a command that should be executed when the method is setup</li>
-        <li><a name="dchem.CmdTemplateExecuter-setupCtxCmd"><b>setupCtxCmd</b></a> (string):a command that should be executed to set up the context</li>
-        <li><a name="dchem.CmdTemplateExecuter-stopCtxCmd"><b>stopCtxCmd</b></a> (string):a command that should be executed to stop the context</li>
-        <li><a name="dchem.CmdTemplateExecuter-writeReplacementsDict"><b>writeReplacementsDict</b></a> (bool):if a dictionary with the replacements performed should be written (default is false)</li>
-        <li><a name="dchem.CmdTemplateExecuter-overwriteUnchangedPaths"><b>overwriteUnchangedPaths</b></a> (bool):if paths that are already there should be overwitten (default is false)</li>
-        <li><a name="dchem.CmdTemplateExecuter-makeReplacementsInCommands"><b>makeReplacementsInCommands</b></a> (bool):if replacements should be performed on the commands to be executed (default is true)</li>
-        <li><a name="dchem.CmdTemplateExecuter-ignoreSetupExitStatus"><b>ignoreSetupExitStatus</b></a> (bool):if the exit status of the setup command should be ignored (false)</li>
-        <li><a name="dchem.CmdTemplateExecuter-ignoreSetupCtxExitStatus"><b>ignoreSetupCtxExitStatus</b></a> (bool):if the exit status of the context setup command should be ignored (false)</li>
-        <li><a name="dchem.CmdTemplateExecuter-ignoreCmdExitStatus"><b>ignoreCmdExitStatus</b></a> (bool):if the exit status of the commands to calculate energy and forces should be ignored (false)</li>
-        <li><a name="dchem.CmdTemplateExecuter-onELog"><b>onELog</b></a> (array):what to log for each energy evaluation (by default energy and positions ad xyz)</li>
-        <li><a name="dchem.CmdTemplateExecuter-onFLog"><b>onFLog</b></a> (array):what to log for each force evaluation (by default xyzForces)</li>
-        <li><a name="dchem.CmdTemplateExecuter-constraints"><b>constraints</b></a> (Ref):the constraints to be applied to the system</li>
-        <li><a name="dchem.CmdTemplateExecuter-executeE"><b>executeE</b></a> (string):command executed to calculate the energy alone (optional)</li>
-        <li><a name="dchem.CmdTemplateExecuter-executeEF"><b>executeEF</b></a> (string):command executed to calculate the energy and forces (this is required)</li>
-        <li><a name="dchem.CmdTemplateExecuter-executeF0"><b>executeF0</b></a> (string):command executed do calculate the forces immediately after the energy (optional)</li>
+        <li><a name="CmdTemplateExecuter-superTemplate"><b>superTemplate</b></a> (Ref):a template where to take default values</li>
+        <li><a name="CmdTemplateExecuter-startConfig"><b>startConfig</b></a> (Ref):the initial configuration</li>
+        <li><a name="CmdTemplateExecuter-templateDir"><b>templateDir</b></a> (string):where to find the definition of the template (tipically a directory)</li>
+        <li><a name="CmdTemplateExecuter-subs"><b>subs</b></a> (aa):keyword and their substitutions to apply to the templates (as dictionary string -> string), a->b will replace "[a]" with "b"</li>
+        <li><a name="CmdTemplateExecuter-setupCmd"><b>setupCmd</b></a> (string):a command that should be executed when the method is setup</li>
+        <li><a name="CmdTemplateExecuter-setupCtxCmd"><b>setupCtxCmd</b></a> (string):a command that should be executed to set up the context</li>
+        <li><a name="CmdTemplateExecuter-stopCtxCmd"><b>stopCtxCmd</b></a> (string):a command that should be executed to stop the context</li>
+        <li><a name="CmdTemplateExecuter-writeReplacementsDict"><b>writeReplacementsDict</b></a> (bool):if a dictionary with the replacements performed should be written (default is false)</li>
+        <li><a name="CmdTemplateExecuter-overwriteUnchangedPaths"><b>overwriteUnchangedPaths</b></a> (bool):if paths that are already there should be overwitten (default is false)</li>
+        <li><a name="CmdTemplateExecuter-makeReplacementsInCommands"><b>makeReplacementsInCommands</b></a> (bool):if replacements should be performed on the commands to be executed (default is true)</li>
+        <li><a name="CmdTemplateExecuter-ignoreSetupExitStatus"><b>ignoreSetupExitStatus</b></a> (bool):if the exit status of the setup command should be ignored (false)</li>
+        <li><a name="CmdTemplateExecuter-ignoreSetupCtxExitStatus"><b>ignoreSetupCtxExitStatus</b></a> (bool):if the exit status of the context setup command should be ignored (false)</li>
+        <li><a name="CmdTemplateExecuter-ignoreCmdExitStatus"><b>ignoreCmdExitStatus</b></a> (bool):if the exit status of the commands to calculate energy and forces should be ignored (false)</li>
+        <li><a name="CmdTemplateExecuter-ignoreExitStatus10"><b>ignoreExitStatus10</b></a> (bool):ignore exit status if it is 10</li>
+        <li><a name="CmdTemplateExecuter-onELog"><b>onELog</b></a> (array):what to log for each energy evaluation (by default energy and positions ad xyz)</li>
+        <li><a name="CmdTemplateExecuter-onFLog"><b>onFLog</b></a> (array):what to log for each force evaluation (by default xyzForces)</li>
+        <li><a name="CmdTemplateExecuter-constraints"><b>constraints</b></a> (Ref):the constraints to be applied to the system</li>
+        <li><a name="CmdTemplateExecuter-executeE"><b>executeE</b></a> (string):command executed to calculate the energy alone (optional)</li>
+        <li><a name="CmdTemplateExecuter-executeEF"><b>executeEF</b></a> (string):command executed to calculate the energy and forces (this is required)</li>
+        <li><a name="CmdTemplateExecuter-executeF0"><b>executeF0</b></a> (string):command executed do calculate the forces immediately after the energy (optional)</li>
     </ul>
-    <h3><a name="dchem.ContextLimiter">dchem.ContextLimiter</a></h3>
+    <h3><a name="ContextLimiter">ContextLimiter</a></h3>
         <p><em>RootInputElement</em>. Limits the number of contexts (to avoid using too many resources), several methods can use the same limiter (and then the total number of their contexts is limited)</p>
     <ul>
-        <li><a name="dchem.ContextLimiter-maxActiveContexts"><b>maxActiveContexts</b></a> (uint):maximum number of active contexts (non binding)</li>
-        <li><a name="dchem.ContextLimiter-maxContexts"><b>maxContexts</b></a> (uint):maximum number of live (i.e. not yet given back) contexts</li>
+        <li><a name="ContextLimiter-maxActiveContexts"><b>maxActiveContexts</b></a> (uint):maximum number of active contexts (non binding)</li>
+        <li><a name="ContextLimiter-maxContexts"><b>maxContexts</b></a> (uint):maximum number of live (i.e. not yet given back) contexts</li>
     </ul>
-    <h3><a name="dchem.ContextLimiterClient">dchem.ContextLimiterClient</a></h3>
+    <h3><a name="ContextLimiterClient">ContextLimiterClient</a></h3>
         <p><em>RootInputElement</em>. Limits a Method to the maximal number of contexts given by the context limiter</p>
     <ul>
-        <li><a name="dchem.ContextLimiterClient-contextLimiter"><b>contextLimiter</b></a> (Ref):the limiter that constrain this method</li>
-        <li><a name="dchem.ContextLimiterClient-method"><b>method</b></a> (Ref):the method that is constrained when accessed through this</li>
+        <li><a name="ContextLimiterClient-contextLimiter"><b>contextLimiter</b></a> (Ref):the limiter that constrain this method</li>
+        <li><a name="ContextLimiterClient-method"><b>method</b></a> (Ref):the method that is constrained when accessed through this</li>
     </ul>
-    <h3><a name="dchem.Cp2kMethod">dchem.Cp2kMethod</a></h3>
+    <h3><a name="Cp2kMethod">Cp2kMethod</a></h3>
         <p><em>RootInputElement</em>. method that calculates energies and forces using cp2k connected through a socket</p>
     <ul>
-        <li><a name="dchem.Cp2kMethod-superTemplate"><b>superTemplate</b></a> (Ref):a template where to take default values</li>
-        <li><a name="dchem.Cp2kMethod-startConfig"><b>startConfig</b></a> (Ref):the initial configuration</li>
-        <li><a name="dchem.Cp2kMethod-templateDir"><b>templateDir</b></a> (string):where to find the definition of the template (tipically a directory)</li>
-        <li><a name="dchem.Cp2kMethod-subs"><b>subs</b></a> (aa):keyword and their substitutions to apply to the templates (as dictionary string -> string), a->b will replace "[a]" with "b"</li>
-        <li><a name="dchem.Cp2kMethod-setupCmd"><b>setupCmd</b></a> (string):a command that should be executed when the method is setup</li>
-        <li><a name="dchem.Cp2kMethod-setupCtxCmd"><b>setupCtxCmd</b></a> (string):a command that should be executed to set up the context</li>
-        <li><a name="dchem.Cp2kMethod-stopCtxCmd"><b>stopCtxCmd</b></a> (string):a command that should be executed to stop the context</li>
-        <li><a name="dchem.Cp2kMethod-writeReplacementsDict"><b>writeReplacementsDict</b></a> (bool):if a dictionary with the replacements performed should be written (default is false)</li>
-        <li><a name="dchem.Cp2kMethod-overwriteUnchangedPaths"><b>overwriteUnchangedPaths</b></a> (bool):if paths that are already there should be overwitten (default is false)</li>
-        <li><a name="dchem.Cp2kMethod-makeReplacementsInCommands"><b>makeReplacementsInCommands</b></a> (bool):if replacements should be performed on the commands to be executed (default is true)</li>
-        <li><a name="dchem.Cp2kMethod-ignoreSetupExitStatus"><b>ignoreSetupExitStatus</b></a> (bool):if the exit status of the setup command should be ignored (false)</li>
-        <li><a name="dchem.Cp2kMethod-ignoreSetupCtxExitStatus"><b>ignoreSetupCtxExitStatus</b></a> (bool):if the exit status of the context setup command should be ignored (false)</li>
-        <li><a name="dchem.Cp2kMethod-ignoreCmdExitStatus"><b>ignoreCmdExitStatus</b></a> (bool):if the exit status of the commands to calculate energy and forces should be ignored (false)</li>
-        <li><a name="dchem.Cp2kMethod-onELog"><b>onELog</b></a> (array):what to log for each energy evaluation (by default energy and positions ad xyz)</li>
-        <li><a name="dchem.Cp2kMethod-onFLog"><b>onFLog</b></a> (array):what to log for each force evaluation (by default xyzForces)</li>
-        <li><a name="dchem.Cp2kMethod-constraints"><b>constraints</b></a> (Ref):the constraints to be applied to the system</li>
-        <li><a name="dchem.Cp2kMethod-initialFileToLoad"><b>initialFileToLoad</b></a> (string):the file to load when the setup is complete</li>
-        <li><a name="dchem.Cp2kMethod-cp2kServer"><b>cp2kServer</b></a> (Ref):the cp2k server to use to get connections to cp2k instances</li>
+        <li><a name="Cp2kMethod-superTemplate"><b>superTemplate</b></a> (Ref):a template where to take default values</li>
+        <li><a name="Cp2kMethod-startConfig"><b>startConfig</b></a> (Ref):the initial configuration</li>
+        <li><a name="Cp2kMethod-templateDir"><b>templateDir</b></a> (string):where to find the definition of the template (tipically a directory)</li>
+        <li><a name="Cp2kMethod-subs"><b>subs</b></a> (aa):keyword and their substitutions to apply to the templates (as dictionary string -> string), a->b will replace "[a]" with "b"</li>
+        <li><a name="Cp2kMethod-setupCmd"><b>setupCmd</b></a> (string):a command that should be executed when the method is setup</li>
+        <li><a name="Cp2kMethod-setupCtxCmd"><b>setupCtxCmd</b></a> (string):a command that should be executed to set up the context</li>
+        <li><a name="Cp2kMethod-stopCtxCmd"><b>stopCtxCmd</b></a> (string):a command that should be executed to stop the context</li>
+        <li><a name="Cp2kMethod-writeReplacementsDict"><b>writeReplacementsDict</b></a> (bool):if a dictionary with the replacements performed should be written (default is false)</li>
+        <li><a name="Cp2kMethod-overwriteUnchangedPaths"><b>overwriteUnchangedPaths</b></a> (bool):if paths that are already there should be overwitten (default is false)</li>
+        <li><a name="Cp2kMethod-makeReplacementsInCommands"><b>makeReplacementsInCommands</b></a> (bool):if replacements should be performed on the commands to be executed (default is true)</li>
+        <li><a name="Cp2kMethod-ignoreSetupExitStatus"><b>ignoreSetupExitStatus</b></a> (bool):if the exit status of the setup command should be ignored (false)</li>
+        <li><a name="Cp2kMethod-ignoreSetupCtxExitStatus"><b>ignoreSetupCtxExitStatus</b></a> (bool):if the exit status of the context setup command should be ignored (false)</li>
+        <li><a name="Cp2kMethod-ignoreCmdExitStatus"><b>ignoreCmdExitStatus</b></a> (bool):if the exit status of the commands to calculate energy and forces should be ignored (false)</li>
+        <li><a name="Cp2kMethod-ignoreExitStatus10"><b>ignoreExitStatus10</b></a> (bool):ignore exit status if it is 10</li>
+        <li><a name="Cp2kMethod-onELog"><b>onELog</b></a> (array):what to log for each energy evaluation (by default energy and positions ad xyz)</li>
+        <li><a name="Cp2kMethod-onFLog"><b>onFLog</b></a> (array):what to log for each force evaluation (by default xyzForces)</li>
+        <li><a name="Cp2kMethod-constraints"><b>constraints</b></a> (Ref):the constraints to be applied to the system</li>
+        <li><a name="Cp2kMethod-initialFileToLoad"><b>initialFileToLoad</b></a> (string):the file to load when the setup is complete</li>
+        <li><a name="Cp2kMethod-cp2kServer"><b>cp2kServer</b></a> (Ref):the cp2k server to use to get connections to cp2k instances</li>
     </ul>
-    <h3><a name="dchem.Cp2kServer">dchem.Cp2kServer</a></h3>
+    <h3><a name="Cp2kServer">Cp2kServer</a></h3>
         <p><em>RootInputElement</em>. server to which cp2k binary shell can connect</p>
     <ul>
-        <li><a name="dchem.Cp2kServer-portMin"><b>portMin</b></a> (ushort):the minimum port number to use as fallback (49152)</li>
-        <li><a name="dchem.Cp2kServer-portMax"><b>portMax</b></a> (ushort):the maximum port number to use as fallback (65535)</li>
-        <li><a name="dchem.Cp2kServer-port"><b>port</b></a> (string):the port/protocol that should be used if possible (51000)</li>
-        <li><a name="dchem.Cp2kServer-setupCmd"><b>setupCmd</b></a> (string):the command executed on activate (might start the clients, in it "[port]" is replaced with the port of the server)</li>
-        <li><a name="dchem.Cp2kServer-maxLife"><b>maxLife</b></a> (double):the maximum life of a connection in minutes (525600 = one year)</li>
-        <li><a name="dchem.Cp2kServer-strict"><b>strict</b></a> (bool):if the port selection should be changed (false)</li>
+        <li><a name="Cp2kServer-portMin"><b>portMin</b></a> (ushort):the minimum port number to use as fallback (49152)</li>
+        <li><a name="Cp2kServer-portMax"><b>portMax</b></a> (ushort):the maximum port number to use as fallback (65535)</li>
+        <li><a name="Cp2kServer-port"><b>port</b></a> (string):the port/protocol that should be used if possible (51000)</li>
+        <li><a name="Cp2kServer-setupCmd"><b>setupCmd</b></a> (string):the command executed on activate (might start the clients, in it "[port]" is replaced with the port of the server)</li>
+        <li><a name="Cp2kServer-maxLife"><b>maxLife</b></a> (double):the maximum life of a connection in minutes (525600 = one year)</li>
+        <li><a name="Cp2kServer-strict"><b>strict</b></a> (bool):if the port selection should be changed (false)</li>
     </ul>
-    <h3><a name="dchem.DetectFlyAway">dchem.DetectFlyAway</a></h3>
+    <h3><a name="DetectFlyAway">DetectFlyAway</a></h3>
         <p><em>RootInputElement</em>. observer that detects when a system breaks apart and stop its exploration</p>
     <ul>
-        <li><a name="dchem.DetectFlyAway-earlyDetect"><b>earlyDetect</b></a> (bool):if the configurations detected should be removed early (before trying to calculate them) (false)</li>
-        <li><a name="dchem.DetectFlyAway-logBaseName"><b>logBaseName</b></a> (string):if given logs the points that have "flown away" to a file that starts with logBaseName</li>
-        <li><a name="dchem.DetectFlyAway-flushEachPoint"><b>flushEachPoint</b></a> (bool):if each point should be immediately flushed (true)</li>
-        <li><a name="dchem.DetectFlyAway-threshold"><b>threshold</b></a> (double):threshold that detects particles flying away (3.0)</li>
-        <li><a name="dchem.DetectFlyAway-particles"><b>particles</b></a> (Ref):the particles to monitor (if not given uses all the particles)</li>
+        <li><a name="DetectFlyAway-earlyDetect"><b>earlyDetect</b></a> (bool):if the configurations detected should be removed early (before trying to calculate them) (false)</li>
+        <li><a name="DetectFlyAway-logBaseName"><b>logBaseName</b></a> (string):if given logs the points that have "flown away" to a file that starts with logBaseName</li>
+        <li><a name="DetectFlyAway-flushEachPoint"><b>flushEachPoint</b></a> (bool):if each point should be immediately flushed (true)</li>
+        <li><a name="DetectFlyAway-threshold"><b>threshold</b></a> (double):threshold that detects particles flying away (3.0)</li>
+        <li><a name="DetectFlyAway-particles"><b>particles</b></a> (Ref):the particles to monitor (if not given uses all the particles)</li>
     </ul>
-    <h3><a name="dchem.EmptyExplorer">dchem.EmptyExplorer</a></h3>
+    <h3><a name="EmptyExplorer">EmptyExplorer</a></h3>
         <p><em>RootInputElement</em>. an explorer that does nothing (not really useful by itself)</p>
-    <h3><a name="dchem.FileConfig">dchem.FileConfig</a></h3>
+    <h3><a name="FileConfig">FileConfig</a></h3>
         <p><em>RootInputElement</em>. a configuration that is read from a file</p>
     <ul>
-        <li><a name="dchem.FileConfig-fileName"><b>fileName</b></a> (string):the filename where to reat the configuration</li>
-        <li><a name="dchem.FileConfig-format"><b>format</b></a> (string):the format of the file(xyz,car,pdb)</li>
-        <li><a name="dchem.FileConfig-frame"><b>frame</b></a> (long):if a frame different from the first one should be read (-1 means the last one)</li>
-        <li><a name="dchem.FileConfig-cell"><b>cell</b></a> (array):the cell matrix h (if present overrides the one that might be in the file)</li>
+        <li><a name="FileConfig-fileName"><b>fileName</b></a> (string):the filename where to reat the configuration</li>
+        <li><a name="FileConfig-format"><b>format</b></a> (string):the format of the file(xyz,car,pdb)</li>
+        <li><a name="FileConfig-frame"><b>frame</b></a> (long):if a frame different from the first one should be read (-1 means the last one)</li>
+        <li><a name="FileConfig-cell"><b>cell</b></a> (array):the cell matrix h (if present overrides the one that might be in the file)</li>
     </ul>
-    <h3><a name="dchem.FullSysNeighLooper">dchem.FullSysNeighLooper</a></h3>
+    <h3><a name="FullSysNeighLooper">FullSysNeighLooper</a></h3>
         <p><em>RootInputElement</em>. neighbor looper for a subsys that uses the one of the full system</p>
-    <h3><a name="dchem.GoUpExplorer">dchem.GoUpExplorer</a></h3>
+    <h3><a name="GoUpExplorer">GoUpExplorer</a></h3>
         <p><em>RootInputElement</em>. explorer that stays in the basin of attraction of the given point</p>
     <ul>
-        <li><a name="dchem.GoUpExplorer-nEval"><b>nEval</b></a> (long):number of evaluations to perform (long.max)</li>
+        <li><a name="GoUpExplorer-nEval"><b>nEval</b></a> (long):number of evaluations to perform (long.max)</li>
     </ul>
-    <h3><a name="dchem.MinEExplorer">dchem.MinEExplorer</a></h3>
+    <h3><a name="MinEExplorer">MinEExplorer</a></h3>
         <p><em>RootInputElement</em>. explorer thet explores always the lowest energy point</p>
     <ul>
-        <li><a name="dchem.MinEExplorer-nEval"><b>nEval</b></a> (long):number of evaluations to perform (long.max)</li>
+        <li><a name="MinEExplorer-nEval"><b>nEval</b></a> (long):number of evaluations to perform (long.max)</li>
     </ul>
-    <h3><a name="dchem.MullerBrownPot">dchem.MullerBrownPot</a></h3>
+    <h3><a name="MullerBrownPot">MullerBrownPot</a></h3>
         <p><em>RootInputElement</em>. evaluator that calculates the muller brown potential</p>
     <ul>
-        <li><a name="dchem.MullerBrownPot-a"><b>a</b></a> (array):</li>
-        <li><a name="dchem.MullerBrownPot-b"><b>b</b></a> (array):</li>
-        <li><a name="dchem.MullerBrownPot-c"><b>c</b></a> (array):</li>
-        <li><a name="dchem.MullerBrownPot-x0"><b>x0</b></a> (array):</li>
-        <li><a name="dchem.MullerBrownPot-y0"><b>y0</b></a> (array):</li>
-        <li><a name="dchem.MullerBrownPot-preFactor"><b>preFactor</b></a> (array):</li>
-        <li><a name="dchem.MullerBrownPot-startX"><b>startX</b></a> (double):</li>
-        <li><a name="dchem.MullerBrownPot-startY"><b>startY</b></a> (double):</li>
-        <li><a name="dchem.MullerBrownPot-sleepSome"><b>sleepSome</b></a> (double):artificially slows down the evaluation by sleeping the given amount of seconds</li>
+        <li><a name="MullerBrownPot-a"><b>a</b></a> (array):</li>
+        <li><a name="MullerBrownPot-b"><b>b</b></a> (array):</li>
+        <li><a name="MullerBrownPot-c"><b>c</b></a> (array):</li>
+        <li><a name="MullerBrownPot-x0"><b>x0</b></a> (array):</li>
+        <li><a name="MullerBrownPot-y0"><b>y0</b></a> (array):</li>
+        <li><a name="MullerBrownPot-preFactor"><b>preFactor</b></a> (array):</li>
+        <li><a name="MullerBrownPot-startX"><b>startX</b></a> (double):</li>
+        <li><a name="MullerBrownPot-startY"><b>startY</b></a> (double):</li>
+        <li><a name="MullerBrownPot-sleepSome"><b>sleepSome</b></a> (double):artificially slows down the evaluation by sleeping the given amount of seconds</li>
     </ul>
-    <h3><a name="dchem.MultiConstraint">dchem.MultiConstraint</a></h3>
+    <h3><a name="MultiConstraint">MultiConstraint</a></h3>
         <p><em>RootInputElement</em>. Constraint that Handles a group of constraints.</p>
     <ul>
-        <li><a name="dchem.MultiConstraint-maxShakeIter"><b>maxShakeIter</b></a> (uint):maximum iteration of "shake" (immediate partial inverse) before switching to direct optimization</li>
-        <li><a name="dchem.MultiConstraint-targetPrecision"><b>targetPrecision</b></a> (double):the target precision that should be reached by the constraint loop</li>
-        <li><a name="dchem.MultiConstraint-constraints"><b>constraints</b></a> (array):the constraints to apply</li>
+        <li><a name="MultiConstraint-maxShakeIter"><b>maxShakeIter</b></a> (uint):maximum iteration of "shake" (immediate partial inverse) before switching to direct optimization (100)</li>
+        <li><a name="MultiConstraint-targetPrecision"><b>targetPrecision</b></a> (double):the target precision that should be reached by the constraint loop (1.0e-6)</li>
+        <li><a name="MultiConstraint-constraints"><b>constraints</b></a> (array):the constraints to apply</li>
     </ul>
-    <h3><a name="dchem.NDistOps">dchem.NDistOps</a></h3>
+    <h3><a name="NDistOps">NDistOps</a></h3>
         <p><em>RootInputElement</em>. how the macroscopic distances are defined (periodic boundary conditions,...)</p>
     <ul>
-        <li><a name="dchem.NDistOps-useFirstNeigh"><b>useFirstNeigh</b></a> (bool):if the first image convention should be used for periodic directions (true)</li>
+        <li><a name="NDistOps-useFirstNeigh"><b>useFirstNeigh</b></a> (bool):if the first image convention should be used for periodic directions (true)</li>
     </ul>
-    <h3><a name="dchem.NoConstraint">dchem.NoConstraint</a></h3>
+    <h3><a name="NoConstraint">NoConstraint</a></h3>
         <p><em>RootInputElement</em>. Empty constraint.</p>
-    <h3><a name="dchem.NoSymmNeighLooper">dchem.NoSymmNeighLooper</a></h3>
+    <h3><a name="NoSymmNeighLooper">NoSymmNeighLooper</a></h3>
         <p><em>RootInputElement</em>. Normal symmetry looper for systems without special symmetry</p>
-    <h3><a name="dchem.PNetJournal">dchem.PNetJournal</a></h3>
+    <h3><a name="PNetJournal">PNetJournal</a></h3>
         <p><em>RootInputElement</em>. object that keeps a journal of the important changes (migth be used to restart an exploration)</p>
     <ul>
-        <li><a name="dchem.PNetJournal-fileBasePath"><b>fileBasePath</b></a> (string):start of the journal filename (defaults to journal)</li>
-        <li><a name="dchem.PNetJournal-journalFormat"><b>journalFormat</b></a> (string):to format of the journal: 'sbin' or 'json'</li>
-        <li><a name="dchem.PNetJournal-logOtherEnergies"><b>logOtherEnergies</b></a> (bool):if the energies of non local points should be logged</li>
-        <li><a name="dchem.PNetJournal-logOtherStart"><b>logOtherStart</b></a> (bool):if the start of non local points should be logged</li>
-        <li><a name="dchem.PNetJournal-logOtherPos"><b>logOtherPos</b></a> (bool):if the positions of non local points should be logged</li>
-        <li><a name="dchem.PNetJournal-logNeighInfo"><b>logNeighInfo</b></a> (bool):if the updates of energies or gradients of the neighbors should be logged</li>
-        <li><a name="dchem.PNetJournal-flushEachEntry"><b>flushEachEntry</b></a> (bool):if each entry should be immediately flushed (false)</li>
+        <li><a name="PNetJournal-fileBasePath"><b>fileBasePath</b></a> (string):start of the journal filename (defaults to journal)</li>
+        <li><a name="PNetJournal-journalFormat"><b>journalFormat</b></a> (string):to format of the journal: 'sbin' or 'json'</li>
+        <li><a name="PNetJournal-logOtherEnergies"><b>logOtherEnergies</b></a> (bool):if the energies of non local points should be logged</li>
+        <li><a name="PNetJournal-logOtherStart"><b>logOtherStart</b></a> (bool):if the start of non local points should be logged</li>
+        <li><a name="PNetJournal-logOtherPos"><b>logOtherPos</b></a> (bool):if the positions of non local points should be logged</li>
+        <li><a name="PNetJournal-logNeighInfo"><b>logNeighInfo</b></a> (bool):if the updates of energies or gradients of the neighbors should be logged</li>
+        <li><a name="PNetJournal-flushEachEntry"><b>flushEachEntry</b></a> (bool):if each entry should be immediately flushed (false)</li>
     </ul>
-    <h3><a name="dchem.PNetJournalLoader">dchem.PNetJournalLoader</a></h3>
+    <h3><a name="PNetJournalLoader">PNetJournalLoader</a></h3>
         <p><em>RootInputElement</em>. Loads one or more journals</p>
     <ul>
-        <li><a name="dchem.PNetJournalLoader-filePaths"><b>filePaths</b></a> (array):files to load</li>
-        <li><a name="dchem.PNetJournalLoader-journalFormat"><b>journalFormat</b></a> (string):to format of the journal: 'sbin' or 'json'</li>
-        <li><a name="dchem.PNetJournalLoader-journalAccuracy"><b>journalAccuracy</b></a> (string):Real or LowP, by default the current accuracy of the silos</li>
-        <li><a name="dchem.PNetJournalLoader-parallelLoad"><b>parallelLoad</b></a> (bool):if when there are several files they should be loaded in parallel (true)</li>
+        <li><a name="PNetJournalLoader-filePaths"><b>filePaths</b></a> (array):files to load</li>
+        <li><a name="PNetJournalLoader-journalFormat"><b>journalFormat</b></a> (string):to format of the journal: 'sbin' or 'json'</li>
+        <li><a name="PNetJournalLoader-journalAccuracy"><b>journalAccuracy</b></a> (string):Real or LowP, by default the current accuracy of the silos</li>
+        <li><a name="PNetJournalLoader-parallelLoad"><b>parallelLoad</b></a> (bool):if when there are several files they should be loaded in parallel (true)</li>
     </ul>
-    <h3><a name="dchem.PNetSilosClient">dchem.PNetSilosClient</a></h3>
-        <p><em>RootInputElement</em>. a silos that connets to another main silos for all important operations</p>
-    <ul>
-        <li><a name="dchem.PNetSilosClient-connectionUrl"><b>connectionUrl</b></a> (string):the url to use to get the connection to the silos</li>
-        <li><a name="dchem.PNetSilosClient-ownerCacheSize"><b>ownerCacheSize</b></a> (long):amount of points whose owner is cached (10)</li>
-    </ul>
-    <h3><a name="dchem.PRange">dchem.PRange</a></h3>
-        <p><em>RootInputElement</em>. Structure that represent some particles (subsets,...)</p>
-    <ul>
-        <li><a name="dchem.PRange-particles"><b>particles</b></a> (array):list of particles in internal notation (kind,idx)</li>
-        <li><a name="dchem.PRange-particleStart"><b>particleStart</b></a> (dchem.sys.PIndexes.PIndex):first particle of a range that continues until particleEnd</li>
-        <li><a name="dchem.PRange-particleEnd"><b>particleEnd</b></a> (dchem.sys.PIndexes.PIndex):last particle of a range that starts at particleStart</li>
-        <li><a name="dchem.PRange-indexes"><b>indexes</b></a> (array):list of (external) indexes (starting at 0)</li>
-        <li><a name="dchem.PRange-indexStart"><b>indexStart</b></a> (long):first (external) index of a range that ends at extIndexEnd</li>
-        <li><a name="dchem.PRange-indexEnd"><b>indexEnd</b></a> (long):last (external) index of a range that starts at extIndexStart</li>
-        <li><a name="dchem.PRange-kIdx"><b>kIdx</b></a> (int):index of the kind of particles that should be selected, if given alone selects all particles, otherwise sets the context for the other indexes</li>
-        <li><a name="dchem.PRange-kindName"><b>kindName</b></a> (string):name of the kind of particles that should be selected, if given alone selects all particles</li>
-        <li><a name="dchem.PRange-refKind"><b>refKind</b></a> (long):the level of the reference (by default -1, i.e. system level)</li>
-        <li><a name="dchem.PRange-refKindName"><b>refKindName</b></a> (string):the name of the level of the reference (overrides refKind)</li>
-    </ul>
-    <h3><a name="dchem.PoorManExecuter">dchem.PoorManExecuter</a></h3>
-        <p><em>RootInputElement</em>. executer that can be used to connect any prgram that writes its output in the correct format</p>
-    <ul>
-        <li><a name="dchem.PoorManExecuter-superTemplate"><b>superTemplate</b></a> (Ref):a template where to take default values</li>
-        <li><a name="dchem.PoorManExecuter-startConfig"><b>startConfig</b></a> (Ref):the initial configuration</li>
-        <li><a name="dchem.PoorManExecuter-templateDir"><b>templateDir</b></a> (string):where to find the definition of the template (tipically a directory)</li>
-        <li><a name="dchem.PoorManExecuter-subs"><b>subs</b></a> (aa):keyword and their substitutions to apply to the templates (as dictionary string -> string), a->b will replace "[a]" with "b"</li>
-        <li><a name="dchem.PoorManExecuter-setupCmd"><b>setupCmd</b></a> (string):a command that should be executed when the method is setup</li>
-        <li><a name="dchem.PoorManExecuter-setupCtxCmd"><b>setupCtxCmd</b></a> (string):a command that should be executed to set up the context</li>
-        <li><a name="dchem.PoorManExecuter-stopCtxCmd"><b>stopCtxCmd</b></a> (string):a command that should be executed to stop the context</li>
-        <li><a name="dchem.PoorManExecuter-writeReplacementsDict"><b>writeReplacementsDict</b></a> (bool):if a dictionary with the replacements performed should be written (default is false)</li>
-        <li><a name="dchem.PoorManExecuter-overwriteUnchangedPaths"><b>overwriteUnchangedPaths</b></a> (bool):if paths that are already there should be overwitten (default is false)</li>
-        <li><a name="dchem.PoorManExecuter-makeReplacementsInCommands"><b>makeReplacementsInCommands</b></a> (bool):if replacements should be performed on the commands to be executed (default is true)</li>
-        <li><a name="dchem.PoorManExecuter-ignoreSetupExitStatus"><b>ignoreSetupExitStatus</b></a> (bool):if the exit status of the setup command should be ignored (false)</li>
-        <li><a name="dchem.PoorManExecuter-ignoreSetupCtxExitStatus"><b>ignoreSetupCtxExitStatus</b></a> (bool):if the exit status of the context setup command should be ignored (false)</li>
-        <li><a name="dchem.PoorManExecuter-ignoreCmdExitStatus"><b>ignoreCmdExitStatus</b></a> (bool):if the exit status of the commands to calculate energy and forces should be ignored (false)</li>
-        <li><a name="dchem.PoorManExecuter-onELog"><b>onELog</b></a> (array):what to log for each energy evaluation (by default energy and positions ad xyz)</li>
-        <li><a name="dchem.PoorManExecuter-onFLog"><b>onFLog</b></a> (array):what to log for each force evaluation (by default xyzForces)</li>
-        <li><a name="dchem.PoorManExecuter-constraints"><b>constraints</b></a> (Ref):the constraints to be applied to the system</li>
-        <li><a name="dchem.PoorManExecuter-executeE"><b>executeE</b></a> (string):command executed to calculate the energy alone (optional)</li>
-        <li><a name="dchem.PoorManExecuter-executeEF"><b>executeEF</b></a> (string):command executed to calculate the energy and forces (this is required)</li>
-        <li><a name="dchem.PoorManExecuter-executeF0"><b>executeF0</b></a> (string):command executed do calculate the forces immediately after the energy (optional)</li>
-        <li><a name="dchem.PoorManExecuter-energyFile"><b>energyFile</b></a> (string):file where to read energy and energy error (just those numbers in Hartrees, separated by spaces)</li>
-        <li><a name="dchem.PoorManExecuter-forceFile"><b>forceFile</b></a> (string):file where to read the error on the forces and then the forces in the input order (just numbers in atomic units separated by whitespace)</li>
-    </ul>
-    <h3><a name="dchem.PosELogger">dchem.PosELogger</a></h3>
-        <p><em>RootInputElement</em>. Logs position and energy</p>
-    <ul>
-        <li><a name="dchem.PosELogger-baseFileName"><b>baseFileName</b></a> (string):base filename used for the logs</li>
-        <li><a name="dchem.PosELogger-posFormat"><b>posFormat</b></a> (string):format string to format the positions</li>
-        <li><a name="dchem.PosELogger-eFormat"><b>eFormat</b></a> (string):format string to format the energy</li>
-        <li><a name="dchem.PosELogger-flushEachLine"><b>flushEachLine</b></a> (bool):if each line should be flushed (defaults to 0)</li>
-    </ul>
-    <h3><a name="dchem.PrintAttractors">dchem.PrintAttractors</a></h3>
-        <p><em>RootInputElement</em>. Prints the attractor of each point</p>
-    <ul>
-        <li><a name="dchem.PrintAttractors-baseFileName"><b>baseFileName</b></a> (string):base filename used for the logs</li>
-        <li><a name="dchem.PrintAttractors-posFormat"><b>posFormat</b></a> (string):format string to format the positions</li>
-        <li><a name="dchem.PrintAttractors-eFormat"><b>eFormat</b></a> (string):format string to format the energy</li>
-        <li><a name="dchem.PrintAttractors-printPos"><b>printPos</b></a> (bool):if the position of the point should be printed (false)</li>
-        <li><a name="dchem.PrintAttractors-printEnergy"><b>printEnergy</b></a> (bool):if the energy should be printed (true)</li>
-    </ul>
-    <h3><a name="dchem.RotTransConstraint">dchem.RotTransConstraint</a></h3>
-        <p><em>RootInputElement</em>. Constraints that removes rotation and translation by keeping three particles (p0,p1,p2) fixed (p0 in the origin, second so that p1-p0 is along x, and the third (or following if perfectly aligned) so that p2-p0 is in the x,y plane wiht positive y)</p>
-    <ul>
-        <li><a name="dchem.RotTransConstraint-particles"><b>particles</b></a> (Ref):the three or more particles used to remove translations and rotations</li>
-    </ul>
-    <h3><a name="dchem.Silos">dchem.Silos</a></h3>
+    <h3><a name="PNetSilos">PNetSilos</a></h3>
         <p><em>RootInputElement</em>. A silos, the place where all points are stored and observers and explorers live.</p>
     <ul>
-        <li><a name="dchem.Silos-noTaskWaitTime"><b>noTaskWaitTime</b></a> (double):the number of seconds to wait when no task is available (10)</li>
-        <li><a name="dchem.Silos-evaluator"><b>evaluator</b></a> (Ref):the method to perform energy evaluations</li>
-        <li><a name="dchem.Silos-evaluatorTask"><b>evaluatorTask</b></a> (Ref):the task to execute (normally to start clients that will perform evaluations, if a SilosConnectorI then it is passed silos and accuracy before starting)</li>
-        <li><a name="dchem.Silos-precision"><b>precision</b></a> (string):the precision with which the points are stored</li>
-        <li><a name="dchem.Silos-gradEagerness"><b>gradEagerness</b></a> (string):the eagerness in calculating gradients (OnRequest,Speculative,Always)</li>
-        <li><a name="dchem.Silos-explorers"><b>explorers</b></a> (array):the observers and explorers active on the point network</li>
-        <li><a name="dchem.Silos-loaders"><b>loaders</b></a> (array):SilosWorkers that load already evaluated points (called after the explorer are set up, before exploring)</li>
-        <li><a name="dchem.Silos-monitors"><b>monitors</b></a> (array):SilosWorkers called at regular intervals during the exploration</li>
-        <li><a name="dchem.Silos-finishers"><b>finishers</b></a> (array):list of finishers, SilosWorkers called after the exploration is finished</li>
-        <li><a name="dchem.Silos-minProjectionResidual"><b>minProjectionResidual</b></a> (double):minimum residual after projecting out the linear dependend directions (0.05)</li>
-        <li><a name="dchem.Silos-sameDirCosAngle"><b>sameDirCosAngle</b></a> (double):minimum cos of then angle in dual space to consider a direction equivalent (0.866)</li>
-        <li><a name="dchem.Silos-minNormDual"><b>minNormDual</b></a> (double):minimum norm in the dual T space to accept an exploration (in units of explorationSize) (0.4)</li>
-        <li><a name="dchem.Silos-minNormDualSelf"><b>minNormDualSelf</b></a> (double):minimum norm in the dual T space to accept an exploration for a self generated direction (in units of discretizationStep) (0.1)</li>
-        <li><a name="dchem.Silos-discretizationStep"><b>discretizationStep</b></a> (double):discretization step (0.2)</li>
-        <li><a name="dchem.Silos-cartesianDiffMin"><b>cartesianDiffMin</b></a> (double):minimum cartesian difference (0.02)</li>
-        <li><a name="dchem.Silos-maxNormDual"><b>maxNormDual</b></a> (double):max norm in the dual T space to accept an exploration (in units of explorationSize) (1.9)</li>
-        <li><a name="dchem.Silos-dirSize2"><b>dirSize2</b></a> (double):square of the maximum distance from the optimal direction point in explorationSize units (1.0)</li>
-        <li><a name="dchem.Silos-explorationSteps"><b>explorationSteps</b></a> (long):number of exploration steps to perform (0)</li>
-        <li><a name="dchem.Silos-maxExplorationTries"><b>maxExplorationTries</b></a> (long):number of times an exploration attempts to get a vaid point to evaluate before giving up (10)</li>
-        <li><a name="dchem.Silos-inDirCartesianScale2"><b>inDirCartesianScale2</b></a> (double):square of the scale applied for the error in cartesian units on the component in the direction (0.5)</li>
-        <li><a name="dchem.Silos-sameDirCosAngleCartesian"><b>sameDirCosAngleCartesian</b></a> (double):cos of the angle in cartesian units (0.866)</li>
-        <li><a name="dchem.Silos-maxMoveCartesian"><b>maxMoveCartesian</b></a> (double):quick cutoff for point further than this in cartesian units (0.0)</li>
-        <li><a name="dchem.Silos-maxMoveDual"><b>maxMoveDual</b></a> (double):quick cutoff for points further than this in cartesian units (3.0)</li>
-        <li><a name="dchem.Silos-minMoveInternal"><b>minMoveInternal</b></a> (double):minimum difference in the internal coords to accept a new direction (0.0)</li>
-        <li><a name="dchem.Silos-zeroLen"><b>zeroLen</b></a> (double):distance that is considered equivalent to 0 (1.0e-10)</li>
+        <li><a name="PNetSilos-noTaskWaitTime"><b>noTaskWaitTime</b></a> (double):the number of seconds to wait when no task is available (10)</li>
+        <li><a name="PNetSilos-evaluator"><b>evaluator</b></a> (Ref):the method to perform energy evaluations</li>
+        <li><a name="PNetSilos-evaluatorTask"><b>evaluatorTask</b></a> (Ref):the task to execute (normally to start clients that will perform evaluations, if a SilosConnectorI then it is passed silos and accuracy before starting)</li>
+        <li><a name="PNetSilos-precision"><b>precision</b></a> (string):the precision with which the points are stored</li>
+        <li><a name="PNetSilos-gradEagerness"><b>gradEagerness</b></a> (string):the eagerness in calculating gradients (OnRequest,Speculative,Always)</li>
+        <li><a name="PNetSilos-explorers"><b>explorers</b></a> (array):the observers and explorers active on the point network</li>
+        <li><a name="PNetSilos-loaders"><b>loaders</b></a> (array):SilosWorkers that load already evaluated points (called after the explorer are set up, before exploring)</li>
+        <li><a name="PNetSilos-monitors"><b>monitors</b></a> (array):SilosWorkers called at regular intervals during the exploration</li>
+        <li><a name="PNetSilos-finishers"><b>finishers</b></a> (array):list of finishers, SilosWorkers called after the exploration is finished</li>
+        <li><a name="PNetSilos-minProjectionResidual"><b>minProjectionResidual</b></a> (double):minimum residual after projecting out the linear dependend directions (0.05)</li>
+        <li><a name="PNetSilos-sameDirCosAngle"><b>sameDirCosAngle</b></a> (double):minimum cos of then angle in dual space to consider a direction equivalent (0.866)</li>
+        <li><a name="PNetSilos-minNormDual"><b>minNormDual</b></a> (double):minimum norm in the dual T space to accept an exploration (in units of explorationSize) (0.4)</li>
+        <li><a name="PNetSilos-minNormDualSelf"><b>minNormDualSelf</b></a> (double):minimum norm in the dual T space to accept an exploration for a self generated direction (in units of discretizationStep) (0.1)</li>
+        <li><a name="PNetSilos-discretizationStep"><b>discretizationStep</b></a> (double):discretization step (0.2)</li>
+        <li><a name="PNetSilos-cartesianDiffMin"><b>cartesianDiffMin</b></a> (double):minimum cartesian difference (0.02)</li>
+        <li><a name="PNetSilos-maxNormDual"><b>maxNormDual</b></a> (double):max norm in the dual T space to accept an exploration (in units of explorationSize) (1.9)</li>
+        <li><a name="PNetSilos-dirSize2"><b>dirSize2</b></a> (double):square of the maximum distance from the optimal direction point in explorationSize units (1.0)</li>
+        <li><a name="PNetSilos-explorationSteps"><b>explorationSteps</b></a> (long):number of exploration steps to perform (0)</li>
+        <li><a name="PNetSilos-maxExplorationTries"><b>maxExplorationTries</b></a> (long):number of times an exploration attempts to get a vaid point to evaluate before giving up (10)</li>
+        <li><a name="PNetSilos-inDirCartesianScale2"><b>inDirCartesianScale2</b></a> (double):square of the scale applied for the error in cartesian units on the component in the direction (0.5)</li>
+        <li><a name="PNetSilos-sameDirCosAngleCartesian"><b>sameDirCosAngleCartesian</b></a> (double):cos of the angle in cartesian units (0.866)</li>
+        <li><a name="PNetSilos-maxMoveCartesian"><b>maxMoveCartesian</b></a> (double):quick cutoff for point further than this in cartesian units (0.0)</li>
+        <li><a name="PNetSilos-maxMoveDual"><b>maxMoveDual</b></a> (double):quick cutoff for points further than this in cartesian units (3.0)</li>
+        <li><a name="PNetSilos-minMoveInternal"><b>minMoveInternal</b></a> (double):minimum difference in the internal coords to accept a new direction (0.0)</li>
+        <li><a name="PNetSilos-zeroLen"><b>zeroLen</b></a> (double):distance that is considered equivalent to 0 (1.0e-10)</li>
     </ul>
-    <h3><a name="dchem.SinglePoint">dchem.SinglePoint</a></h3>
+    <h3><a name="PNetSilosClient">PNetSilosClient</a></h3>
+        <p><em>RootInputElement</em>. a silos that connets to another main silos for all important operations</p>
+    <ul>
+        <li><a name="PNetSilosClient-connectionUrl"><b>connectionUrl</b></a> (string):the url to use to get the connection to the silos</li>
+        <li><a name="PNetSilosClient-ownerCacheSize"><b>ownerCacheSize</b></a> (long):amount of points whose owner is cached (10)</li>
+    </ul>
+    <h3><a name="ParticleRange">ParticleRange</a></h3>
+        <p><em>RootInputElement</em>. Structure that represent some particles (subsets,...)</p>
+    <ul>
+        <li><a name="ParticleRange-particles"><b>particles</b></a> (array):list of particles in internal notation (kind,idx)</li>
+        <li><a name="ParticleRange-particleStart"><b>particleStart</b></a> (dchem.sys.PIndexes.PIndex):first particle of a range that continues until particleEnd</li>
+        <li><a name="ParticleRange-particleEnd"><b>particleEnd</b></a> (dchem.sys.PIndexes.PIndex):last particle of a range that starts at particleStart</li>
+        <li><a name="ParticleRange-indexes"><b>indexes</b></a> (array):list of (external) indexes (starting at 0)</li>
+        <li><a name="ParticleRange-indexStart"><b>indexStart</b></a> (long):first (external) index of a range that ends at extIndexEnd</li>
+        <li><a name="ParticleRange-indexEnd"><b>indexEnd</b></a> (long):last (external) index of a range that starts at extIndexStart</li>
+        <li><a name="ParticleRange-kIdx"><b>kIdx</b></a> (int):index of the kind of particles that should be selected, if given alone selects all particles, otherwise sets the context for the other indexes</li>
+        <li><a name="ParticleRange-kindName"><b>kindName</b></a> (string):name of the kind of particles that should be selected, if given alone selects all particles</li>
+        <li><a name="ParticleRange-refKind"><b>refKind</b></a> (long):the level of the reference (by default -1, i.e. system level)</li>
+        <li><a name="ParticleRange-refKindName"><b>refKindName</b></a> (string):the name of the level of the reference (overrides refKind)</li>
+    </ul>
+    <h3><a name="PoorManExecuter">PoorManExecuter</a></h3>
+        <p><em>RootInputElement</em>. executer that can be used to connect any prgram that writes its output in the correct format</p>
+    <ul>
+        <li><a name="PoorManExecuter-superTemplate"><b>superTemplate</b></a> (Ref):a template where to take default values</li>
+        <li><a name="PoorManExecuter-startConfig"><b>startConfig</b></a> (Ref):the initial configuration</li>
+        <li><a name="PoorManExecuter-templateDir"><b>templateDir</b></a> (string):where to find the definition of the template (tipically a directory)</li>
+        <li><a name="PoorManExecuter-subs"><b>subs</b></a> (aa):keyword and their substitutions to apply to the templates (as dictionary string -> string), a->b will replace "[a]" with "b"</li>
+        <li><a name="PoorManExecuter-setupCmd"><b>setupCmd</b></a> (string):a command that should be executed when the method is setup</li>
+        <li><a name="PoorManExecuter-setupCtxCmd"><b>setupCtxCmd</b></a> (string):a command that should be executed to set up the context</li>
+        <li><a name="PoorManExecuter-stopCtxCmd"><b>stopCtxCmd</b></a> (string):a command that should be executed to stop the context</li>
+        <li><a name="PoorManExecuter-writeReplacementsDict"><b>writeReplacementsDict</b></a> (bool):if a dictionary with the replacements performed should be written (default is false)</li>
+        <li><a name="PoorManExecuter-overwriteUnchangedPaths"><b>overwriteUnchangedPaths</b></a> (bool):if paths that are already there should be overwitten (default is false)</li>
+        <li><a name="PoorManExecuter-makeReplacementsInCommands"><b>makeReplacementsInCommands</b></a> (bool):if replacements should be performed on the commands to be executed (default is true)</li>
+        <li><a name="PoorManExecuter-ignoreSetupExitStatus"><b>ignoreSetupExitStatus</b></a> (bool):if the exit status of the setup command should be ignored (false)</li>
+        <li><a name="PoorManExecuter-ignoreSetupCtxExitStatus"><b>ignoreSetupCtxExitStatus</b></a> (bool):if the exit status of the context setup command should be ignored (false)</li>
+        <li><a name="PoorManExecuter-ignoreCmdExitStatus"><b>ignoreCmdExitStatus</b></a> (bool):if the exit status of the commands to calculate energy and forces should be ignored (false)</li>
+        <li><a name="PoorManExecuter-ignoreExitStatus10"><b>ignoreExitStatus10</b></a> (bool):ignore exit status if it is 10</li>
+        <li><a name="PoorManExecuter-onELog"><b>onELog</b></a> (array):what to log for each energy evaluation (by default energy and positions ad xyz)</li>
+        <li><a name="PoorManExecuter-onFLog"><b>onFLog</b></a> (array):what to log for each force evaluation (by default xyzForces)</li>
+        <li><a name="PoorManExecuter-constraints"><b>constraints</b></a> (Ref):the constraints to be applied to the system</li>
+        <li><a name="PoorManExecuter-executeE"><b>executeE</b></a> (string):command executed to calculate the energy alone (optional)</li>
+        <li><a name="PoorManExecuter-executeEF"><b>executeEF</b></a> (string):command executed to calculate the energy and forces (this is required)</li>
+        <li><a name="PoorManExecuter-executeF0"><b>executeF0</b></a> (string):command executed do calculate the forces immediately after the energy (optional)</li>
+        <li><a name="PoorManExecuter-energyFile"><b>energyFile</b></a> (string):file where to read energy and energy error (just those numbers in Hartrees, separated by spaces)</li>
+        <li><a name="PoorManExecuter-forceFile"><b>forceFile</b></a> (string):file where to read the error on the forces and then the forces in the input order (just numbers in atomic units separated by whitespace)</li>
+    </ul>
+    <h3><a name="PosELogger">PosELogger</a></h3>
+        <p><em>RootInputElement</em>. Logs position and energy</p>
+    <ul>
+        <li><a name="PosELogger-baseFileName"><b>baseFileName</b></a> (string):base filename used for the logs</li>
+        <li><a name="PosELogger-posFormat"><b>posFormat</b></a> (string):format string to format the positions</li>
+        <li><a name="PosELogger-eFormat"><b>eFormat</b></a> (string):format string to format the energy</li>
+        <li><a name="PosELogger-flushEachLine"><b>flushEachLine</b></a> (bool):if each line should be flushed (defaults to 0)</li>
+    </ul>
+    <h3><a name="PrintAttractors">PrintAttractors</a></h3>
+        <p><em>RootInputElement</em>. Prints the attractor of each point</p>
+    <ul>
+        <li><a name="PrintAttractors-baseFileName"><b>baseFileName</b></a> (string):base filename used for the logs</li>
+        <li><a name="PrintAttractors-posFormat"><b>posFormat</b></a> (string):format string to format the positions</li>
+        <li><a name="PrintAttractors-eFormat"><b>eFormat</b></a> (string):format string to format the energy</li>
+        <li><a name="PrintAttractors-printPos"><b>printPos</b></a> (bool):if the position of the point should be printed (false)</li>
+        <li><a name="PrintAttractors-printEnergy"><b>printEnergy</b></a> (bool):if the energy should be printed (true)</li>
+    </ul>
+    <h3><a name="Ref">Ref</a></h3>
+        <p><em>RootInputElement</em>. reference to another input field. If the class is already known one should write @xyz to refer to the object with key xyz otherwise { class:Ref @xyz }</p>
+    <h3><a name="RotTransConstraint">RotTransConstraint</a></h3>
+        <p><em>RootInputElement</em>. Constraints that removes rotation and translation by keeping three particles (p0,p1,p2) fixed (p0 in the origin, second so that p1-p0 is along x, and the third (or following if perfectly aligned) so that p2-p0 is in the x,y plane wiht positive y)</p>
+    <ul>
+        <li><a name="RotTransConstraint-particles"><b>particles</b></a> (Ref):the three or more particles used to remove translations and rotations</li>
+    </ul>
+    <h3><a name="SinglePoint">SinglePoint</a></h3>
         <p><em>RootInputElement</em>. Sampler that performs a single point evaluation.</p>
     <ul>
-        <li><a name="dchem.SinglePoint-calcE"><b>calcE</b></a> (bool):the energy should be calculated</li>
-        <li><a name="dchem.SinglePoint-calcF"><b>calcF</b></a> (bool):the forces should be calculated</li>
-        <li><a name="dchem.SinglePoint-method"><b>method</b></a> (Ref):the method to use</li>
+        <li><a name="SinglePoint-calcE"><b>calcE</b></a> (bool):the energy should be calculated</li>
+        <li><a name="SinglePoint-calcF"><b>calcF</b></a> (bool):the forces should be calculated</li>
+        <li><a name="SinglePoint-method"><b>method</b></a> (Ref):the method to use</li>
     </ul>
-    <h3><a name="dchem.SubsetCalculator">dchem.SubsetCalculator</a></h3>
+    <h3><a name="SubsetCalculator">SubsetCalculator</a></h3>
         <p><em>RootInputElement</em>. selects some particles and degrees of and input calculator and generates a calculator using only those</p>
     <ul>
-        <li><a name="dchem.SubsetCalculator-selections"><b>selections</b></a> (array):the selected degrees of freedom</li>
-        <li><a name="dchem.SubsetCalculator-method"><b>method</b></a> (Ref):the method to subset</li>
-        <li><a name="dchem.SubsetCalculator-trimUnspecifiedSuperParticles"><b>trimUnspecifiedSuperParticles</b></a> (bool):if unspecified superparticle should have their degrees of freedom removed (true)</li>
-        <li><a name="dchem.SubsetCalculator-singleSys"><b>singleSys</b></a> (bool):if there is a single system for all the contexts, and thus the mapping and new sysStruct can be cached (true)</li>
+        <li><a name="SubsetCalculator-selections"><b>selections</b></a> (array):the selected degrees of freedom</li>
+        <li><a name="SubsetCalculator-method"><b>method</b></a> (Ref):the method to subset</li>
+        <li><a name="SubsetCalculator-trimUnspecifiedSuperParticles"><b>trimUnspecifiedSuperParticles</b></a> (bool):if unspecified superparticle should have their degrees of freedom removed (true)</li>
+        <li><a name="SubsetCalculator-singleSys"><b>singleSys</b></a> (bool):if there is a single system for all the contexts, and thus the mapping and new sysStruct can be cached (true)</li>
     </ul>
-    <h3><a name="dchem.SwapSymmNeighLooper">dchem.SwapSymmNeighLooper</a></h3>
+    <h3><a name="SwapSymmNeighLooper">SwapSymmNeighLooper</a></h3>
         <p><em>RootInputElement</em>. handles permutational symmetry of groups of particles</p>
     <ul>
-        <li><a name="dchem.SwapSymmNeighLooper-useFirstNeigh"><b>useFirstNeigh</b></a> (bool):if first image convention should be used for periodic dimensions (default is true)</li>
-        <li><a name="dchem.SwapSymmNeighLooper-groups"><b>groups</b></a> (array):the groups that should be swapped (ParticleRange), all permutations within one group are checked</li>
+        <li><a name="SwapSymmNeighLooper-useFirstNeigh"><b>useFirstNeigh</b></a> (bool):if first image convention should be used for periodic dimensions (default is true)</li>
+        <li><a name="SwapSymmNeighLooper-groups"><b>groups</b></a> (array):the groups that should be swapped (ParticleRange), all permutations within one group are checked</li>
     </ul>
-    <h3><a name="dchem.TemplateExecuter">dchem.TemplateExecuter</a></h3>
+    <h3><a name="TemplateExecuter">TemplateExecuter</a></h3>
         <p><em>RootInputElement</em>. Executes an external program using a template directory to generate the directory where to run. The user can define extra substitutions.</p>
     <ul>
-        <li><a name="dchem.TemplateExecuter-superTemplate"><b>superTemplate</b></a> (Ref):a template where to take default values</li>
-        <li><a name="dchem.TemplateExecuter-startConfig"><b>startConfig</b></a> (Ref):the initial configuration</li>
-        <li><a name="dchem.TemplateExecuter-templateDir"><b>templateDir</b></a> (string):where to find the definition of the template (tipically a directory)</li>
-        <li><a name="dchem.TemplateExecuter-subs"><b>subs</b></a> (aa):keyword and their substitutions to apply to the templates (as dictionary string -> string), a->b will replace "[a]" with "b"</li>
-        <li><a name="dchem.TemplateExecuter-setupCmd"><b>setupCmd</b></a> (string):a command that should be executed when the method is setup</li>
-        <li><a name="dchem.TemplateExecuter-setupCtxCmd"><b>setupCtxCmd</b></a> (string):a command that should be executed to set up the context</li>
-        <li><a name="dchem.TemplateExecuter-stopCtxCmd"><b>stopCtxCmd</b></a> (string):a command that should be executed to stop the context</li>
-        <li><a name="dchem.TemplateExecuter-writeReplacementsDict"><b>writeReplacementsDict</b></a> (bool):if a dictionary with the replacements performed should be written (default is false)</li>
-        <li><a name="dchem.TemplateExecuter-overwriteUnchangedPaths"><b>overwriteUnchangedPaths</b></a> (bool):if paths that are already there should be overwitten (default is false)</li>
-        <li><a name="dchem.TemplateExecuter-makeReplacementsInCommands"><b>makeReplacementsInCommands</b></a> (bool):if replacements should be performed on the commands to be executed (default is true)</li>
-        <li><a name="dchem.TemplateExecuter-ignoreSetupExitStatus"><b>ignoreSetupExitStatus</b></a> (bool):if the exit status of the setup command should be ignored (false)</li>
-        <li><a name="dchem.TemplateExecuter-ignoreSetupCtxExitStatus"><b>ignoreSetupCtxExitStatus</b></a> (bool):if the exit status of the context setup command should be ignored (false)</li>
-        <li><a name="dchem.TemplateExecuter-ignoreCmdExitStatus"><b>ignoreCmdExitStatus</b></a> (bool):if the exit status of the commands to calculate energy and forces should be ignored (false)</li>
-        <li><a name="dchem.TemplateExecuter-onELog"><b>onELog</b></a> (array):what to log for each energy evaluation (by default energy and positions ad xyz)</li>
-        <li><a name="dchem.TemplateExecuter-onFLog"><b>onFLog</b></a> (array):what to log for each force evaluation (by default xyzForces)</li>
-        <li><a name="dchem.TemplateExecuter-constraints"><b>constraints</b></a> (Ref):the constraints to be applied to the system</li>
+        <li><a name="TemplateExecuter-superTemplate"><b>superTemplate</b></a> (Ref):a template where to take default values</li>
+        <li><a name="TemplateExecuter-startConfig"><b>startConfig</b></a> (Ref):the initial configuration</li>
+        <li><a name="TemplateExecuter-templateDir"><b>templateDir</b></a> (string):where to find the definition of the template (tipically a directory)</li>
+        <li><a name="TemplateExecuter-subs"><b>subs</b></a> (aa):keyword and their substitutions to apply to the templates (as dictionary string -> string), a->b will replace "[a]" with "b"</li>
+        <li><a name="TemplateExecuter-setupCmd"><b>setupCmd</b></a> (string):a command that should be executed when the method is setup</li>
+        <li><a name="TemplateExecuter-setupCtxCmd"><b>setupCtxCmd</b></a> (string):a command that should be executed to set up the context</li>
+        <li><a name="TemplateExecuter-stopCtxCmd"><b>stopCtxCmd</b></a> (string):a command that should be executed to stop the context</li>
+        <li><a name="TemplateExecuter-writeReplacementsDict"><b>writeReplacementsDict</b></a> (bool):if a dictionary with the replacements performed should be written (default is false)</li>
+        <li><a name="TemplateExecuter-overwriteUnchangedPaths"><b>overwriteUnchangedPaths</b></a> (bool):if paths that are already there should be overwitten (default is false)</li>
+        <li><a name="TemplateExecuter-makeReplacementsInCommands"><b>makeReplacementsInCommands</b></a> (bool):if replacements should be performed on the commands to be executed (default is true)</li>
+        <li><a name="TemplateExecuter-ignoreSetupExitStatus"><b>ignoreSetupExitStatus</b></a> (bool):if the exit status of the setup command should be ignored (false)</li>
+        <li><a name="TemplateExecuter-ignoreSetupCtxExitStatus"><b>ignoreSetupCtxExitStatus</b></a> (bool):if the exit status of the context setup command should be ignored (false)</li>
+        <li><a name="TemplateExecuter-ignoreCmdExitStatus"><b>ignoreCmdExitStatus</b></a> (bool):if the exit status of the commands to calculate energy and forces should be ignored (false)</li>
+        <li><a name="TemplateExecuter-ignoreExitStatus10"><b>ignoreExitStatus10</b></a> (bool):ignore exit status if it is 10</li>
+        <li><a name="TemplateExecuter-onELog"><b>onELog</b></a> (array):what to log for each energy evaluation (by default energy and positions ad xyz)</li>
+        <li><a name="TemplateExecuter-onFLog"><b>onFLog</b></a> (array):what to log for each force evaluation (by default xyzForces)</li>
+        <li><a name="TemplateExecuter-constraints"><b>constraints</b></a> (Ref):the constraints to be applied to the system</li>
     </ul>
-    <h3><a name="dchem.TestGrad">dchem.TestGrad</a></h3>
+    <h3><a name="TestGrad">TestGrad</a></h3>
         <p><em>RootInputElement</em>. Sampler that tests the gradient using finite differences at the start configuration.</p>
     <ul>
-        <li><a name="dchem.TestGrad-dx"><b>dx</b></a> (double):the discretization amount (derivatives are approximated with +dx/2..dx/2)</li>
-        <li><a name="dchem.TestGrad-maxDxFact"><b>maxDxFact</b></a> (double):maximum distance between the two evaluation points (needs to be larger than 1)</li>
-        <li><a name="dchem.TestGrad-maxOffsetCFact"><b>maxOffsetCFact</b></a> (double):maximum distance from the central point to accept a point evaluation as fraction of dx (needs to be larger than 1)</li>
-        <li><a name="dchem.TestGrad-maxEDiffErr"><b>maxEDiffErr</b></a> (double):maximum error in the energy difference</li>
-        <li><a name="dchem.TestGrad-method"><b>method</b></a> (Ref):the method to test</li>
+        <li><a name="TestGrad-dx"><b>dx</b></a> (double):the discretization amount (derivatives are approximated with +dx/2..dx/2)</li>
+        <li><a name="TestGrad-maxDxFact"><b>maxDxFact</b></a> (double):maximum distance between the two evaluation points (needs to be larger than 1)</li>
+        <li><a name="TestGrad-maxOffsetCFact"><b>maxOffsetCFact</b></a> (double):maximum distance from the central point to accept a point evaluation as fraction of dx (needs to be larger than 1)</li>
+        <li><a name="TestGrad-maxEDiffErr"><b>maxEDiffErr</b></a> (double):maximum error in the energy difference</li>
+        <li><a name="TestGrad-method"><b>method</b></a> (Ref):the method to test</li>
     </ul>
-    <h3><a name="dchem.TestSampler">dchem.TestSampler</a></h3>
+    <h3><a name="TestSampler">TestSampler</a></h3>
         <p><em>RootInputElement</em>. A sampler that just performs some tests</p>
     <ul>
-        <li><a name="dchem.TestSampler-method"><b>method</b></a> (Ref):the method to use</li>
+        <li><a name="TestSampler-method"><b>method</b></a> (Ref):the method to use</li>
     </ul>
-    <h3><a name="dchem.TrackSpecialPoints">dchem.TrackSpecialPoints</a></h3>
+    <h3><a name="TopologyInfo">TopologyInfo</a></h3>
         <p><em>RootInputElement</em>. Writes out the special points found so far</p>
     <ul>
-        <li><a name="dchem.TrackSpecialPoints-logfileBaseName"><b>logfileBaseName</b></a> (string):base path used for the file where the special points are logged, if emty no log is written (defaults to log)</li>
-        <li><a name="dchem.TrackSpecialPoints-flushEachLine"><b>flushEachLine</b></a> (bool):if each line should be flushed (true)</li>
-        <li><a name="dchem.TrackSpecialPoints-logAllGFlagsChanges"><b>logAllGFlagsChanges</b></a> (bool):if all gFlags changes should be logged (default is false)</li>
+        <li><a name="TopologyInfo-logfileBaseName"><b>logfileBaseName</b></a> (string):base path used for the file where the special points are logged, if emty no log is written (defaults to log)</li>
+        <li><a name="TopologyInfo-flushEachLine"><b>flushEachLine</b></a> (bool):if each line should be flushed (true)</li>
+        <li><a name="TopologyInfo-logAllGFlagsChanges"><b>logAllGFlagsChanges</b></a> (bool):if all gFlags changes should be logged (default is false)</li>
+        <li><a name="TopologyInfo-convergenceLimit"><b>convergenceLimit</b></a> (double):minimum cos value of the residual of self pointing gradients before minima are merged (set it larger than 1 to disable merging) (0.866)</li>
+        <li><a name="TopologyInfo-minLogs"><b>minLogs</b></a> (array):what is logged for points that are suspected to be minima (minima.xyz)</li>
+        <li><a name="TopologyInfo-tPointLogs"><b>tPointLogs</b></a> (array):what is logged for points that are suspected to be transition points (tPointLogs.xyz)</li>
     </ul>
-    <h3><a name="dchem.TurboExecuter">dchem.TurboExecuter</a></h3>
+    <h3><a name="TrackSpecialPoints">TrackSpecialPoints</a></h3>
+        <p><em>RootInputElement</em>. Writes out the special points found so far</p>
+    <ul>
+        <li><a name="TrackSpecialPoints-logfileBaseName"><b>logfileBaseName</b></a> (string):base path used for the file where the special points are logged, if emty no log is written (defaults to log)</li>
+        <li><a name="TrackSpecialPoints-flushEachLine"><b>flushEachLine</b></a> (bool):if each line should be flushed (true)</li>
+        <li><a name="TrackSpecialPoints-logAllGFlagsChanges"><b>logAllGFlagsChanges</b></a> (bool):if all gFlags changes should be logged (default is false)</li>
+    </ul>
+    <h3><a name="TurboExecuter">TurboExecuter</a></h3>
         <p><em>RootInputElement</em>. performs a calculation with TurboMole</p>
     <ul>
-        <li><a name="dchem.TurboExecuter-superTemplate"><b>superTemplate</b></a> (Ref):a template where to take default values</li>
-        <li><a name="dchem.TurboExecuter-startConfig"><b>startConfig</b></a> (Ref):the initial configuration</li>
-        <li><a name="dchem.TurboExecuter-templateDir"><b>templateDir</b></a> (string):where to find the definition of the template (tipically a directory)</li>
-        <li><a name="dchem.TurboExecuter-subs"><b>subs</b></a> (aa):keyword and their substitutions to apply to the templates (as dictionary string -> string), a->b will replace "[a]" with "b"</li>
-        <li><a name="dchem.TurboExecuter-setupCmd"><b>setupCmd</b></a> (string):a command that should be executed when the method is setup</li>
-        <li><a name="dchem.TurboExecuter-setupCtxCmd"><b>setupCtxCmd</b></a> (string):a command that should be executed to set up the context</li>
-        <li><a name="dchem.TurboExecuter-stopCtxCmd"><b>stopCtxCmd</b></a> (string):a command that should be executed to stop the context</li>
-        <li><a name="dchem.TurboExecuter-writeReplacementsDict"><b>writeReplacementsDict</b></a> (bool):if a dictionary with the replacements performed should be written (default is false)</li>
-        <li><a name="dchem.TurboExecuter-overwriteUnchangedPaths"><b>overwriteUnchangedPaths</b></a> (bool):if paths that are already there should be overwitten (default is false)</li>
-        <li><a name="dchem.TurboExecuter-makeReplacementsInCommands"><b>makeReplacementsInCommands</b></a> (bool):if replacements should be performed on the commands to be executed (default is true)</li>
-        <li><a name="dchem.TurboExecuter-ignoreSetupExitStatus"><b>ignoreSetupExitStatus</b></a> (bool):if the exit status of the setup command should be ignored (false)</li>
-        <li><a name="dchem.TurboExecuter-ignoreSetupCtxExitStatus"><b>ignoreSetupCtxExitStatus</b></a> (bool):if the exit status of the context setup command should be ignored (false)</li>
-        <li><a name="dchem.TurboExecuter-ignoreCmdExitStatus"><b>ignoreCmdExitStatus</b></a> (bool):if the exit status of the commands to calculate energy and forces should be ignored (false)</li>
-        <li><a name="dchem.TurboExecuter-onELog"><b>onELog</b></a> (array):what to log for each energy evaluation (by default energy and positions ad xyz)</li>
-        <li><a name="dchem.TurboExecuter-onFLog"><b>onFLog</b></a> (array):what to log for each force evaluation (by default xyzForces)</li>
-        <li><a name="dchem.TurboExecuter-constraints"><b>constraints</b></a> (Ref):the constraints to be applied to the system</li>
-        <li><a name="dchem.TurboExecuter-executeE"><b>executeE</b></a> (string):command executed to calculate the energy alone (optional)</li>
-        <li><a name="dchem.TurboExecuter-executeEF"><b>executeEF</b></a> (string):command executed to calculate the energy and forces (this is required)</li>
-        <li><a name="dchem.TurboExecuter-executeF0"><b>executeF0</b></a> (string):command executed do calculate the forces immediately after the energy (optional)</li>
-        <li><a name="dchem.TurboExecuter-enerFile"><b>enerFile</b></a> (string):file where the energy is stored (energy)</li>
-        <li><a name="dchem.TurboExecuter-eErrorFile"><b>eErrorFile</b></a> (string):file where to read the convergence error (ridft.out)</li>
-        <li><a name="dchem.TurboExecuter-gradFile"><b>gradFile</b></a> (string):file where to read the gradient(gradient)</li>
-        <li><a name="dchem.TurboExecuter-lastCycle"><b>lastCycle</b></a> (long):last cycle for energy and gradient (0)</li>
-        <li><a name="dchem.TurboExecuter-incrementCycle"><b>incrementCycle</b></a> (bool):if the cycle should be incremented</li>
-        <li><a name="dchem.TurboExecuter-subset"><b>subset</b></a> (array):if just a subset [from..to) 0 based of the atoms should be considered</li>
-        <li><a name="dchem.TurboExecuter-maxEDiff"><b>maxEDiff</b></a> (double):maximum difference in energy in au (1.e-4)</li>
-        <li><a name="dchem.TurboExecuter-maxPosDiff"><b>maxPosDiff</b></a> (double):maximum difference in the positions in au (1.e-3)</li>
-        <li><a name="dchem.TurboExecuter-throwOnElMismatch"><b>throwOnElMismatch</b></a> (bool):if an exception should be raised on a mismatch in the element (atom) symbol (true)</li>
-        <li><a name="dchem.TurboExecuter-shouldBeLast"><b>shouldBeLast</b></a> (bool):if the gradeint/energy read should always be the last (true)</li>
-        <li><a name="dchem.TurboExecuter-executeF0DoesNotIncrement"><b>executeF0DoesNotIncrement</b></a> (bool):if executeF0 (if given) does not increment the cycle (true)</li>
+        <li><a name="TurboExecuter-superTemplate"><b>superTemplate</b></a> (Ref):a template where to take default values</li>
+        <li><a name="TurboExecuter-startConfig"><b>startConfig</b></a> (Ref):the initial configuration</li>
+        <li><a name="TurboExecuter-templateDir"><b>templateDir</b></a> (string):where to find the definition of the template (tipically a directory)</li>
+        <li><a name="TurboExecuter-subs"><b>subs</b></a> (aa):keyword and their substitutions to apply to the templates (as dictionary string -> string), a->b will replace "[a]" with "b"</li>
+        <li><a name="TurboExecuter-setupCmd"><b>setupCmd</b></a> (string):a command that should be executed when the method is setup</li>
+        <li><a name="TurboExecuter-setupCtxCmd"><b>setupCtxCmd</b></a> (string):a command that should be executed to set up the context</li>
+        <li><a name="TurboExecuter-stopCtxCmd"><b>stopCtxCmd</b></a> (string):a command that should be executed to stop the context</li>
+        <li><a name="TurboExecuter-writeReplacementsDict"><b>writeReplacementsDict</b></a> (bool):if a dictionary with the replacements performed should be written (default is false)</li>
+        <li><a name="TurboExecuter-overwriteUnchangedPaths"><b>overwriteUnchangedPaths</b></a> (bool):if paths that are already there should be overwitten (default is false)</li>
+        <li><a name="TurboExecuter-makeReplacementsInCommands"><b>makeReplacementsInCommands</b></a> (bool):if replacements should be performed on the commands to be executed (default is true)</li>
+        <li><a name="TurboExecuter-ignoreSetupExitStatus"><b>ignoreSetupExitStatus</b></a> (bool):if the exit status of the setup command should be ignored (false)</li>
+        <li><a name="TurboExecuter-ignoreSetupCtxExitStatus"><b>ignoreSetupCtxExitStatus</b></a> (bool):if the exit status of the context setup command should be ignored (false)</li>
+        <li><a name="TurboExecuter-ignoreCmdExitStatus"><b>ignoreCmdExitStatus</b></a> (bool):if the exit status of the commands to calculate energy and forces should be ignored (false)</li>
+        <li><a name="TurboExecuter-ignoreExitStatus10"><b>ignoreExitStatus10</b></a> (bool):ignore exit status if it is 10</li>
+        <li><a name="TurboExecuter-onELog"><b>onELog</b></a> (array):what to log for each energy evaluation (by default energy and positions ad xyz)</li>
+        <li><a name="TurboExecuter-onFLog"><b>onFLog</b></a> (array):what to log for each force evaluation (by default xyzForces)</li>
+        <li><a name="TurboExecuter-constraints"><b>constraints</b></a> (Ref):the constraints to be applied to the system</li>
+        <li><a name="TurboExecuter-executeE"><b>executeE</b></a> (string):command executed to calculate the energy alone (optional)</li>
+        <li><a name="TurboExecuter-executeEF"><b>executeEF</b></a> (string):command executed to calculate the energy and forces (this is required)</li>
+        <li><a name="TurboExecuter-executeF0"><b>executeF0</b></a> (string):command executed do calculate the forces immediately after the energy (optional)</li>
+        <li><a name="TurboExecuter-enerFile"><b>enerFile</b></a> (string):file where the energy is stored (energy)</li>
+        <li><a name="TurboExecuter-eErrorFile"><b>eErrorFile</b></a> (string):file where to read the convergence error (ridft.out)</li>
+        <li><a name="TurboExecuter-gradFile"><b>gradFile</b></a> (string):file where to read the gradient(gradient)</li>
+        <li><a name="TurboExecuter-lastCycle"><b>lastCycle</b></a> (long):last cycle for energy and gradient (0)</li>
+        <li><a name="TurboExecuter-incrementCycle"><b>incrementCycle</b></a> (bool):if the cycle should be incremented</li>
+        <li><a name="TurboExecuter-subset"><b>subset</b></a> (array):if just a subset [from..to) 0 based of the atoms should be considered</li>
+        <li><a name="TurboExecuter-maxEDiff"><b>maxEDiff</b></a> (double):maximum difference in energy in au (1.e-4)</li>
+        <li><a name="TurboExecuter-maxPosDiff"><b>maxPosDiff</b></a> (double):maximum difference in the positions in au (1.e-3)</li>
+        <li><a name="TurboExecuter-throwOnElMismatch"><b>throwOnElMismatch</b></a> (bool):if an exception should be raised on a mismatch in the element (atom) symbol (true)</li>
+        <li><a name="TurboExecuter-shouldBeLast"><b>shouldBeLast</b></a> (bool):if the gradeint/energy read should always be the last (true)</li>
+        <li><a name="TurboExecuter-executeF0DoesNotIncrement"><b>executeF0DoesNotIncrement</b></a> (bool):if executeF0 (if given) does not increment the cycle (true)</li>
     </ul>
-    <h3><a name="dchem.WaitExplorer">dchem.WaitExplorer</a></h3>
+    <h3><a name="WaitExplorer">WaitExplorer</a></h3>
         <p><em>RootInputElement</em>. An explorer that just waits.</p>
     <ul>
-        <li><a name="dchem.WaitExplorer-time"><b>time</b></a> (double):minutes to wait (10)</li>
+        <li><a name="WaitExplorer-time"><b>time</b></a> (double):minutes to wait (10)</li>
     </ul>
-    <h3><a name="dchem.WorkAsker">dchem.WorkAsker</a></h3>
+    <h3><a name="WorkAsker">WorkAsker</a></h3>
         <p><em>RootInputElement</em>. A client that asks work to a silos and perform the operations it receives</p>
     <ul>
-        <li><a name="dchem.WorkAsker-connectionUrl"><b>connectionUrl</b></a>:the url to use to get the connection to the silos</li>
-        <li><a name="dchem.WorkAsker-maxDuration"><b>maxDuration</b></a> (double):maximum duration in minutes for each context (one year: 525600)</li>
-        <li><a name="dchem.WorkAsker-maxDurationTot"><b>maxDurationTot</b></a> (double):maximum duration in minutes for the workAsker (one year: 525600)</li>
-        <li><a name="dchem.WorkAsker-maxFail"><b>maxFail</b></a> (long):maximum number of failures before stopping adding new contexts (5)</li>
-        <li><a name="dchem.WorkAsker-maxEval"><b>maxEval</b></a> (long):maximum number of evaluations</li>
-        <li><a name="dchem.WorkAsker-maxWait"><b>maxWait</b></a> (long):maximum number of retries waiting for a point to evaluate</li>
-        <li><a name="dchem.WorkAsker-ownerCacheSize"><b>ownerCacheSize</b></a> (long):amout of points whose owner is cached (10)</li>
-        <li><a name="dchem.WorkAsker-precision"><b>precision</b></a>:precision of the silos, either LowP or Real (LowP)</li>
-        <li><a name="dchem.WorkAsker-evaluator"><b>evaluator</b></a> (Ref):the mehod used to evaluate energy and forces (used only if you run this standalone)</li>
+        <li><a name="WorkAsker-connectionUrl"><b>connectionUrl</b></a>:the url to use to get the connection to the silos</li>
+        <li><a name="WorkAsker-maxDuration"><b>maxDuration</b></a> (double):maximum duration in minutes for each context (one year: 525600)</li>
+        <li><a name="WorkAsker-maxDurationTot"><b>maxDurationTot</b></a> (double):maximum duration in minutes for the workAsker (one year: 525600)</li>
+        <li><a name="WorkAsker-maxFail"><b>maxFail</b></a> (long):maximum number of failures before stopping adding new contexts (5)</li>
+        <li><a name="WorkAsker-maxEval"><b>maxEval</b></a> (long):maximum number of evaluations</li>
+        <li><a name="WorkAsker-maxWait"><b>maxWait</b></a> (long):maximum number of retries waiting for a point to evaluate</li>
+        <li><a name="WorkAsker-ownerCacheSize"><b>ownerCacheSize</b></a> (long):amout of points whose owner is cached (10)</li>
+        <li><a name="WorkAsker-precision"><b>precision</b></a>:precision of the silos, either LowP or Real (LowP)</li>
+        <li><a name="WorkAsker-evaluator"><b>evaluator</b></a> (Ref):the mehod used to evaluate energy and forces (used only if you run this standalone)</li>
     </ul>
     <h3><a name="dchem.sys.PIndexes.PIndex">dchem.sys.PIndexes.PIndex</a></h3>
         <p>a global index of a particle</p>
