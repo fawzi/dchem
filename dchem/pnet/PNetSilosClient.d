@@ -28,6 +28,8 @@ import blip.container.HashMap;
 import blip.container.GrowableArray;
 import blip.parallel.mpi.MpiModels;
 import blip.container.BatchedGrowableArray;
+import blip.io.FileStream;
+import Path=tango.io.Path;
 
 /// help structure 
 struct CachedPoint(T){
@@ -163,6 +165,15 @@ class PNetSilosClient(T): LocalSilosI!(T){
     string name(){
         return "PNetSilosClient_"~input.myFieldName;
     }
+    
+    string _nameId;
+    string nameId(){
+        if (_nameId.length==0){
+            _nameId=connection.name();
+        }
+        return _nameId;
+    }
+    
     /// updates a pending operation status, should remove the operation when finished
     void updateEvalStatus(SKey owner,char[] opId, ModifyEvalOp!(T) op,EvalOp!(T).Status newStat){
         connection.updateEvalStatus(owner,opId,op,newStat);
@@ -343,6 +354,34 @@ class PNetSilosClient(T): LocalSilosI!(T){
             sinkIndented("  ",s,msg);
             dumper(s)("\n</PNetSilosClientLog>\n");
         });
+    }
+    /// an outputfile local to this silos (or silos client)
+    OutStreamI outfileForName(string path,WriteMode method=WriteMode.WriteAppend,StreamOptions sOpt=StreamOptions.BinBase){
+        auto lastSlash=path.length;
+        foreach(i,c;path){
+            if (c=='/') lastSlash=i;
+        }
+        string prePath,fName;
+        if (lastSlash<path.length){
+            prePath=path[0..lastSlash+1];
+            fName=path[lastSlash+1..$];
+        } else {
+            prePath="";
+            fName=path;
+        }
+        char[128] buf;
+        auto arr=lGrowableArray(buf,0,GASharing.Local);
+        arr(prePath);
+        arr(nameId);
+        if (!Path.exists(arr.data)){
+            Path.createFolder(arr.data);
+        }
+        if (!Path.isFolder(arr.data)){
+            throw new Exception("path '"~arr.data~"' exists, but is not a folder",__FILE__,__LINE__);
+        }
+        arr("/");
+        arr(fName);
+        return outfile(arr.takeData(),method,sOpt);
     }
     /// owner of the given point (just a utility method)
     SKey ownerOfPoint(Point p){

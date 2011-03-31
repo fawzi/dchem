@@ -22,13 +22,13 @@ import blip.core.Array;
 
 /// a loader of points (what is created by the input)
 class TrackSpecialPointsGen:SilosWorkerGen{
-    string logfileBaseName="specialPoints";
+    string logFileName="specialPoints.log";
     bool flushEachLine=true;
     bool logAllGFlagsChanges=false;
     EvalLog[] configLogs=[{targetFile:"specialPoints.xyz",format:"xyz"}];
     
     mixin(serializeSome("TrackSpecialPoints",`Writes out the special points found so far`,
-    `logfileBaseName: base path used for the file where the special points are logged, if emty no log is written (defaults to log)
+    `logFileName: base path used for the file where the special points are logged, if emty no log is written (defaults to specialPoints.log)
     flushEachLine: if each line should be flushed (true)
     logAllGFlagsChanges: if all gFlags changes should be logged (default is false)`));
     mixin printOut!();
@@ -37,8 +37,8 @@ class TrackSpecialPointsGen:SilosWorkerGen{
     this(){}
     
     bool verify(CharSink s){
-	bool res=true;
-	foreach(l;configLogs){
+        bool res=true;
+        foreach(l;configLogs){
             if (l.targetFile.length==0){
                 dumper(s)("missing targetFile in configLogs in field ")(myFieldName)("\n");
                 res=false;
@@ -80,8 +80,8 @@ class TrackSpecialPoints(T):SilosComponentI!(T){
     
     void workOn(LocalSilosI!(T)silos){
         this.silos=silos;
-        if (input.logfileBaseName.length>0){
-            this.stream=outfileStrSync(input.logfileBaseName~"-"~silos.name~".spLog",WriteMode.WriteAppend);
+        if (input.logFileName.length>0){
+            this.stream=silos.outfileForName(input.logfileBaseName,WriteMode.WriteAppend,StreamOptions.CharBase|StreamOptions.Sync);
         }
         myCallback=silos.nCenter.registerCallback("localPointChangedGFlags",
             &flagsChanged,Callback.Flags.ReceiveAll);
@@ -148,15 +148,15 @@ class TrackSpecialPoints(T):SilosComponentI!(T){
             });
             if (input.flushEachLine) stream.flush();
         }
-	foreach(l;input.configLogs){
-	    auto f=outfileBin(l.targetFile,WriteMode.WriteAppend);
-	    scope(exit){ f.flush(); f.close(); }
-	    auto lp=silos.mainPointL(flagChange.point);
-	    auto externalRef=collectAppender(delegate void(CharSink s){
-						 dumper(s)(flagChange.point.data);
-					     });
-	    WriteOut.writeConfig(f,lp.pos,l.format,externalRef);
-	}
+        foreach(l;input.configLogs){
+            auto f=silos.outfileForName(l.targetFile,WriteMode.WriteAppend);
+            scope(exit){ f.flush(); f.close(); }
+            auto lp=silos.mainPointL(flagChange.point);
+            auto externalRef=collectAppender(delegate void(CharSink s){
+                                                 dumper(s)(flagChange.point.data);
+                                             });
+            WriteOut.writeConfig(f,lp.pos,l.format,externalRef);
+        }
     }
 
     void addSpecialPoint(GFlagsChange flagChange){

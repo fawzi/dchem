@@ -41,7 +41,10 @@ class TemplateExecuter: Method {
     char[] setupCmd;
     char[] setupCtxCmd;
     char[] stopCtxCmd;
+    char[] bigChangeCmd;
     char[][char[]] subs;
+    Real maxSmoothChange=0.3;
+    Real maxCloseChange=0.6;
     bool writeReplacementsDict;
     bool overwriteUnchangedPaths;
     bool makeReplacementsInCommands=true;
@@ -50,8 +53,8 @@ class TemplateExecuter: Method {
     bool ignoreCmdExitStatus;
     bool ignoreExitStatus10=true;
     EvalLog[] onELog=[{targetFile:"log.energies",format:"energy"},
-        {targetFile:"log.pos",format:"xyz"}];
-    EvalLog[] onFLog=[{targetFile:"log.forces",format:"xyzForces"}];
+        {targetFile:"posLog.xyz",format:"xyz"}];
+    EvalLog[] onFLog=[{targetFile:"forcesLog.xyz",format:"xyzForces"}];
     VfsFolder _templateDirectory;
     CharSink logger;
     InputField constraints;
@@ -161,7 +164,7 @@ class TemplateExecuter: Method {
             auto templateH=new TemplateHandler(templateDirectory(),new FileFolder(ProcContext.instance.baseDirectory.toString(),true)); // to fix
             addFullSubs(templateH.subs);
             templateH.shouldWriteReplacementsDict=writeReplacementsDict;
-	    templateH.ignoreExitStatus10=ignoreExitStatus10;
+            templateH.ignoreExitStatus10=ignoreExitStatus10;
             templateH.subs["templateDirectory"]=templateDirectory.toString;
             templateH.subs["workingDirectory"]=templateH.targetDir.toString;
             auto opInProgress=templateH.processForCmd(setupCommand,log);
@@ -177,6 +180,9 @@ class TemplateExecuter: Method {
     setupCmd: a command that should be executed when the method is setup
     setupCtxCmd: a command that should be executed to set up the context
     stopCtxCmd: a command that should be executed to stop the context
+    bigChangeCmd: a command that should be executed when the positions change by a large amount
+    maxSmoothChange: maximum change for a smooth change in bohr (larger changes are automaticaly considered non smooth) (0.3)
+    maxCloseChange: maximum change for a small change in bohr (larger changes are automaticaly considered big changes) (0.6)
     writeReplacementsDict: if a dictionary with the replacements performed should be written (default is false)
     overwriteUnchangedPaths: if paths that are already there should be overwitten (default is false)
     makeReplacementsInCommands: if replacements should be performed on the commands to be executed (default is true)
@@ -265,7 +271,7 @@ class ExecuterContext:CalcContext{
         auto templateH=new TemplateHandler(input.templateDirectory(),new FileFolder(ProcContext.instance.baseDirectory.toString()~"/"~contextId,true)); // to fix
         input.addFullSubs(templateH.subs);
         templateH.shouldWriteReplacementsDict=input.writeReplacementsDict;
-	templateH.ignoreExitStatus10=input.ignoreExitStatus10;
+        templateH.ignoreExitStatus10=input.ignoreExitStatus10;
         templateH.subs["templateDirectory"]=input.templateDirectory.toString;
         templateH.subs["workingDirectory"]=templateH.targetDir.toString;
         return templateH;
@@ -344,8 +350,11 @@ class ExecuterContext:CalcContext{
         templateH.subs["evalE"]=(updateE?"T":"F");
         templateH.subs["evalF"]=(updateF?"T":"F");
         templateH.evalTemplates(changeLevel,input.overwriteUnchangedPaths);
+        if (changeLevel>ChangeLevel.SmoothPosChange && input.bigChangeCmd.length>0){
+            execCmd(input.bigChangeCmd,null,input.ignoreCmdExitStatus);
+        }
         execCmd(input.commandFor(updateE,updateF,changeLevel,maxChange),null,
-		input.ignoreCmdExitStatus);
+                input.ignoreCmdExitStatus);
         try{
             collectEF(updateE,updateF);
         } catch (Exception e){
@@ -370,6 +379,16 @@ class ExecuterContext:CalcContext{
         }
     }
     
+    override void changedDynVars(ChangeLevel changeLevel,Real diff){
+        if (diff>input.maxCloseChange){
+            if (changeLevel<=ChangeLevel.SmoothPosChange){
+                changeLevel=ChangeLevel.PosChanged;
+            }
+        } else if (diff>input.maxSmoothChange && changeLevel<=ChangeLevel.SmoothPosChange){
+            changeLevel=ChangeLevel.SmallPosChange;
+        }
+        super.changedDynVars(changeLevel,diff);
+    }
     /// should collect the newly calculated energy
     void collectEF(bool updateE=true,bool updateF=true){
         assert(0,"to implement in subclasses");
@@ -526,11 +545,11 @@ class TemplateHandler{
             } else if (overwriteUnchangedPaths || level==0 ||
                 (!targetDir.file(f.toString()).exists()))
             {
-		auto fIn=f.input;
-		scope(exit){
-		    fIn.close();
-		}
-		auto newF=targetDir.file(f.name).create(fIn);
+                auto fIn=f.input;
+                scope(exit){
+                    fIn.close();
+                }
+                auto newF=targetDir.file(f.name).create(fIn);
             }
         }
     }

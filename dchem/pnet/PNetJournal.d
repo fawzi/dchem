@@ -188,10 +188,10 @@ class PNetJournal(T):ExplorationObserverI!(T){
             throw new Exception("exception trying to open journal file",__FILE__,__LINE__,lastE);
         }
         if (input.journalFormat=="json"){
-            auto stream=outfileStr(input.fileBasePath~"-"~silos.name~"."~input.journalFormat~"Log",WriteMode.WriteAppend);
+            auto stream=silos.outfileForName(input.fileBasePath~"."~input.journalFormat~"Log",WriteMode.WriteAppend,StreamOptions.CharBase);
             jSerial=new JsonSerializer!(char)(stream);
         } else if (input.journalFormat=="sbin"){
-            auto stream=outfileBin(input.fileBasePath~"-"~silos.name~"."~input.journalFormat~"Log",WriteMode.WriteAppend);
+            auto stream=silos.outfileForName(input.fileBasePath~"."~input.journalFormat~"Log",WriteMode.WriteAppend,StreamOptions.BinBase);
             jSerial=new SBinSerializer(stream);
         } else {
             assert(0);

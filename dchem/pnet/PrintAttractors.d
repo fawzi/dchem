@@ -17,7 +17,7 @@ import dchem.pnet.EmptyObserver;
 
 // object that keeps the journal of the computations done
 class PrintAttractorsGen:SilosWorkerGen{
-    char[] baseFileName="AttractorLog";
+    char[] fileName="AttractorLog.log";
     char[] posFormat="f8.4";
     char[] eFormat="g12.6";
     bool printPos=false;
@@ -30,7 +30,7 @@ class PrintAttractorsGen:SilosWorkerGen{
         return new PrintAttractors!(LowP)(this);
     }
     mixin(serializeSome("PrintAttractors",`Prints the attractor of each point`,
-    `baseFileName: base filename used for the logs
+    `fileName: base filename used for the logs
     posFormat: format string to format the positions
     eFormat: format string to format the energy
     printPos: if the position of the point should be printed (false)
@@ -99,7 +99,7 @@ class PrintAttractors(T):SilosWorkerI!(T){
     void workOn(LocalSilosI!(T) silos){
         this.silos=silos;
         this.serialLock.lock();
-        this.outStream=outfileStr(input.baseFileName~"-"~silos.name~".peLog",WriteMode.WriteAppend);
+        this.outStream=silos.outfileForName(input.fileName,WriteMode.WriteAppend,StreamOptions.CharBase);
         scope(exit){ this.serialLock.unlock(); }
         auto s=dumper(&outStream.rawWriteStr);
         foreach (p,mp;silos){

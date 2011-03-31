@@ -27,6 +27,7 @@ import blip.parallel.mpi.MpiModels;
 import blip.io.EventWatcher;
 import blip.container.HashMap;
 import blip.container.BatchedGrowableArray;
+import blip.io.FileStream;
 
 enum { batchSize=512 }
 
@@ -312,7 +313,7 @@ Prob minimumForGFlags(uint gFlags){
     /// the next one accepts all elements of a flat potential as minima, which while logially correct overcrowds the special points
     /// add requirement that AlongForcesDecrease is 0 ???
     if ((gFlags&GFlags.AlongForcesIncrease)!=0) return (((gFlags&GFlags.FullyEvaluated)!=0)?Prob.Confirmed:Prob.Likely);
-    if ((gFlags&GFlags.NeighValsIncrease)!=0) return (((gFlags&GFlags.FullyEvaluated)!=0)?Prob.Likely:Prob.Possible);
+    if ((gFlags&GFlags.NeighValsIncrease)!=0) return (((gFlags&(GFlags.FullyEvaluated|GFlags.DoNotExplore|GFlags.FullyExplored))!=0)?Prob.Likely:Prob.Possible);
     return Prob.Unlikely;
 }
 /// probability of having a critical point close by for the given gFlags
@@ -391,6 +392,8 @@ interface MainPointI(T){
     Point point();
     /// attractor of this point (attractors are identified by their minima)
     Attractor attractor();
+    /// changes the attractor of this point (attractors are identified by their minima)
+    void attractor(Attractor);
     /// position of the point (energy, derivatives,... might be invalid, only real positions have to be valid)
     ParticleSys!(T) pos();
     /// direction of the minimum in the dual space with norm 1 wrt. euclidean norm
@@ -845,6 +848,8 @@ enum GradEagerness:uint{
 
 /// local interface, to a silos (basically a silos client)
 interface LocalSilosI(T): PNetSilosI!(T) {
+    /// a file local to this silos
+    OutStreamI outfileForName(string filename,WriteMode method=WriteMode.WriteAppend,StreamOptions sOpt=StreamOptions.BinBase);
     /// if this silos is owner of the key k (note that using this rather than having a single key per silos
     /// will allow more complex interpretations of SKey in the future...)
     bool hasKey(SKey k);

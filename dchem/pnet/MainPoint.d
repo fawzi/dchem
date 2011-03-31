@@ -283,6 +283,16 @@ class MainPoint(T):MainPointI!(T){
     Point _point;
     /// attractor of this point (attractors are identified by their minima)
     Attractor attractor(){ return _attractor; }
+    void attractor(Attractor newA){
+        bool minChanged=false;
+        synchronized(this){
+            if ((isNaN(_attractor.energyThroughPoint) || newA.energyThroughPoint<=_attractor.energyThroughPoint) &&
+                (_attractor.throughPoint!=newA.throughPoint || _attractor.idThroughPoint<newA.idThroughPoint)){
+                _attractor.energyThroughPoint=newA.energyThroughPoint;
+                ++(_attractor.id);
+            }
+        }
+    }
     Attractor _attractor;
     
     /// position of the point (energy, derivatives,... might be invalid, only real positions have to be valid)
@@ -1190,13 +1200,19 @@ class MainPoint(T):MainPointI!(T){
         if (calcE||calcF){
             Real e=pos.dynVars.potentialEnergy;
             Real eErr=pos.dynVars.potentialEnergyError;
+            Real diff2=0;
             mixin(withPSys(`
             pSys.checkX();
-            pSys.dynVars.x[]=pos.dynVars.x;
-	    pSys.dynVars.potentialEnergy=pos.dynVars.potentialEnergy;
-	    pSys.dynVars.potentialEnergyError=pos.dynVars.potentialEnergyError;
+            foreach(i,ref v;pSys.dynVars.x.sLoop){ /+ should do an optimized native impl +/
+                auto x=pos.dynVars.x[i];
+                diff2+=pow2(v-x);
+                v=x;
+            }
+            //pSys.dynVars.x[]=pos.dynVars.x;
+            pSys.dynVars.potentialEnergy=pos.dynVars.potentialEnergy;
+            pSys.dynVars.potentialEnergyError=pos.dynVars.potentialEnergyError;
             `,"c."));
-            c.changedDynVars(ChangeLevel.SmallPosChange,0);
+            c.changedDynVars(ChangeLevel.SmallPosChange,sqrt(diff2));
             char[64] buf;
             auto arr=lGrowableArray(buf,0,GASharing.Local);
             writeOut(&arr.appendArr,point.data);

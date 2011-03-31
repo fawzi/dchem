@@ -17,7 +17,7 @@ import dchem.pnet.EmptyObserver;
 
 // object that keeps the journal of the computations done
 class PosELoggerGen:ExplorationObserverGen{
-    char[] baseFileName="posELog";
+    char[] logFile="posELog.log";
     bool flushEachLine=false;
     char[] posFormat="f8.4";
     char[] eFormat="g12.6";
@@ -29,7 +29,7 @@ class PosELoggerGen:ExplorationObserverGen{
         return new PosELogger!(LowP)(this,silos);
     }
     mixin(serializeSome("PosELogger",`Logs position and energy`,
-    `baseFileName: base filename used for the logs
+    `logFile: filename used for the logs
     posFormat: format string to format the positions
     eFormat: format string to format the energy
     flushEachLine: if each line should be flushed (defaults to 0)`));
@@ -92,7 +92,7 @@ class PosELogger(T):EmptyObserver!(T){
         this.input=c;
         this.silos=silos;
         this.serialLock=new RLock();
-        this.outStream=outfileStr(input.baseFileName~"-"~silos.name~".peLog",WriteMode.WriteAppend);
+        this.outStream=silos.outfileForName(input.logFile,WriteMode.WriteAppend,StreamOptions.CharBase);
     }
     
     // ExplorationObserverI(T)

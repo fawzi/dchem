@@ -29,6 +29,7 @@ import blip.container.MinHeap;
 import blip.container.AtomicSLink;
 import blip.math.IEEE;
 import blip.math.Math;
+import blip.parallel.smp.Wait;
 
 /// Information about a point
 struct PointTopoInfo{
@@ -89,6 +90,15 @@ struct BoundaryPointInfo{
     BoundaryPointInfo *next;
     BoundaryPointInfo *next2;
     
+    Point otherP(Point p){
+        if (p==p1){
+            return p2;
+        } else if (p==p2){
+            return p1;
+        } else {
+            throw new Exception("no point p in this boundary",__FILE__,__LINE__);
+        }
+    }
     BoundaryPointInfo* nextP(Point p){
         if (p==p1){
             return next;
@@ -108,12 +118,30 @@ struct BoundaryPointInfo{
             throw new Exception("no point p in this boundary",__FILE__,__LINE__);
         }
     }
+    void dirPSet(int v,Point p){
+        if (p==p1){
+            dir12=v;
+        } else if (p==p2){
+            dir21=v;
+        } else {
+            throw new Exception("no point p in this boundary",__FILE__,__LINE__);
+        }
+    }
     
     bool shortestP(Point p){
         if (p==p1){
             return shortest1;
         } else if (p==p2){
             return shortest2;
+        } else {
+            throw new Exception("no point p in this boundary",__FILE__,__LINE__);
+        }
+    }
+    void shortestPSet(bool v,Point p){
+        if (p==p1){
+            shortest1=v;
+        } else if (p==p2){
+            shortest2=v;
         } else {
             throw new Exception("no point p in this boundary",__FILE__,__LINE__);
         }
@@ -146,7 +174,7 @@ class BorderInfo(T){
     BoundaryPointInfo *freeList;
     SpecialCmpHeap!(size_t) tPoint;
     TopologyInfo!(T) topoInfo;
-    mixin(serializeSome("","information od a border between two minima","mins"));
+    mixin(serializeSome("","information of a border between two minima","mins"));
     mixin printOut!();
     this(){
         this(null,Mins(Point(0),Point(0)));
@@ -162,8 +190,11 @@ class BorderInfo(T){
         return pointInfo[a].energy <= pointInfo[b].energy;
     }
     
-    BoundaryPointInfo transitionPoint(LocalSilosI!(T) silos){
-        return pointInfo[tPoint.peek];
+    BoundaryPointInfo *transitionPoint(){
+        size_t i;
+        if (tPoint.first(i))
+            return pointInfo.ptrI(i);
+        return null;
     }
     
     BoundaryPointInfo *add(BoundaryPointInfo newInfo){
@@ -173,16 +204,32 @@ class BorderInfo(T){
         } else {
             *res=newInfo;
         }
+        auto oldP=transitionPoint();
         tPoint.push(pointInfo.ptr2Idx(res));
+        if (transitionPoint!is oldP){
+            logTPointChange(oldP,transitionPoint);
+        }
         return res;
     }
     /// removes the given bInfo (that must be owned by this BorderInfo)
     void remove(BoundaryPointInfo *bInfo){
+        bool shouldRemoveSelf=false;
         auto idx=pointInfo.ptr2Idx(bInfo);
+        bool tPointChange=idx==tPoint.peek;
         if (!tPoint.remove(idx)){
             throw new Exception("did not find BoundaryPointInfo index in tPoint heap",__FILE__,__LINE__);
         }
-        
+        if (tPoint.length==0){
+            synchronized(topoInfo){
+                if (tPoint.length==0){
+                    logTPointChange(bInfo,null);
+                    auto p=mins in topoInfo.borders;
+                    if (*p == this)
+                        topoInfo.borders.removeKey(mins);
+                }
+            }
+        }
+        if (tPointChange) logTPointChange(pointInfo.ptrI(idx),transitionPoint);
         if (bInfo.p1.isValid){
             auto p1Info=topoInfo.pointTopoInfo.ptrI(bInfo.p1);
             BoundaryPointInfo ** bAtt=&(p1Info.border);
@@ -217,19 +264,25 @@ class BorderInfo(T){
             }
             assert(found);
         }
-        bInfo.clear();
-        insertAt(freeList,bInfo);
+        version(TopologyInfoNoClear){} else {
+            bInfo.clear();
+            insertAt(freeList,bInfo);
+        }
     }
     void removeAll(){
         auto v=pointInfo.view;
+        if (v.length>0){
+            logTPointChange(transitionPoint,null);
+        }
         foreach(ref p;v){
             this.remove(&p);
         }
         freeList=null;
         pointInfo.deallocData();
     }
-    /// merges borderInfo (b2 with be to remove)
+    /// merges borderInfo (b2 will be to removed)
     void mergeWith(BorderInfo!(T) b2){
+        auto oldP=transitionPoint;
         BatchedGrowableArray!(BoundaryPointInfo) shortPointInfo=b2.pointInfo;
         BatchedGrowableArray!(BoundaryPointInfo) longPointInfo=pointInfo;
         if (pointInfo.length<b2.pointInfo.length){
@@ -245,6 +298,9 @@ class BorderInfo(T){
         }
         pointInfo=longPointInfo;
         b2.pointInfo=shortPointInfo; // tryDeleteT?
+        if (transitionPoint!is oldP){
+            logTPointChange(oldP,transitionPoint);
+        }
     }
     bool updateEnergy(BoundaryPointInfo *bp){
         if (topoInfo.calcEnergy(bp)){
@@ -254,6 +310,14 @@ class BorderInfo(T){
             return true;
         }
         return false;
+    }
+    void logTPointChange(BoundaryPointInfo *oldTp,BoundaryPointInfo *newTp){
+        if (oldTp !is null){
+            topoInfo.logTp("remTp",oldTp);
+        }
+        if (newTp !is null){
+            topoInfo.logTp("addTp",newTp);
+        }
     }
 }
 
@@ -278,17 +342,17 @@ class MinInfo{
 
 /// a loader of points (what is created by the input)
 class TopologyInfoGen:ExplorationObserverGen{
-    string logfileBaseName="specialPoints";
     bool flushEachLine=true;
-    bool logAllGFlagsChanges=false;
+    char[] minInfoFile="mins.log";
+    char[] tPointInfoFile="tPoints.log";
     EvalLog[] minLogs=[{targetFile:"minima.xyz",format:"xyz"}];
     EvalLog[] tPointLogs=[{targetFile:"tPoints.xyz",format:"xyz"}];
     Real convergenceLimit=0.866;
     
     mixin(serializeSome("TopologyInfo",`Writes out the special points found so far`,
-    `logfileBaseName: base path used for the file where the special points are logged, if emty no log is written (defaults to log)
+    `minInfoFile: base path used for the file where the minima are logged, if empty no log is written (defaults to mins.log)
+    tPointInfoFile: base path used for the file where the transition points are logged, if emty no log is written (defaults to tPoints.log)
     flushEachLine: if each line should be flushed (true)
-    logAllGFlagsChanges: if all gFlags changes should be logged (default is false)
     convergenceLimit: minimum cos value of the residual of self pointing gradients before minima are merged (set it larger than 1 to disable merging) (0.866)
     minLogs: what is logged for points that are suspected to be minima (minima.xyz)
     tPointLogs: what is logged for points that are suspected to be transition points (tPointLogs.xyz)`));
@@ -343,31 +407,42 @@ class TopologyInfoGen:ExplorationObserverGen{
     }
 }
 
-class TopologyInfo(T):EmptyObserver!(T),SilosComponentI!(T){
+class TopologyInfo(T):EmptyObserver!(T){
     LocalSilosI!(T) silos;
     TopologyInfoGen input;
     Callback *myCallback;
-    OutStreamI stream;
+    OutStreamI minLog;
+    OutStreamI tPointLog;
     DenseLocalPointArray!(PointTopoInfo) pointTopoInfo;
     HashMap!(Mins,BorderInfo!(T)) borders;
     HashMap!(Point,MinInfo) minima;
+    RLock minimaLock; /// lock for the input.minLogs
+    RLock tPointsLock; /// lock for the input.tPointLogs
     
     this(TopologyInfoGen input,LocalSilosI!(T)silos){
         this.input=input;
         silos=silos;
+        this.minimaLock=new RLock();
+        this.tPointsLock=new RLock();
         pointTopoInfo=new DenseLocalPointArray!(PointTopoInfo)(silos.localPointsKeys());
-        
+        if (input.minInfoFile.length>0) minLog=silos.outfileForName(input.minInfoFile,WriteMode.WriteAppend,StreamOptions.CharBase|StreamOptions.Sync);
+        if (input.tPointInfoFile.length>0) tPointLog=silos.outfileForName(input.tPointInfoFile,WriteMode.WriteAppend,StreamOptions.CharBase|StreamOptions.Sync);
         workOn(silos);
     }
     
     void workOn(LocalSilosI!(T)silos){
         this.silos=silos;
-        if (input.logfileBaseName.length>0){
-            this.stream=outfileStrSync(input.logfileBaseName~"-"~silos.name~".spLog",WriteMode.WriteAppend);
+        if (input.minInfoFile.length>0){
+            this.minLog=silos.outfileForName(input.minInfoFile,WriteMode.WriteAppend,
+                StreamOptions.CharBase|StreamOptions.Sync);
+        }
+        if (input.tPointInfoFile.length>0){
+            this.tPointLog=silos.outfileForName(input.tPointInfoFile,WriteMode.WriteAppend,
+                StreamOptions.CharBase|StreamOptions.Sync);
         }
         myCallback=silos.nCenter.registerCallback("attractorChange",
             &attractorChanged,Callback.Flags.ReceiveAll);
-        silos.addComponent(this); // avoid??
+        //silos.addComponent(this); // avoid??
     }
     
     char[] name(){
@@ -376,9 +451,39 @@ class TopologyInfo(T):EmptyObserver!(T),SilosComponentI!(T){
     char[] kind(){
         return "TopologyInfo";
     }
-    
+    void logTp(string op, BoundaryPointInfo* tp){
+        if (tp is null) return;
+        if (tPointLog!is null){
+            sinkTogether(tPointLog.charSink,delegate void(CharSink s){
+                PointTopoInfo *p1Info=pointTopoInfo.ptrI(tp.p1);
+                PointTopoInfo *p2Info=pointTopoInfo.ptrI(tp.p2);
+                auto mins=Mins(p1Info.minimum,p2Info.minimum);
+                bool first=mins.min1==p1Info.minimum;
+                dumper(s)(op)("\t ")(mins.min1.data)("\t ")((first?tp.p1.data:tp.p2.data))("\t ")
+                    ((first?tp.p2.data:tp.p1.data))("\t ")(mins.min2.data)("\n");
+            });
+            if (input.flushEachLine) tPointLog.flush;
+        }
+        if (op=="addTp" && input.tPointLogs.length>0){
+            for (int i=0;i<2;++i){
+                MainPointI!(T) mp=silos.mainPointL(tp.p1);
+                if (i==1) mp=silos.mainPointL(tp.p2);
+                char[128] buf;
+                auto arr=lGrowableArray(buf,0,GASharing.Local);
+                writeOut(&arr.appendArr,mp.point.data);
+                auto extRef=arr.takeData;
+                foreach(l;input.tPointLogs){
+                    auto f=outfile(l.targetFile,WriteMode.WriteAppend,StreamOptions.BinBase);
+                    scope(exit){ f.flush(); f.close(); }
+                    WriteOut.writeConfig(f,mp.pos,l.format,extRef);
+                }
+            }
+        }
+    }
     /// merges two minima
     void mergeMin(Point oldMin,Point newMin){
+        logMin("remMin",newMin);
+        bool shouldLogNewMin=false;
         synchronized(this){
             assert(oldMin in minima,"mergeMin with non known oldMin");
             auto oldMinInfo=minima[oldMin];
@@ -393,6 +498,7 @@ class TopologyInfo(T):EmptyObserver!(T),SilosComponentI!(T){
                     if (mins.min1==newMin || mins.min2==newMin){
                         b.removeAll();
                     } else {
+                        logTp("remTp",b.transitionPoint());
                         if (mins.min1==oldMin){
                             b.mins=Mins(newMin,mins.min2);
                         } else {
@@ -403,6 +509,17 @@ class TopologyInfo(T):EmptyObserver!(T),SilosComponentI!(T){
                             biAtt.mergeWith(b);
                         } else {
                             toAdd(b);
+                            if (tPointLog!is null){
+                                BoundaryPointInfo *tp=b.transitionPoint;
+                                PointTopoInfo *p1Info=pointTopoInfo.ptrI(tp.p1);
+                                PointTopoInfo *p2Info=pointTopoInfo.ptrI(tp.p2);
+                                if (p1Info.minimum==oldMin) {
+                                    p1Info.minimum=newMin;
+                                } else if (p2Info.minimum==oldMin){
+                                    p2Info.minimum=newMin;
+                                } else assert(0);
+                                logTp("addTp",b.transitionPoint);
+                            }
                         }
                     }
                 }
@@ -428,6 +545,7 @@ class TopologyInfo(T):EmptyObserver!(T),SilosComponentI!(T){
                 } else {
                     foreach(p;oldMinInfo.attractor){
                         newMinInfo.attractor.add(p);
+                        (*pointTopoInfo.ptrI(p)).minimum=newMin;
                     }
                     tryDeleteT(oldMinInfo.attractor);
                     oldMinInfo.attractor=null;
@@ -436,6 +554,61 @@ class TopologyInfo(T):EmptyObserver!(T),SilosComponentI!(T){
             } else {
                 minima[newMin]=oldMinInfo;
                 minima.removeKey(oldMin);
+                shouldLogNewMin=true;
+            }
+        }
+        auto newMinMP=silos.mainPointL(newMin);
+        auto oldMinMP=silos.mainPointL(oldMin);
+        Real newMinE;
+        ulong newMinId;
+        synchronized(newMinMP){
+            newMinE=newMinMP.energy;
+            newMinId=newMinMP.attractor.id;
+            if (shouldLogNewMin){
+                logMin("addMin",newMin);
+            }
+        }
+        Attractor attractor;
+        bool didChangeAttractor=false;
+        synchronized(oldMinMP){
+            if (oldMinMP.attractor.minimum!=newMin){
+                assert(newMinE<=attractor.energyThroughPoint || isNaN(attractor.energyThroughPoint));
+                attractor=oldMinMP.attractor;
+                attractor.throughPoint=newMin;
+                attractor.energyThroughPoint=newMinE;
+                attractor.idThroughPoint=newMinId;
+                attractor.minimum=newMin;
+                didChangeAttractor=true;
+            }
+        }
+        if (didChangeAttractor) {
+            oldMinMP.attractor=attractor;
+        }
+        if (minLog!is null){
+            sinkTogether(minLog.charSink,delegate void(CharSink s){
+                dumper(s)("minMerge\t ")(oldMin.data)("\t ")(newMin.data)("\n");
+            });
+            if (input.flushEachLine) minLog.flush();
+        }
+    }
+    
+    void logMin(string op,Point min){
+        if (minLog!is null){
+            sinkTogether(minLog.charSink,delegate void(CharSink s){
+                dumper(s)(op)("\t ")(min)("\n");
+            });
+            if (input.flushEachLine) minLog.flush();
+        }
+        if (op=="addMin" && input.minLogs.length>0){
+            MainPointI!(T) mp=silos.mainPointL(min);
+            char[128] buf;
+            auto arr=lGrowableArray(buf,0,GASharing.Local);
+            writeOut(&arr.appendArr,mp.point.data);
+            auto extRef=arr.takeData;
+            foreach(l;input.minLogs){
+                auto f=outfile(l.targetFile,WriteMode.WriteAppend,StreamOptions.BinBase);
+                scope(exit){ f.flush(); f.close(); }
+                WriteOut.writeConfig(f,mp.pos,l.format,extRef);
             }
         }
     }
@@ -500,6 +673,7 @@ class TopologyInfo(T):EmptyObserver!(T),SilosComponentI!(T){
                     auto newMinInfo=new MinInfo(newMin.minimum);
                     newMinInfo.attractor.add(point);
                     minima[newMin.minimum]=newMinInfo;
+                    logMin("addMin",newMin.point);
                 }
                 if (oldMin.border !is null){
                     fixBoundaryMinChange(oldMin,point,oldMin.minimum,newMin.minimum);
@@ -561,11 +735,13 @@ class TopologyInfo(T):EmptyObserver!(T),SilosComponentI!(T){
         BoundaryPointInfo[128] buf;
         auto newBorder=lGrowableArray(buf,0);
         synchronized(mp){
+            if (isNaN(mp.energy)) return;
             Point oldP=p;
             PointAndDir[] neighs=mp.neighbors().data();
             DirDistances!(T)[] neighDists=mp.neighDistances().data();
             BPoint[Point] min2Dist;
             foreach (i,pAtt;neighs){
+                if (isNaN(neighDists[i].energy)) continue;
                 if (pAtt.point!=oldP){
                     oldP=pAtt.point;
                     auto pAttInfo=pointTopoInfo.ptrI(pAtt.point);
@@ -591,7 +767,8 @@ class TopologyInfo(T):EmptyObserver!(T),SilosComponentI!(T){
                 bool tooFar=false;
                 if (dir==invalidDir || dir==nDirs) tooFar=true;
                 foreach(i,pAtt;neighs){
-                    if (pAtt.dir==dir && bP.idx!=i && neighDists[i].cartesianDist<bP.distance){
+                    if (pAtt.dir==dir && bP.idx!=i && (!isNaN(neighDists[i].energy)) 
+                        && neighDists[i].cartesianDist<bP.distance){
                         tooFar=true;
                     }
                 }
@@ -853,7 +1030,42 @@ class TopologyInfo(T):EmptyObserver!(T),SilosComponentI!(T){
         } else {
             bool checkB=false;
             foreach(p;neighbors){
-                if (energy.minimum!=pointTopoInfo[p].minimum){
+                auto pTopo=pointTopoInfo.ptrI(p);
+                if (energy.minimum!=pTopo.minimum){
+                    if (pTopo.border!is null){
+                        auto mp=silos.mainPointL(p);
+                        Real cDist=Real.max;
+                        int cDir=int.max;
+                        synchronized(mp){
+                            PointAndDir[] neighs=mp.neighbors().data();
+                            DirDistances!(T)[] neighDists=mp.neighDistances().data();
+                            foreach(i,pAtt;neighs){
+                                if (p==pAtt.point){
+                                    cDist=neighDists[i].cartesianDist;
+                                    if (cDir==0||cDir==int.max||cDir==invalidDir){
+                                        cDir=pAtt.dir;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                        BoundaryPointInfo **bAtt=&pTopo.border;
+                        while((*bAtt)!is null){
+                            if ((**bAtt).dirP(p)==cDir && (**bAtt).cartesianDistP(p)<cDist && 
+                                (**bAtt).p1!=energy.point && (**bAtt).p2!=energy.point)
+                            {
+                                auto otherPoint=(**bAtt).otherP(p);
+                                auto borderAtt=Mins(pTopo.minimum,energy.minimum) in borders;
+                                borderAtt.remove(*bAtt);
+                            } else {
+                                if ((**bAtt).p1==energy.point){
+                                    bAtt=&((**bAtt).next);
+                                } else {
+                                    bAtt=&((**bAtt).next2);
+                                }
+                            }
+                        }
+                    }
                     checkB=true;
                     break;
                 }
@@ -869,25 +1081,10 @@ class TopologyInfo(T):EmptyObserver!(T),SilosComponentI!(T){
         neighborHasEnergy(s,neighbors,energy);
     }
     
-    void logChange(string change,GFlagsChange flagChange){
-        if (stream!is null){
-            sinkTogether(&stream.rawWriteStrC,delegate void(CharSink s){
-                auto newT=pointTypeForGFlags(flagChange.newGFlags);
-                dumper(s)(change)("\t ")(flagChange.point.data)("\t ")(pointTypeStr(newT))("\t ")(newT)("\t ")(specialPointForGFlags(flagChange.newGFlags))("\t ")(flagChange.oldGFlags)("\t ")(flagChange.newGFlags)("\n");
-            });
-            if (input.flushEachLine) stream.flush();
-        }
-        foreach(l;input.minLogs){
-            auto f=outfileBin(l.targetFile,WriteMode.WriteAppend);
-            scope(exit){ f.flush(); f.close(); }
-            auto lp=silos.mainPointL(flagChange.point);
-            auto externalRef=collectAppender(delegate void(CharSink s){
-                             dumper(s)(flagChange.point.data);
-                             });
-            WriteOut.writeConfig(f,lp.pos,l.format,externalRef);
-        }
+    override void increaseRunLevel(SKey s,RunLevel level){
+        if (level>RunLevel.Stopping) stop();
     }
-
+    
     void stop(){
         Callback *cb;
         synchronized(this){
@@ -899,11 +1096,15 @@ class TopologyInfo(T):EmptyObserver!(T),SilosComponentI!(T){
         if (cb!is null){
             cb.flags&= ~Callback.Flags.Resubmit;
             silos.nCenter.unregisterReceiveAllCallback("localPointChangedGFlags",cb);
-            silos.rmComponentNamed(this.name);
+            //silos.rmComponentNamed(this.name);
         }
-        if (stream!is null){
-            stream.close();
-            stream=null;
+        if (minLog!is null){
+            minLog.close();
+            minLog=null;
+        }
+        if (tPointLog!is null){
+            tPointLog.close();
+            tPointLog=null;
         }
     }
 }
