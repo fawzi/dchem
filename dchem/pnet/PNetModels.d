@@ -320,6 +320,8 @@ Prob minimumForGFlags(uint gFlags){
 Prob criticalPointForGFlags(uint gFlags){
     if ((gFlags&GFlags.AlongForcesIncrease)!=0 && (gFlags&GFlags.AlongForcesDecrease)==0) return Prob.Likely;
     if ((gFlags&GFlags.AlongGradientDecrease)!=0 && (gFlags&GFlags.AlongGradientIncrease)==0) return Prob.Likely;
+    if ((gFlags&GFlags.NeighValsDecrease)==0 && (gFlags&(GFlags.FullyEvaluated|GFlags.DoNotExplore|GFlags.FullyExplored))!=0) return Prob.Likely;
+    
     return Prob.Unlikely;
 }
 /// probability of having a saddle point

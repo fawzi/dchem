@@ -347,6 +347,7 @@ class TopologyInfoGen:ExplorationObserverGen{
     char[] tPointInfoFile="tPoints.log";
     EvalLog[] minLogs=[{targetFile:"minima.xyz",format:"xyz"}];
     EvalLog[] tPointLogs=[{targetFile:"tPoints.xyz",format:"xyz"}];
+    EvalLog[] pathLogs=[{targetFile:"path.xyz",format:"xyz"}];
     Real convergenceLimit=0.866;
     
     mixin(serializeSome("TopologyInfo",`Writes out the special points found so far`,
@@ -355,7 +356,8 @@ class TopologyInfoGen:ExplorationObserverGen{
     flushEachLine: if each line should be flushed (true)
     convergenceLimit: minimum cos value of the residual of self pointing gradients before minima are merged (set it larger than 1 to disable merging) (0.866)
     minLogs: what is logged for points that are suspected to be minima (minima.xyz)
-    tPointLogs: what is logged for points that are suspected to be transition points (tPointLogs.xyz)`));
+    tPointLogs: what is logged for points that are suspected to be transition points (tPointLogs.xyz)
+    pathLogs: what is logged for paths (*path.xyz)`));
     mixin printOut!();
     mixin myFieldMixin!();
     
@@ -363,38 +365,9 @@ class TopologyInfoGen:ExplorationObserverGen{
     
     bool verify(CharSink s){
         bool res=true;
-        foreach(l;minLogs){
-            if (l.targetFile.length==0){
-                dumper(s)("missing targetFile in configLogs in field ")(myFieldName)("\n");
-                res=false;
-            }
-            if (find(WriteOut.writeConfigFormats,l.format)==WriteOut.writeConfigFormats.length){
-                auto w=dumper(s);
-                w("format in minLogs has to be one of ");
-                foreach(i,f;WriteOut.writeConfigFormats){
-                    if (i!=0) w(", ");
-                    w(f);
-                }
-                w(" and not '")(l.format)("' in field ")(myFieldName)("\n");
-                res=false;
-            }
-        }
-        foreach(l;tPointLogs){
-            if (l.targetFile.length==0){
-                dumper(s)("missing targetFile in configLogs in field ")(myFieldName)("\n");
-                res=false;
-            }
-            if (find(WriteOut.writeConfigFormats,l.format)==WriteOut.writeConfigFormats.length){
-                auto w=dumper(s);
-                w("format in tPointLogs has to be one of ");
-                foreach(i,f;WriteOut.writeConfigFormats){
-                    if (i!=0) w(", ");
-                    w(f);
-                }
-                w(" and not '")(l.format)("' in field ")(myFieldName)("\n");
-                res=false;
-            }
-        }
+        res=res && EvalLog.checkLogs(s,minLogs,"minLogs",myFieldName);
+        res=res && EvalLog.checkLogs(s,minLogs,"tPointLogs",myFieldName);
+        res=res && EvalLog.checkLogs(s,minLogs,"pathLogs",myFieldName);
         return res;
     }
     ExplorationObserverI!(Real) observerReal(LocalSilosI!(Real)silos){
@@ -648,7 +621,7 @@ class TopologyInfo(T):EmptyObserver!(T){
         }
         assert(found);
     }
-    /// minimm of a point changed
+    /// minimum of a point changed
     void pointAttractorChanged(PointEMin newMin){
         auto point=newMin.point;
         PointTopoInfo *oldMin=pointTopoInfo.ptrI(point);
@@ -1085,6 +1058,71 @@ class TopologyInfo(T):EmptyObserver!(T){
         if (level>RunLevel.Stopping) stop();
     }
     
+    void printPath(string baseName,BoundaryPointInfo*bp,EvalLog[]logs){
+        if (bp is null || logs.length==0) return;
+        Point[128] buf;
+        auto toMin1=lGrowableArray(buf,0);
+        auto p1Info=pointTopoInfo.ptrI(bp.p1);
+        auto p2Info=pointTopoInfo.ptrI(bp.p2);
+        auto p1m=p1Info.minimum;
+        auto mins=Mins(p1m,p2Info.minimum);
+        Point p;
+        if (p1m==mins.min1){
+            p=bp.p1;
+        } else {
+            p=bp.p2;
+        }
+        toMin1(p);
+        {
+            auto attractor=silos.mainPointL(p).attractor;
+            while(attractor.throughPoint!=p){
+                p=attractor.throughPoint;
+                toMin1(p);
+                attractor=silos.mainPointL(p).attractor;
+            }
+        }
+        char[256] buf2;
+        auto fName=lGrowableArray(buf2,0);
+        scope(exit) {
+            fName.deallocData;
+        }
+        fName(baseName);
+        fName("-");
+        writeOut(&fName.appendArr,mins.min1.data);
+        fName("_");
+        writeOut(&fName.appendArr,mins.min2.data);
+        size_t lenBase=fName.length;
+        foreach(l;logs){
+            fName.growTo(lenBase);
+            fName(l.targetFile);
+            auto f=silos.outfileForName(fName.data,WriteMode.WriteAppend,StreamOptions.BinBase);
+            scope(exit){ f.flush(); f.close(); }
+            char[128] buf3;
+            auto extRef=lGrowableArray(buf3,0);
+            foreach_reverse(pAtt;toMin1.data){
+                extRef.clearData();
+                writeOut(extRef,pAtt.data);
+                auto mp=silos.mainPointL(pAtt);
+                WriteOut.writeConfig(f,mp.pos,l.format,extRef.data);
+            }
+            if (p1m==mins.min1){
+                p=bp.p2;
+            } else {
+                p=bp.p1;
+            }
+            auto attractor=silos.mainPointL(p).attractor;
+            while(true){
+                extRef.clearData();
+                writeOut(extRef,p.data);
+                auto mp=silos.mainPointL(p);
+                WriteOut.writeConfig(f,mp.pos,l.format,extRef.data);
+                if (attractor.throughPoint==p) break;
+                p=attractor.throughPoint;
+                attractor=silos.mainPointL(p).attractor;
+            }
+        }
+    }
+    
     void stop(){
         Callback *cb;
         synchronized(this){
@@ -1105,6 +1143,11 @@ class TopologyInfo(T):EmptyObserver!(T){
         if (tPointLog!is null){
             tPointLog.close();
             tPointLog=null;
+        }
+        if (input.pathLogs.length>0){
+            foreach(m,b;borders){
+                printPath("finalPath",b.transitionPoint,input.pathLogs);
+            }
         }
     }
 }

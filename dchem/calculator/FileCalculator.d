@@ -31,6 +31,32 @@ struct EvalLog{
     targetFile: file where to log the things
     format: the format (xyz,xyzForces,energy,jsonDynMddx,sbinDynMddx,jsonDynX,sbinDynX,jsonFull,sbinFull)`));
     mixin printOut!();
+
+    static bool checkLog(CharSink s,EvalLog l,string name, string field){
+        bool res=true;
+        if (l.targetFile.length==0){
+            dumper(s)("missing targetFile in ")(name)(" in field ")(field)("\n");
+            res=false;
+        }
+        if (find(WriteOut.writeConfigFormats,l.format)==WriteOut.writeConfigFormats.length){
+            auto w=dumper(s);
+            w("format in ")(name)(" has to be one of ");
+            foreach(i,f;WriteOut.writeConfigFormats){
+                if (i!=0) w(", ");
+                w(f);
+            }
+            w(" and not '")(l.format)("' in field ")(field)("\n");
+            res=false;
+        }
+        return res;
+    }
+    static bool checkLogs(CharSink s,EvalLog[] eLogs,string name, string field){
+        bool res=true;
+        foreach(l;eLogs){
+            res=res&&checkLog(s,l,name,field);
+        }
+        return res;
+    }
 }
 
 /// an executer that uses a template directory, and is command based
@@ -83,38 +109,8 @@ class TemplateExecuter: Method {
                 res=false;
             }
         }
-        foreach(l;onELog){
-            if (l.targetFile.length==0){
-                dumper(sink)("missing targetFile in onELog in field ")(myFieldName)("\n");
-                res=false;
-            }
-            if (find(WriteOut.writeConfigFormats,l.format)==WriteOut.writeConfigFormats.length){
-                auto w=dumper(sink);
-                w("format in onELog has to be one of ");
-                foreach(i,f;WriteOut.writeConfigFormats){
-                    if (i!=0) w(", ");
-                    w(f);
-                }
-                w(" and not '")(l.format)("' in field ")(myFieldName)("\n");
-                res=false;
-            }
-        }
-        foreach(l;onFLog){
-            if (l.targetFile.length==0){
-                dumper(sink)("missing targetFile in onFLog in field ")(myFieldName)("\n");
-                res=false;
-            }
-            if (find(WriteOut.writeConfigFormats,l.format)==WriteOut.writeConfigFormats.length){
-                auto w=dumper(sink);
-                w("format in onFLog has to be one of ");
-                foreach(i,f;WriteOut.writeConfigFormats){
-                    if (i!=0) w(", ");
-                    w(f);
-                }
-                w(" and not '")(l.format)("' in field ")(myFieldName)("\n");
-                res=false;
-            }
-        }
+        res=res && EvalLog.checkLogs(sink,onELog,"onELog",myFieldName);
+        res=res && EvalLog.checkLogs(sink,onFLog,"onFLog",myFieldName);
         if (constraints!is null && (cast(MultiConstraintGen)constraints.contentObj) is null){
             s("constraints must be a dchem.MultiConstraint and not ")(constraints.classinfo.name)(" in field ")(myFieldName)("\n");
             res=false;

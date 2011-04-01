@@ -65,7 +65,7 @@ initialPos:{
 
 posELog:{
     class:PosELogger,
-    baseFileName:"posELog",
+    logFile:"posELog",
     flushEachLine:true
 }
 

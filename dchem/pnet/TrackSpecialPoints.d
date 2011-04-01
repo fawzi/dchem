@@ -81,7 +81,7 @@ class TrackSpecialPoints(T):SilosComponentI!(T){
     void workOn(LocalSilosI!(T)silos){
         this.silos=silos;
         if (input.logFileName.length>0){
-            this.stream=silos.outfileForName(input.logfileBaseName,WriteMode.WriteAppend,StreamOptions.CharBase|StreamOptions.Sync);
+            this.stream=silos.outfileForName(input.logFileName,WriteMode.WriteAppend,StreamOptions.CharBase|StreamOptions.Sync);
         }
         myCallback=silos.nCenter.registerCallback("localPointChangedGFlags",
             &flagsChanged,Callback.Flags.ReceiveAll);
