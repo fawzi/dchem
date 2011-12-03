@@ -1,9 +1,10 @@
 DChem
 
-A framework for chemistry simulation and electrostatic embedding in D.
+A framework for chemistry simulation, sampling and electrostatic embedding in D.
 
-It needs tango (the developer's library for D, http://www.dsource.org/projects/tango/ ), rtest (my testing framework http://github.com/fawzi/rtest ), narray (my n dimensional array solution http://github.com/fawzi/narray ).
+It needs tango (the developer's library for D, http://www.dsource.org/projects/tango/ ), and blip http://fawzi.github.com/blip .
+Its official webpage is http://fawzi.github.com/blip
 
-License is not yet decided, so for now it is "ask the developer", i.e. me.
+License is not yet decided, most likely it will be GPL v3, but I still have to go though the files and clean up everything, so for now it is "ask the developer", i.e. me.
 
 Fawzi

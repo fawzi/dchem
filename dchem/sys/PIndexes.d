@@ -6,6 +6,7 @@ import blip.parallel.smp.WorkManager;
 import blip.container.Cache;
 import blip.container.Pool;
 import blip.core.sync.Mutex;
+import blip.BasicModels: LoopType;
 
 version(LongIndexes){
     alias ulong idxType; /// type used for particle,... indexing
@@ -111,6 +112,15 @@ struct KindRange{
         for (KindIdx k=kStart;k<kEnd;++k){
             auto res=loopOp(k);
             if (res!=0) return res;
+        }
+        return 0;
+    }
+    int opApply(int delegate(ref size_t i,ref KindIdx)loopOp){
+        size_t ii=0;
+        for (KindIdx k=kStart;k<kEnd;++k){
+            auto res=loopOp(ii,k);
+            if (res!=0) return res;
+            ++ii;
         }
         return 0;
     }
@@ -239,6 +249,21 @@ struct KindRange{
     /// parallel loop (all kinds in parallel)
     PLoop pLoop(){
         return PLoop(*this);
+    }
+    template LoopReturnType(LoopType loopKind){
+        static if (loopKind==LoopType.Parallel){
+            alias PLoop LoopReturnType;
+        } else {
+            alias KindRange LoopReturnType;
+        }
+    }
+    /// possibly parallel loop
+    LoopReturnType!(loopKind) loop(LoopType loopKind)(){
+        static if (loopKind==LoopType.Parallel){
+            return PLoop(*this);
+        } else {
+            return this;
+        }
     }
     /// true if the current KindRange is a dummy
     bool isDummy(){
@@ -551,4 +576,3 @@ struct LocalPIndex{
     }
     mixin printOut!();
 }
-

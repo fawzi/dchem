@@ -245,3 +245,64 @@ class Cell(T)
     mixin printOut!();
 }
 
+/// compact structure to represent a shift by a cell multiple (can be used to store in which supercell one is)
+/// only shifts in -512..512 are supported
+struct CellShift{
+    enum Mask:uint{
+        All=0x3FFF_FFFF,
+        One=0x3FF,
+        X=      0x3FF,
+        Y=   0xF_FC00,
+        Z=0x3FF0_0000,
+    }
+    enum Neg:int{
+        Bit=0x200,
+        Val=0x400,
+        Min=-0x200,
+        Max=0x1FF,
+    }
+    enum Shifts:int{
+        X=0,
+        Y=10,
+        Z=20,
+    }
+    uint data;
+    int xShift(){
+        int res=cast(int)((data>>Shifts.X)&Mask.One);
+        if ((res&Neg.Bit)!=0) res+=Neg.Val;
+        return res;
+    }
+    int yShift(){
+        int res=cast(int)((data>>Shifts.Y)&Mask.One);
+        if ((res&Neg.Bit)!=0) res+=Neg.Val;
+        return res;
+    }
+    int zShift(){
+        int res=cast(int)((data>>Shifts.Z)&Mask.One);
+        if ((res&Neg.Bit)!=0) res-=Neg.Val;
+        return res;
+    }
+    void xShift(int val){
+        if (val<Neg.Min || val>Neg.Max) throw new Exception("xShift out of range",__FILE__,__LINE__);
+        if (val<0) val+=Neg.Val;
+        data=(data&(~Mask.X))|((cast(uint)val)<<Shifts.X);
+    }
+    void yShift(int val){
+        if (val<Neg.Min || val>Neg.Max) throw new Exception("yShift out of range",__FILE__,__LINE__);
+        if (val<0) val+=Neg.Val;
+        data=(data&(~Mask.Y))|((cast(uint)val)<<Shifts.Y);
+    }
+    void zShift(int val){
+        if (val<Neg.Min || val>Neg.Max) throw new Exception("zShift out of range",__FILE__,__LINE__);
+        if (val<0) val+=Neg.Val;
+        data=(data&(~Mask.Z))|((cast(uint)val)<<Shifts.Z);
+    }
+    static CellShift opCall(int xShift,int yShift,int zShift){
+        CellShift res;
+        res.xShift=xShift;
+        res.yShift=yShift;
+        res.zShift=zShift;
+        return res;
+    }
+}
+

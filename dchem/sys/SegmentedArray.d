@@ -23,10 +23,10 @@ import blip.container.Cache;
 import blip.stdc.string: memcpy;
 import blip.math.Math: max;
 
-enum ParaFlags{
-    FullPara,
-    KindPara,
-    Sequential,
+enum ParaFlags:int{
+    Sequential=0,
+    FullPara=1,
+    KindPara=2,
     DataLoop=1<<5,
     MaskBase= ~DataLoop,
 }
@@ -362,7 +362,7 @@ final class SegmentedArray(T){
     KindRange  kRange;
     alias T dtype;
     alias BulkArray!(T).basicDtype basicDtype;
-    static size_t defaultOptimalBlockSize=32*1024/T.sizeof;
+    static size_t defaultOptimalBlockSize=((32*1024<T.sizeof)?cast(size_t)1:32*1024/T.sizeof);
     PoolI!(SegmentedArray) pool;
     
     mixin(serializeSome("SegmentedArray!("~T.stringof~")","A segmented array i.e some particle associated property.",
@@ -727,8 +727,8 @@ final class SegmentedArray(T){
     void dupTo(V)(SegmentedArray!(V) val){
         static if(is(T==V)){
             if (val.kRange!=kRange ||
-		val.arrayMap.arrayStruct != arrayMap.arrayStruct){
-		val.clear();
+                val.arrayMap.arrayStruct != arrayMap.arrayStruct){
+                val.clear();
                 // avoid using this mapping if it is a much smaller subset?
                 val.reset(arrayMap,arrayMap.poolChunks.getObj());
                 if (val.guard!is null) val.guard.release();
@@ -736,7 +736,7 @@ final class SegmentedArray(T){
             val.opSliceAssignT!(T)(this);
         } else {
             if (val.kRange!=kRange||
-		val.arrayMap.arrayStruct != arrayMap.arrayStruct){
+            val.arrayMap.arrayStruct != arrayMap.arrayStruct){
                 val.clear();
                 auto newMap=new SegArrMemMap!(V)(arrayStruct);
                 newMap.consolidate(arrayMap);
@@ -795,7 +795,7 @@ final class SegmentedArray(T){
     
     /// loops on the particles and each element of a multivaluated segmented array.
     /// for consistency always skips kinds without particles (even if Min1)
-    struct PLoop(int pFlags){
+    struct PLoop(ParaFlags pFlags){
         size_t optimalBlockSize;
         SegmentedArray array;
         int opApply(int delegate(ref T)loopBody){
@@ -871,40 +871,32 @@ final class SegmentedArray(T){
            return result;
         }
     }
-    /// full parallel loop
-    PLoop!(ParaFlags.FullPara) pLoop(size_t optSize=defaultOptimalBlockSize){
-        PLoop!(ParaFlags.FullPara) res;
+    /// a possibly parallel loop
+    PLoop!(loopKind) loop(ParaFlags loopKind)(size_t optSize=defaultOptimalBlockSize){
+        PLoop!(loopKind) res;
         res.optimalBlockSize=optSize;
         res.array=this;
         return res;
+    }
+    /// full parallel loop
+    PLoop!(ParaFlags.FullPara) pLoop(size_t optSize=defaultOptimalBlockSize){
+        return loop!(ParaFlags.FullPara)(optSize);
     }
     /// loop parallel only between kinds
     PLoop!(ParaFlags.KindPara) pLoopKinds(size_t optSize=defaultOptimalBlockSize){
-        PLoop!(ParaFlags.KindPara) res;
-        res.optimalBlockSize=optSize;
-        res.array=this;
-        return res;
+        return loop!(ParaFlags.KindPara)(optSize);
     }
     /// sequential loop
     PLoop!(ParaFlags.Sequential) sLoop(){
-        PLoop!(ParaFlags.Sequential) res;
-        res.optimalBlockSize=defaultOptimalBlockSize;
-        res.array=this;
-        return res;
+        return loop!(ParaFlags.Sequential)();
     }
     /// parallel data loop
     PLoop!(ParaFlags.FullPara|ParaFlags.DataLoop) pDataLoop(size_t optSize=defaultOptimalBlockSize){
-        PLoop!(ParaFlags.FullPara|ParaFlags.DataLoop) res;
-        res.optimalBlockSize=optSize;
-        res.array=this;
-        return res;
+        return loop!(ParaFlags.FullPara|ParaFlags.DataLoop)(optSize);
     }
     /// sequential data loop
     PLoop!(ParaFlags.Sequential|ParaFlags.DataLoop) sDataLoop(){
-        PLoop!(ParaFlags.Sequential|ParaFlags.DataLoop) res;
-        res.optimalBlockSize=defaultOptimalBlockSize;
-        res.array=this;
-        return res;
+        return loop!(ParaFlags.Sequential|ParaFlags.DataLoop)();
     }
 
     /// opBypax
@@ -1426,4 +1418,11 @@ char[] segArrayBinLoop(int pFlags,char[] iterName, char[][]namesLocal1, char[] c
     res~=kLoopExt;
     res~="\n}\n";
     return res;
+}
+
+debug{
+import blip.BasicModels;
+
+static assert(LoopType.Parallel==1,"broken assumption for SegmentedArray.loop");
+static assert(LoopType.Sequential==0,"broken assumption for SegmentedArray.loop");
 }

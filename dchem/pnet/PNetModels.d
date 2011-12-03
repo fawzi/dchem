@@ -164,6 +164,9 @@ struct PointAndEnergy{
     int opCmp(PointAndEnergy p2){
         return ((energy<p2.energy)?-1:((energy>p2.energy)?1:point.opCmp(p2.point)));
     }
+    int opEquals(PointAndEnergy p2){
+        return energy==p2.energy && point==p2.point;
+    }
     static enum:bool{
         isSimpleData=true
     }

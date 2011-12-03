@@ -61,7 +61,7 @@ class NDistOps:DistOpsGen,DistOps{
         PosUtils.wrap(pSys.dynVars.x.cell,deltaX.pos);
     }
     // alias don't work reliably :(
-    // ditto
+    /// ditto
     void wrap(ParticleSys!(Real)pSys,DynPVector!(Real,XType)deltaX){
         wrapT!(Real)(pSys,deltaX);
     }
