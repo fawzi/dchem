@@ -19,7 +19,7 @@ class RandomOrthoCell(T){
         h[0,0]=r.uniformR2!(T)(1.5,15.0);
         h[1,1]=r.uniformR2!(T)(1.5,15.0);
         h[2,2]=r.uniformR2!(T)(1.5,15.0);
-        auto x0=emptyR(3);
+        auto x0=empty!(T)(3);
         randomizeNArray(r.normalD(cast(T)2),x0);
         int periodic=0;
         for (int idim=0;idim<3;++idim){
@@ -39,7 +39,7 @@ struct RandomCellParams(T){
     NArray!(T) param;
     static RandomCellParams randomGenerate(Rand r,ref bool acceptable){
         RandomCellParams res;
-        auto param=emptyR([6]);
+        auto param=empty!(T)([6]);
         randomizeNArray(r.uniformD!(T)(),param);
         param[Range(0,3)]*=13.5;
         param[Range(0,3)]+=1.5;
@@ -72,7 +72,7 @@ class RandomNormCell(T){
         for (int idim=0;idim<3;++idim){
           periodic|=(r.uniform!(bool)()?(1<<idim):0);
         }
-        auto x0=emptyR(3);
+        auto x0=empty!(T)(3);
         randomizeNArray(r.normalD(cast(T)2.0),x0);
         auto res=new typeof(this)();
         res.cell=new Cell(cellParamNArr2h(param),periodic,na2v3(x0));
@@ -91,7 +91,7 @@ class RandomCell(T){
         RandomCellParams!(T) rParam;
         acceptable = acceptable&&simpleRandom(r,rParam);
         scope param=rParam.param;
-        NArray!(T,1) dir=emptyR([3]);
+        NArray!(T,1) dir=empty!(T)([3]);
         randomizeNArray(r.normalD(cast(Real)1.0),dir);
         dir/=norm2(dir);
         auto h=cellParamNArr2h(param);
@@ -101,7 +101,7 @@ class RandomCell(T){
         for (int idim=0;idim<3;++idim){
             periodic|=(r.uniform!(bool)()?(1<<idim):0);
         }
-        scope x0=emptyR(3);
+        scope x0=empty!(T)(3);
         randomizeNArray(r.normalD(cast(T)2.0),x0);
         auto res=new typeof(this)();
         res.cell=new Cell!(T)(h,periodic,na2v3(x0));

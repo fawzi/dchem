@@ -10,38 +10,49 @@ import blip.io.BasicIO;
 import blip.io.Console;
 import blip.util.RefCount;
 import blip.math.IEEE;
+import blip.math.Math;
 import blip.container.BulkArray;
+import blip.container.GrowableArray;
 import blip.serialization.Serialization;
-
+import blip.util.Convert;
+import blip.narray.NArray;
 //r12 = (r1_l-r2_l+h_lm*I_m)*(r1_l-r2_l+h_lm*I_m) =
 //  = (r1_l-r2_l)**2+2*(r1_l-r2_l)*h_lm*I_m+h_ln*h_lk*I_n*I_k
 
-void testEllipsoidBounds(T)(Cell!(T) cell, Vector!(T,3) r1, Vector!(T,3) r2,
+void testEllipsoidBounds(T)(Cell!(T) cell, Vector!(T,3) r1, Vector!(T,3) r2, T cutoff,
     void delegate(int, int, int) loop){
     alias SafeType!(T) SafeT;
-    auto h = cell.h.dupT!(SafeT)();
-    SafeT mii = h[0,0]*h[0,0]+h[0,1]*h[1,0]+h[0,2]*h[2,0],
-        mij = h[0,0]*h[0,1]+h[0,1]*h[1,1]+h[0,2]*h[2,1],
-        mik = h[0,0]*h[0,2]+h[0,1]*h[1,2]+h[0,2]*h[2,2],
-        mjj = h[1,0]*h[0,1]+h[1,1]*h[1,1]+h[1,2]*h[2,1],
-        mjk = h[1,0]*h[0,2]+h[1,1]*h[1,2]+h[1,2]*h[2,2],
-        mkk = h[2,0]*h[0,2]+h[2,1]*h[1,2]+h[2,2]*h[2,2];
+    alias Matrix!(SafeT,3,3) M;
+    M h = convertTo!(M)(cell.h);
+    SafeT mii = h[0,0]*h[0,0]+h[1,0]*h[1,0]+h[2,0]*h[2,0],
+        mij = h[0,0]*h[0,1]+h[1,0]*h[1,1]+h[2,0]*h[2,1],
+        mik = h[0,0]*h[0,2]+h[1,0]*h[1,2]+h[2,0]*h[2,2],
+        mjj = h[0,1]*h[0,1]+h[1,1]*h[1,1]+h[2,1]*h[2,1],
+        mjk = h[0,1]*h[0,2]+h[1,1]*h[1,2]+h[2,1]*h[2,2],
+        mkk = h[0,2]*h[0,2]+h[1,2]*h[1,2]+h[2,2]*h[2,2];
     SafeT r12_x = cast(SafeT)(r2.x-r1.x);
     SafeT r12_y = cast(SafeT)(r2.y-r1.y);
     SafeT r12_z = cast(SafeT)(r2.z-r1.z);
-    SafeT li = 2*(r12_x*h[0,0]+r12_y*h[1,0]+r12_z*h[2,0]);
-    SafeT lj = 2*(r12_x*h[0,1]+r12_y*h[1,1]+r12_z*h[2,1]);
-    SafeT lk = 2*(r12_x*h[0,2]+r12_y*h[1,2]+r12_z*h[2,2]);
-    SafeT a = r12_x*r12_x+r12_y*r12_y+r12_z*r12_z;
+    SafeT li = r12_x*h[0,0]+r12_y*h[1,0]+r12_z*h[2,0];
+    SafeT lj = r12_x*h[0,1]+r12_y*h[1,1]+r12_z*h[2,1];
+    SafeT lk = r12_x*h[0,2]+r12_y*h[1,2]+r12_z*h[2,2];
+    SafeT a = r12_x*r12_x+r12_y*r12_y+r12_z*r12_z-cutoff;
+    // p:=2*li*i+2*lj*j+2*lk*k+i*(mii*i+mij*j+mik*k)+j*(mij*i+mjj*j+mjk*k)+k*(mik*i+mjk*j+mkk*k)+a
+    // dp/di = 2*li+2*mii*i+2*mij*j+2*mik*k
+    // dp/dj = 2*lj+2*mij*i+2*mjj*j+2*mjk*k
+    // dp/dk = 2*lk+2*mik*i+2*mjk*j+2*mkk*k
     auto periodicFlags=cell.periodicFlags;
+    int iMin,iMax;
     if ((periodicFlags & CellPeriodic.x)==0){
         iMin=0;
         iMax=0;
     } else {
+        // eq3 <~> p=0, eq2 <~> dp/dk=0
         SafeT eq3ii=mii, eq3i=2*li, eq3=a;
         SafeT eq3ik=2*mik, eq3k=2*lk, eq3kk=mkk;
         SafeT eq2=lk, eq2i=mik, eq2k=mkk;
         if ((periodicFlags & CellPeriodic.y)!=0) {
+            // substitute dp/dj=0 <=> j=(-lj-mij*i-mjk*k)/mjj
             SafeT fact2 = mjk/mjj;
             eq2  -= fact2*lj;
             eq2i -= fact2*mij;
@@ -62,37 +73,46 @@ void testEllipsoidBounds(T)(Cell!(T) cell, Vector!(T,3) r1, Vector!(T,3) r2,
             eq3ii += (eq3kk*valKI+eq3ik)*valKI;
         }
         SafeT delta = eq3i*eq3i-4*eq3ii*eq3;
-        if (eq3ii==0 || delta<=0) continue;
+        if (eq3ii==0 || delta<=0) return;
         SafeT sDelta = sqrt(delta);
         {
             // test
             SafeT iVal1 = (-eq3i-sDelta)/(2*eq3ii);
             SafeT iVal2 = (-eq3i+sDelta)/(2*eq3ii);
-            SafeT kVal1 = -(eq2+eq2i*iVal1)/eq2k;
-            SafeT kVal2 = -(eq2+eq2i*iVal2)/eq2k;
-            SafeT jVal1 = -(lj+mij*iVal1+mjk*kVal1)/mjj;
-            SafeT jVal2 = -(lj+mij*iVal1+mjk*kVal2)/mjj;
+            SafeT kVal1 = 0;
+            SafeT kVal2 = 0;
+            if ((periodicFlags & CellPeriodic.z)!=0) {
+                kVal1 = -(eq2+eq2i*iVal1)/eq2k;
+                kVal2 = -(eq2+eq2i*iVal2)/eq2k;
+            }
+            SafeT jVal1 = 0;
+            SafeT jVal2 = 0;
+            if ((periodicFlags & CellPeriodic.y)!=0) {
+                jVal1 = -(lj+mij*iVal1+mjk*kVal1)/mjj;
+                jVal2 = -(lj+mij*iVal2+mjk*kVal2)/mjj;
+            }
             auto iVect1=Vector!(T,3)(iVal1,jVal1,kVal1);
             auto iVect2=Vector!(T,3)(iVal2,jVal2,kVal2);
-            Vector!(T,3) r12_1 = r1-r2+hMat*iVect1;
-            Vector!(T,3) r12_2 = r1-r2+hMat*iVect2;
-            if (feqrel2(r12_1.norm22(),cutoff)<SafeT.mant_dig*4/3){
+            Vector!(T,3) r12_1 = r2-r1+cell.h*iVect1;
+            Vector!(T,3) r12_2 = r2-r1+cell.h*iVect2;
+            if (feqrel2(r12_1.norm22(),cutoff)<SafeT.mant_dig*3/4){
                 throw new Exception(collectAppender(delegate void(CharSink s){
-                    dumper(s)("r12_1 too far: ")(r12_1.norm22())(" vs ")(cutoff)(" diff:")(r12_1.norm22()-cutoff)
-                        (" cell:")(cell)(" r1")(r1)(" r2:")(r2)(" i:")(iVal1)(" ")(" j:")(jVal1)(" ")(" k:")(kVal1);
+                    dumper(s)("r12_1 i too far: ")(r12_1.norm22())(" vs ")(cutoff)(" diff:")(r12_1.norm22()-cutoff)
+                        (" cell:")(cell)(" r1:")(r1)(" r2:")(r2)(" i:")(iVal1)(" ")(" j:")(jVal1)(" ")(" k:")(kVal1);
                 }));
             }
-            if (feqrel2(r12_2.norm22(),cutoff)<SafeT.mant_dig*4/3){
+            if (feqrel2(r12_2.norm22(),cutoff)<SafeT.mant_dig*3/4){
                 throw new Exception(collectAppender(delegate void(CharSink s){
-                    dumper(s)("r12_2 too far: ")(r12_2.norm22())(" vs ")(cutoff)(" diff:")(r12_2.norm22()-cutoff)
+                    dumper(s)("r12_2 i too far: ")(r12_2.norm22())(" vs ")(cutoff)(" diff:")(r12_2.norm22()-cutoff)
                         (" cell:")(cell)(" r1")(r1)(" r2:")(r2)(" i:")(iVal2)(" ")(" j:")(jVal2)(" ")(" k:")(kVal2);
                 }));
             }
         }
-        iMin = cast(int)ceiling((-eq3i-sDelta)/(2*eq3ii));
+        iMin = cast(int)ceil((-eq3i-sDelta)/(2*eq3ii));
         iMax = cast(int)floor((-eq3i+sDelta)/(2*eq3ii));
     }
     for (int i=iMin; i<=iMax; ++i) {
+        int jMin,jMax;
         if ((periodicFlags & CellPeriodic.y)==0) {
             jMin=0;
             jMax=0;
@@ -104,8 +124,8 @@ void testEllipsoidBounds(T)(Cell!(T) cell, Vector!(T,3) r1, Vector!(T,3) r2,
                 SafeT valK = -(lk+mik*i)/mkk;
                 SafeT valKj = -mjk/mkk;
                 eq3   += (2*(lk+mik*i)+mkk*valK)*valK;
-                eq3j  += 2*(mik*i+lk+mkk*valK)*valKj;
-                eq3jj += mkk*valKj*valKj;
+                eq3j  += 2*(mik*i+lk+mkk*valK)*valKj+2*mjk*valK;
+                eq3jj += mkk*valKj*valKj+2*mjk*valKj;
             }
             SafeT delta = eq3j*eq3j-4*eq3jj*eq3;
             if (eq3jj==0 || delta<=0) continue;
@@ -114,26 +134,30 @@ void testEllipsoidBounds(T)(Cell!(T) cell, Vector!(T,3) r1, Vector!(T,3) r2,
                 // test
                 SafeT jVal1 = (-eq3j-sDelta)/(2*eq3jj);
                 SafeT jVal2 = (-eq3j+sDelta)/(2*eq3jj);
-                SafeT kVal1 = -(lk+mik*i)/mkk-jVal1*mjk/mkk;
-                SafeT kVal2 = -(lk+mik*i)/mkk-jVal2*mjk/mkk;
+                SafeT kVal1 = 0;
+                SafeT kVal2 = 0;
+                if ((periodicFlags & CellPeriodic.z)!=0) {
+                    kVal1 = -(lk+mik*i)/mkk-jVal1*mjk/mkk;
+                    kVal2 = -(lk+mik*i)/mkk-jVal2*mjk/mkk;
+                }
                 auto iVect1=Vector!(T,3)(i,jVal1,kVal1);
                 auto iVect2=Vector!(T,3)(i,jVal2,kVal2);
-                Vector!(T,3) r12_1 = r1-r2+hMat*iVect1;
-                Vector!(T,3) r12_2 = r1-r2+hMat*iVect2;
-                if (feqrel2(r12_1.norm22(),cutoff)<SafeT.mant_dig*4/3){
+                Vector!(T,3) r12_1 = r2-r1+cell.h*iVect1;
+                Vector!(T,3) r12_2 = r2-r1+cell.h*iVect2;
+                if (feqrel2(r12_1.norm22(),cutoff)<SafeT.mant_dig*3/4){
                     throw new Exception(collectAppender(delegate void(CharSink s){
-                        dumper(s)("r12_1 too far: ")(r12_1.norm22())(" vs ")(cutoff)(" diff:")(r12_1.norm22()-cutoff)
-                            (" cell:")(cell)(" r1")(r1)(" r2:")(r2)(" i:")(i)(" ")(" j:")(jVal1)(" ")(" k:")(kVal1);
+                        dumper(s)("r12_1 j too far: ")(r12_1.norm22())(" vs ")(cutoff)(" diff:")(r12_1.norm22()-cutoff)
+                            (" cell:")(cell)(" r1:")(r1)(" r2:")(r2)(" i:")(i)(" ")(" j:")(jVal1)(" ")(" k:")(kVal1);
                     }));
                 }
-                if (feqrel2(r12_2.norm22(),cutoff)<SafeT.mant_dig*4/3){
+                if (feqrel2(r12_2.norm22(),cutoff)<SafeT.mant_dig*3/4){
                     throw new Exception(collectAppender(delegate void(CharSink s){
-                        dumper(s)("r12_2 too far: ")(r12_2.norm22())(" vs ")(cutoff)(" diff:")(r12_2.norm22()-cutoff)
-                            (" cell:")(cell)(" r1")(r1)(" r2:")(r2)(" i:")(i)(" ")(" j:")(jVal2)(" ")(" k:")(kVal2);
+                        dumper(s)("r12_2 j too far: ")(r12_2.norm22())(" vs ")(cutoff)(" diff:")(r12_2.norm22()-cutoff)
+                            (" cell:")(cell)(" r1:")(r1)(" r2:")(r2)(" i:")(i)(" ")(" j:")(jVal2)(" ")(" k:")(kVal2);
                     }));
                 }
             }
-            jMin = cast(int)ceiling((-eq3j-sDelta)/(2*eq3jj));
+            jMin = cast(int)ceil((-eq3j-sDelta)/(2*eq3jj));
             jMax = cast(int)floor((-eq3j+sDelta)/(2*eq3jj));
         }
         for (int j=jMin; j<=jMax; ++j) {
@@ -151,22 +175,22 @@ void testEllipsoidBounds(T)(Cell!(T) cell, Vector!(T,3) r1, Vector!(T,3) r2,
                     SafeT kVal2 = (-eq3k+sDelta)/(2*eq3kk);
                     auto iVect1=Vector!(T,3)(i,j,kVal1);
                     auto iVect2=Vector!(T,3)(i,j,kVal2);
-                    Vector!(T,3) r12_1 = r1-r2+hMat*iVect1;
-                    Vector!(T,3) r12_2 = r1-r2+hMat*iVect2;
-                    if (feqrel2(r12_1.norm22(),cutoff)<SafeT.mant_dig*4/3){
+                    Vector!(T,3) r12_1 = r2-r1+h*iVect1;
+                    Vector!(T,3) r12_2 = r2-r1+h*iVect2;
+                    if (feqrel2(r12_1.norm22(),cutoff)<SafeT.mant_dig*3/4){
                         throw new Exception(collectAppender(delegate void(CharSink s){
-                            dumper(s)("r12_1 too far: ")(r12_1.norm22())(" vs ")(cutoff)(" diff:")(r12_1.norm22()-cutoff)
-                                (" cell:")(cell)(" r1")(r1)(" r2:")(r2)(" i:")(i)(" ")(" j:")(j)(" ")(" k:")(kVal1);
+                            dumper(s)("r12_1 k too far: ")(r12_1.norm22())(" vs ")(cutoff)(" diff:")(r12_1.norm22()-cutoff)
+                                (" cell:")(cell)(" r1:")(r1)(" r2:")(r2)(" i:")(i)(" ")(" j:")(j)(" ")(" k:")(kVal1);
                         }));
                     }
-                    if (feqrel2(r12_2.norm22(),cutoff)<SafeT.mant_dig*4/3){
+                    if (feqrel2(r12_2.norm22(),cutoff)<SafeT.mant_dig*3/4){
                         throw new Exception(collectAppender(delegate void(CharSink s){
-                            dumper(s)("r12_2 too far: ")(r12_2.norm22())(" vs ")(cutoff)(" diff:")(r12_2.norm22()-cutoff)
-                                (" cell:")(cell)(" r1")(r1)(" r2:")(r2)(" i:")(i)(" ")(" j:")(j)(" ")(" k:")(kVal2);
+                            dumper(s)("r12_2 k too far: ")(r12_2.norm22())(" vs ")(cutoff)(" diff:")(r12_2.norm22()-cutoff)
+                                (" cell:")(cell)(" r1:")(r1)(" r2:")(r2)(" i:")(i)(" ")(" j:")(j)(" ")(" k:")(kVal2);
                         }));
                     }
                 }
-                kMin = cast(int)ceiling((-eq3k-sDelta)/(2*eq3kk));
+                kMin = cast(int)ceil((-eq3k-sDelta)/(2*eq3kk));
                 kMax = cast(int)floor((-eq3k+sDelta)/(2*eq3kk));
             }
             for (int k=kMin; k<=kMax; ++k) {
