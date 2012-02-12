@@ -18,9 +18,8 @@ import blip.util.Convert;
 import blip.narray.NArray;
 //r12 = (r1_l-r2_l+h_lm*I_m)*(r1_l-r2_l+h_lm*I_m) =
 //  = (r1_l-r2_l)**2+2*(r1_l-r2_l)*h_lm*I_m+h_ln*h_lk*I_n*I_k
-
-void testEllipsoidBounds(T)(Cell!(T) cell, Vector!(T,3) r1, Vector!(T,3) r2, T cutoff,
-    void delegate(int, int, int) loop){
+int loopEllipsoidBoundsT(T, int periodicFlags, bool doTests=false)(Cell!(T) cell, Vector!(T,3) r1, Vector!(T,3) r2, T cutoff,
+    PIndex p1, index_type i1, PIndex p2, index_type i2, int delegate(ref NeighPair!(T)) loop){
     alias SafeType!(T) SafeT;
     alias Matrix!(SafeT,3,3) M;
     M h = convertTo!(M)(cell.h);
@@ -41,17 +40,17 @@ void testEllipsoidBounds(T)(Cell!(T) cell, Vector!(T,3) r1, Vector!(T,3) r2, T c
     // dp/di = 2*li+2*mii*i+2*mij*j+2*mik*k
     // dp/dj = 2*lj+2*mij*i+2*mjj*j+2*mjk*k
     // dp/dk = 2*lk+2*mik*i+2*mjk*j+2*mkk*k
-    auto periodicFlags=cell.periodicFlags;
+    assert(periodicFlags==cell.periodicFlags,"unxpected value of periodicFlags");
     int iMin,iMax;
-    if ((periodicFlags & CellPeriodic.x)==0){
+    static if ((periodicFlags & CellPeriodic.x)==0){
         iMin=0;
         iMax=0;
-    } else {
+    } else {{
         // eq3 <~> p=0, eq2 <~> dp/dk=0
         SafeT eq3ii=mii, eq3i=2*li, eq3=a;
         SafeT eq3ik=2*mik, eq3k=2*lk, eq3kk=mkk;
         SafeT eq2=lk, eq2i=mik, eq2k=mkk;
-        if ((periodicFlags & CellPeriodic.y)!=0) {
+        static if ((periodicFlags & CellPeriodic.y)!=0) {
             // substitute dp/dj=0 <=> j=(-lj-mij*i-mjk*k)/mjj
             SafeT fact2 = mjk/mjj;
             eq2  -= fact2*lj;
@@ -65,7 +64,7 @@ void testEllipsoidBounds(T)(Cell!(T) cell, Vector!(T,3) r1, Vector!(T,3) r2, T c
             eq3kk -= mjk*mjk/mjj;
             eq3ii -= mij*mij/mjj;
         }
-        if ((periodicFlags & CellPeriodic.z)!=0) {
+        static if ((periodicFlags & CellPeriodic.z)!=0) {
             SafeT valK = -eq2/eq2k;
             SafeT valKI = -eq2i/eq2k;
             eq3   += (eq3kk*valK+eq3k)*valK;
@@ -73,9 +72,9 @@ void testEllipsoidBounds(T)(Cell!(T) cell, Vector!(T,3) r1, Vector!(T,3) r2, T c
             eq3ii += (eq3kk*valKI+eq3ik)*valKI;
         }
         SafeT delta = eq3i*eq3i-4*eq3ii*eq3;
-        if (eq3ii==0 || delta<=0) return;
+        if (eq3ii==0 || delta<=0) return 0;
         SafeT sDelta = sqrt(delta);
-        {
+        static if (doTests) {{
             // test
             SafeT iVal1 = (-eq3i-sDelta)/(2*eq3ii);
             SafeT iVal2 = (-eq3i+sDelta)/(2*eq3ii);
@@ -107,20 +106,27 @@ void testEllipsoidBounds(T)(Cell!(T) cell, Vector!(T,3) r1, Vector!(T,3) r2, T c
                         (" cell:")(cell)(" r1")(r1)(" r2:")(r2)(" i:")(iVal2)(" ")(" j:")(jVal2)(" ")(" k:")(kVal2);
                 }));
             }
-        }
+        }}
         iMin = cast(int)ceil((-eq3i-sDelta)/(2*eq3ii));
         iMax = cast(int)floor((-eq3i+sDelta)/(2*eq3ii));
-    }
+    }}
+    if (iMin>iMax) return 0;
+    NeighPair!(T) neigh;
+    neigh.p1=p1;
+    neigh.i1=i1;
+    neigh.p2=p2;
+    neigh.i2=i2;
     for (int i=iMin; i<=iMax; ++i) {
+        Vector!(T,3) r12i=r2-r1-cell.h.column(0)*iMin;
         int jMin,jMax;
-        if ((periodicFlags & CellPeriodic.y)==0) {
+        static if ((periodicFlags & CellPeriodic.y)==0) {
             jMin=0;
             jMax=0;
-        } else {
+        } else {{
             SafeT eq3   = a+(2*li+mii*i)*i;
             SafeT eq3j  = 2*lj+2*i*mij;
             SafeT eq3jj = mjj;
-            if ((periodicFlags & CellPeriodic.z)!=0){
+            static if ((periodicFlags & CellPeriodic.z)!=0){
                 SafeT valK = -(lk+mik*i)/mkk;
                 SafeT valKj = -mjk/mkk;
                 eq3   += (2*(lk+mik*i)+mkk*valK)*valK;
@@ -130,13 +136,13 @@ void testEllipsoidBounds(T)(Cell!(T) cell, Vector!(T,3) r1, Vector!(T,3) r2, T c
             SafeT delta = eq3j*eq3j-4*eq3jj*eq3;
             if (eq3jj==0 || delta<=0) continue;
             SafeT sDelta = sqrt(delta);
-            {
+            static if (doTests) {{
                 // test
                 SafeT jVal1 = (-eq3j-sDelta)/(2*eq3jj);
                 SafeT jVal2 = (-eq3j+sDelta)/(2*eq3jj);
                 SafeT kVal1 = 0;
                 SafeT kVal2 = 0;
-                if ((periodicFlags & CellPeriodic.z)!=0) {
+                static if ((periodicFlags & CellPeriodic.z)!=0) {
                     kVal1 = -(lk+mik*i)/mkk-jVal1*mjk/mkk;
                     kVal2 = -(lk+mik*i)/mkk-jVal2*mjk/mkk;
                 }
@@ -156,20 +162,21 @@ void testEllipsoidBounds(T)(Cell!(T) cell, Vector!(T,3) r1, Vector!(T,3) r2, T c
                             (" cell:")(cell)(" r1:")(r1)(" r2:")(r2)(" i:")(i)(" ")(" j:")(jVal2)(" ")(" k:")(kVal2);
                     }));
                 }
-            }
+            }}
             jMin = cast(int)ceil((-eq3j-sDelta)/(2*eq3jj));
             jMax = cast(int)floor((-eq3j+sDelta)/(2*eq3jj));
-        }
+        }}
         for (int j=jMin; j<=jMax; ++j) {
+            Vector!(T,3) r12j=r12i+cell.h.column(1)*jMin;
             int kMin=0, kMax=0;
-            if ((periodicFlags & CellPeriodic.z)!=0) {
+            static if ((periodicFlags & CellPeriodic.z)!=0) {{
                 SafeT eq3   = a+2*(li*i+lj*j+mij*i*j)+mii*i*i+mjj*j*j;
                 SafeT eq3k  = 2*(lk+mik*i+mjk*j);
                 SafeT eq3kk = mkk;
                 SafeT delta = eq3k*eq3k-4*eq3kk*eq3;
                 if (eq3kk==0 || delta<=0) continue;
                 SafeT sDelta = sqrt(delta);
-                {
+                static if (doTests) {
                     // test 
                     SafeT kVal1 = (-eq3k-sDelta)/(2*eq3kk);
                     SafeT kVal2 = (-eq3k+sDelta)/(2*eq3kk);
@@ -192,14 +199,54 @@ void testEllipsoidBounds(T)(Cell!(T) cell, Vector!(T,3) r1, Vector!(T,3) r2, T c
                 }
                 kMin = cast(int)ceil((-eq3k-sDelta)/(2*eq3kk));
                 kMax = cast(int)floor((-eq3k+sDelta)/(2*eq3kk));
-            }
-            for (int k=kMin; k<=kMax; ++k) {
-                loop(i,j,k);
+            }}
+            if (kMin>kMax) continue;
+            neigh.p1p2=r12j+kMin*cell.h.column(2);
+            for (int k=kMin; true; ++k) {
+                int lVal=loop(neigh);
+                if (lVal != 0) return lVal;
+                if (k>kMax) break;
+                neigh.p1p2+=cell.h.column(2);
             }
         }
     }
+    return 0;
 }
 
+int loopEllipsoidBounds(T, bool doTests=false)(Cell!(T) cell, Vector!(T,3) r1, Vector!(T,3) r2, T cutoff,
+    PIndex p1, index_type i1, PIndex p2, index_type i2, int delegate(ref NeighPair!(T)) loop)
+{
+    switch(cell.periodicFlags){
+    case 0:
+        {
+            NeighPair!(T) neigh;
+            neigh.p1p2=r2-r1;
+            if (Vector!(SafeType!(T),3).from(neigh.p1p2).norm22 < cutoff) {
+                neigh.p1=p1;
+                neigh.i1=i1;
+                neigh.p2=p2;
+                neigh.i2=i2;
+                return loop(neigh);
+            }
+        }
+    case 1:
+        return loopEllipsoidBoundsT!(T, 1, doTests)(cell, r1, r2, cutoff, p1, i1, p2, i2, loop);
+    case 2:
+        return loopEllipsoidBoundsT!(T, 2, doTests)(cell, r1, r2, cutoff, p1, i1, p2, i2, loop);
+    case 3:
+        return loopEllipsoidBoundsT!(T, 3, doTests)(cell, r1, r2, cutoff, p1, i1, p2, i2, loop);
+    case 4:
+        return loopEllipsoidBoundsT!(T, 4, doTests)(cell, r1, r2, cutoff, p1, i1, p2, i2, loop);
+    case 5:
+        return loopEllipsoidBoundsT!(T, 5, doTests)(cell, r1, r2, cutoff, p1, i1, p2, i2, loop);
+    case 6:
+        return loopEllipsoidBoundsT!(T, 6, doTests)(cell, r1, r2, cutoff, p1, i1, p2, i2, loop);
+    case 7:
+        return loopEllipsoidBoundsT!(T, 7, doTests)(cell, r1, r2, cutoff, p1, i1, p2, i2, loop);
+    default:
+        assert(0,"unexpected value for periodicFlags in loopEllipsoidBounds");
+    }
+}
 /// loops on the  neighbors using the simple O(N**2) algorithm
 class SimpleNeighListGen:NeighListGen{
     this(){}
