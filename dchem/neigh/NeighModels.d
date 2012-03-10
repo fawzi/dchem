@@ -169,6 +169,13 @@ struct NeighPair(T){
     Vector!(T,3) p1p2;
 }
 
+/// describes a neighbor of a point in space
+struct NeighParticle(T){
+    PIndex p1;
+    index_type i1;
+    Vector!(T,3) rp1;
+}
+
 /// a neighboring list
 /// parallel loops *might* be parallel, but don't have to
 interface NeighList(T):BasicObjectI{
@@ -178,20 +185,26 @@ interface NeighList(T):BasicObjectI{
     /// range of kinds this neighboring list loops on
     KindRange kRange();
     
-    alias int delegate(ref NeighPair!(T) neighs) LoopBody;
+    alias int delegate(ref NeighPair!(T) neighs) LoopPairs;
     
+    /// loops on the neighbor of the point r with kind k (p1 will be invalid, i1=0)
+    int sloopOnNeighsRK(Vector!(T,3) r,KindIdx k,SafeT cutoff2,LoopPairs loopBody,
+        size_t optSize=defaultOptimalBlockSize);
     /// loops on the neighbor of p with kind k
-    int sloopOnNeighsPK(PIndex p1,index_type i1,KindIdx k,SafeT cutoff2,LoopBody loopBody, bool avoidDoubleCount=false,
+    int sloopOnNeighsPK(PIndex p1,index_type i1,KindIdx k,SafeT cutoff2,LoopPairs loopBody, bool avoidDoubleCount=false,
         size_t optSize=defaultOptimalBlockSize);
     /// loops on the neighbors between particles of kind k1 and k2
-    int sloopOnNeighsKK(KindIdx k1,KindIdx k2,SafeT cutoff2,LoopBody loopBody, bool avoidDoubleCount=false,
+    int sloopOnNeighsKK(KindIdx k1,KindIdx k2,SafeT cutoff2,LoopPairs loopBody, bool avoidDoubleCount=false,
         size_t optSize=defaultOptimalBlockSize);
     
+    /// parallel loop on the neighbor of the point r with kind k (p1 will be invalid, i1=0)
+    int sloopOnNeighsRK(Vector!(T,3) r,KindIdx k,SafeT cutoff2,LoopPairs loopBody,
+        size_t optSize=defaultOptimalBlockSize);
     /// parallel loop on the neighbor of p with kind k
-    int ploopOnNeighsPK(PIndex p1,index_type i1,KindIdx k,SafeT cutoff2,LoopBody loopBody, bool avoidDoubleCount=false,
+    int ploopOnNeighsPK(PIndex p1,index_type i1,KindIdx k,SafeT cutoff2,LoopPairs loopBody, bool avoidDoubleCount=false,
         size_t optSize=defaultOptimalBlockSize);
     /// parallel loop on the neighbors between particles of kind k1 and k2
-    int ploopOnNeighsKK(KindIdx k1,KindIdx k2,SafeT cutoff2, LoopBody loopBody, bool avoidDoubleCount=false,
+    int ploopOnNeighsKK(KindIdx k1,KindIdx k2,SafeT cutoff2, LoopPairs loopBody, bool avoidDoubleCount=false,
         size_t optSize=defaultOptimalBlockSize);
     
     /// reatin/relase semantic

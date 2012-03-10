@@ -857,15 +857,15 @@ final class SegmentedArray(T){
             }+/`,""]));
            return result;
         }
-        int opApply(int delegate(ref size_t i,ref PIndex pIdx,ref LocalPIndex lIdx,ref T)loopBody){
+        int opApply(int delegate(ref index_type i,ref PIndex pIdx,ref LocalPIndex lIdx,ref T)loopBody){
             int result=0;
             mixin(segArrayMonoLoop(pFlags,"iterContext",["array"],
-            "int delegate(ref size_t i,ref PIndex, ref LocalPIndex, ref T) dlg; int* finalRes;","",
+            "int delegate(ref index_type i,ref PIndex, ref LocalPIndex, ref T) dlg; int* finalRes;","",
             "mainContext.dlg=loopBody;mainContext.finalRes=&result;","visitKind=visitKind&&(newK.arrayPtrStart !is null);","",
-            ["if ((*finalRes)!=0) return;",`size_t ii=0; if (auto returnV=dlg(ii,*pIndexPtr,localPIndex,*arrayPtr)){ *finalRes=returnV; return; }`,"",
+            ["if ((*finalRes)!=0) return;",`index_type ii=0; if (auto returnV=dlg(ii,*pIndexPtr,localPIndex,*arrayPtr)){ *finalRes=returnV; return; }`,"",
             
             "if ((*finalRes)!=0) return;",`
-            for (size_t ii=0;ii<arrayMKindDims;++ii){
+            for (index_type ii=0;ii<arrayMKindDims;++ii){
                 if (auto returnV=dlg(ii,*pIndexPtr,localPIndex,arrayPtr[ii])){ *finalRes=returnV; return; }
             }`,""]));
            return result;

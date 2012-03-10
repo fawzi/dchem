@@ -262,7 +262,7 @@ struct KindRange{
         static if (loopKind==LoopType.Parallel){
             return PLoop(*this);
         } else {
-            return this;
+            return *this;
         }
     }
     /// true if the current KindRange is a dummy
