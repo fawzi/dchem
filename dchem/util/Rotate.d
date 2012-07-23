@@ -47,14 +47,15 @@ in{
 body{
     scope c=v2[i];
     alias typeof(c) S;
-    scope v1m=m[i];
-    static if(is(typeof(v1m.dup))){
-        v1m=v1m.dup;
+    static if(is(typeof(m[i].dup))){
+        scope v1m=m[i].dup;
+    } else {
+	auto v1m=m[i];
     }
     static if (is(typeof(v2.dup))){
         scope v2Ortho=v2.dup;
     } else {
-        v2Ortho=v2;
+        auto v2Ortho=v2;
     }
     auto v2Val=v2Ortho[i];
     v2Ortho[i]=cast(S)0;
@@ -91,9 +92,10 @@ body{
     scope c=v2[i];
     alias typeof(c) S;
     
-    scope v1m=m[i];
-    static if(is(typeof(v1m.dup))){
-      v1m=v1m.dup;
+    static if(is(typeof(m[i].dup))){
+	scope v1m=m[i].dup;
+    } else {
+	auto v1m=m[i];
     }
     static if(is(typeof(v2.dup))){
         scope v2Ortho=v2.dup;

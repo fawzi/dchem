@@ -604,7 +604,7 @@ class LazyMPLoader(T):Serializable{
         this(point,weakUpdate,ev_time());
     }
     this(){}
-    typeof(this) postUnserialize(Unserializer s){
+    override Serializable postUnserialize(Unserializer s){
         maxTime=ev_time(); // reset time as it cannot be assumed to be synchronized between different computers
         return this;
     }

@@ -338,28 +338,32 @@ ParticleSys!(T) artificialPSys(T)(size_t nPos, size_t nOrient,size_t nDof,
     auto subParticlesStruct=new SegmentedArrayStruct("subParticlesStruct",fullSystem,KindRange(levels[1].kStart,levels[$-1].kEnd),nSubparticles[levels[1].kStart..levels[$-1].kEnd]);
     auto subPMapPIdx=new SegArrMemMap!(PIndex)(subParticlesStruct);
     auto subParticleIdxs=subPMapPIdx.newArray();
-    auto pMapSizeT=new SegArrMemMap!(size_t)(particlesStruct,KindRange(levels[0].kEnd,levels[$-1].kEnd));
-    scope nSub=pMapSizeT.newArray();
-    nSub[]=0;
-    foreach(inP,pIdx,lIdx,superP;superParticle[KindRange(levels[0].kStart,levels[$-2].kEnd)].sLoop){ // sequential, we need to guarantee a deterministic result
-        nSub.dtype* idxAtt;
-        idxAtt=nSub.ptrI(superP,0);
-        *(subParticleIdxs.ptrI(superP,*idxAtt))=PIndex(lIdx);
-        ++(*idxAtt);
+    {
+	auto pMapSizeT=new SegArrMemMap!(size_t)(particlesStruct,KindRange(levels[0].kEnd,levels[$-1].kEnd));
+	auto nSub=pMapSizeT.newArray();
+	scope (exit) {
+	    if (nSub) nSub.giveBack();
+	    pMapSizeT.rmUser(); // avoid if we throw an exception??
+	}
+	nSub[]=0;
+	foreach(inP,pIdx,lIdx,superP;superParticle[KindRange(levels[0].kStart,levels[$-2].kEnd)].sLoop){ // sequential, we need to guarantee a deterministic result
+	    nSub.dtype* idxAtt;
+	    idxAtt=nSub.ptrI(superP,0);
+	    *(subParticleIdxs.ptrI(superP,*idxAtt))=PIndex(lIdx);
+	    ++(*idxAtt);
+	}
+	Exception e;
+	foreach(inP,pIdx,lIdx,nPart;nSub.pLoop){
+	    if (nSubparticles[cast(size_t)lIdx.kind]!=cast(index_type)nPart){
+		e=new Exception(collectAppender(delegate void(CharSink sink){
+			    dumper(sink)("internal error inconsistent number of subparticles:")
+			    (nSubparticles[cast(size_t)lIdx.kind])("vs")(nPart)("\n");
+			}),__FILE__,__LINE__);
+		break;
+	    }
+	}
+	if (e!is null) throw e;
     }
-    Exception e;
-    foreach(inP,pIdx,lIdx,nPart;nSub.pLoop){
-        if (nSubparticles[cast(size_t)lIdx.kind]!=cast(index_type)nPart){
-            e=new Exception(collectAppender(delegate void(CharSink sink){
-                dumper(sink)("internal error inconsistent number of subparticles:")
-                    (nSubparticles[cast(size_t)lIdx.kind])("vs")(nPart)("\n");
-            }),__FILE__,__LINE__);
-            break;
-        }
-    }
-    if (e!is null) throw e;
-    pMapSizeT.rmUser();
-    nSub.giveBack(); nSub=null;
     
     // sysStruct
     auto sysStruct=new SysStruct("sys", fullSystem, externalOrder, levels,
