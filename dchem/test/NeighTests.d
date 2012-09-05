@@ -269,5 +269,5 @@ void doNeigListTests(T)(RandomCell!(T) rcell, RandomSegmentedArray!(T) rArray,
     SizeLikeNumber!(4,1,-3) bs, bool avoidDoubleCount)
 {
     auto tester=new NeighListTester!(T)();
-    //tester.tests()
+    tester.tests()
 }

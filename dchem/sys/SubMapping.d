@@ -98,12 +98,12 @@ class SubMapping: BasicObjectI{
             dumper(s)("indexing of a local particle with kind out of range:")
                 (l)(" not in ")(lKRange);
         }));
+	int idx=l.kind-lKRange.kStart;
+	auto nPart=kindStarts[idx+1]-kindStarts[idx];
         assert((cast(size_t)l.particle)+cast(size_t)kindStarts[l.kind-lKRange.kStart] <
             cast(size_t)kindStarts[l.kind-lKRange.kStart+1],collectAppender(delegate void(CharSink s){
                 dumper(s)("indexing of a local particle out of range:")
-                    (l)(" when that kind has ")
-                    (kindStarts[l.kind-lKRange.kStart+1]-kindStarts[l.kind-lKRange.kStart])
-                    ("particles");
+                    (l)(" when that kind has ")(nPart)(" particles");
             }));
     } body {
         return lSortedPIndex[cast(size_t)kindStarts[cast(size_t)(l.kind-lKRange.kStart)]

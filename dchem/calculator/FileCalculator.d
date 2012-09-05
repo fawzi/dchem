@@ -413,7 +413,7 @@ class TemplateHandler{
         if (cmd.length>0 && cmd!="NONE"){
             char[256] buf;
             auto arr=lGrowableArray(buf,0);
-            dumper(&arr)("will execute `")(cmd)("`\n");
+            dumper(&arr.appendArr)("will execute `")(cmd)("`\n");
             log(arr.data);
             arr.clearData();
             auto cmdP=cmd;
