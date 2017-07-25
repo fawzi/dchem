@@ -95,9 +95,6 @@ class PosELogger(T):EmptyObserver!(T){
         this.outStream=silos.outfileForName(input.logFile,WriteMode.WriteAppend,StreamOptions.CharBase);
     }
     
-    // ExplorationObserverI(T)
-    void increaseRunLevel(SKey s,RunLevel rLevel){
-    }
     /// adds energy for a local point and bCasts addEnergyEval
     void addEnergyEvalLocal(SKey key,Point p,Real energy,Real energyError){
         try{
