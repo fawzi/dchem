@@ -24,7 +24,7 @@ import dchem.calculator.CalculatorModels;
 import blip.container.HashMap;
 import blip.container.Set;
 import blip.sync.Atomic;
-import blip.core.Variant;
+import blip.core.Boxer;
 
 /// selection mapping of a particle
 struct ParticleDynvarsSelect{
@@ -982,17 +982,17 @@ class SubsetContext:CalcContext{
     /// should be called before working again with a deactivated calculator
     void activate(){
         subContext.activate();
-        nCenter.notify("willActivateContext",Variant(this));
+        nCenter.notify("willActivateContext",box(this));
     }
     /// call this to possibly get rid of all caches (i.e. before a pause in the calculation)
     void deactivate(){
         subContext.deactivate();
-        nCenter.notify("willDeactivateContext",Variant(this));
+        nCenter.notify("willDeactivateContext",box(this));
     }
     /// call this to remove the context (after all calculations with this are finished)
     void giveBack(){
         subContext.giveBack();
-        nCenter.notify("willGiveBackContext",Variant(this));
+        nCenter.notify("willGiveBackContext",box(this));
     }
     /// tries to stop a calculation in progress. Recovery after this is not possible
     /// giveBack should still be called

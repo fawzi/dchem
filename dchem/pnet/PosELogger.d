@@ -94,7 +94,8 @@ class PosELogger(T):EmptyObserver!(T){
         this.serialLock=new RLock();
         this.outStream=silos.outfileForName(input.logFile,WriteMode.WriteAppend,StreamOptions.CharBase);
     }
-    
+
+    // ExplorationObserverI(T)
     /// adds energy for a local point and bCasts addEnergyEval
     void addEnergyEvalLocal(SKey key,Point p,Real energy,Real energyError){
         try{

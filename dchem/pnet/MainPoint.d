@@ -9,6 +9,7 @@ import blip.io.BasicIO;
 import blip.serialization.Serialization;
 import tango.math.random.Random;
 import blip.rtest.RTest;
+import blip.core.Boxer;
 import blip.sync.Atomic;
 import blip.math.Math:max,abs,pow2,sqrt;
 import tango.util.container.more.Heap;
@@ -900,7 +901,7 @@ class MainPoint(T):MainPointI!(T){
         pn.neighbors=neighs;
         pn.dirDist=dirDist;
         pn.time=Clock.now;
-        localContext.nCenter.notify("PointHasNewNeighbors",Variant(pn));
+        localContext.nCenter.notify("PointHasNewNeighbors",box(pn));
         version(TrackPNet) logMsg(delegate void(CharSink s){
             dumper(s)("completed addition of ")(newPoint.data);
         });
@@ -1297,9 +1298,9 @@ class MainPoint(T):MainPointI!(T){
             gFlagsChange.newGFlags=gFlags;
             gFlagsChange.point=point;
             if ((gFlags&GFlags.LocalCopy)==0){
-                localContext.nCenter.notify("localPointChangedGFlags",Variant(&gFlagsChange));
+                localContext.nCenter.notify("localPointChangedGFlags",box(&gFlagsChange));
             } else {
-                localContext.nCenter.notify("copiedPointChangedGFlags",Variant(&gFlagsChange));
+                localContext.nCenter.notify("copiedPointChangedGFlags",box(&gFlagsChange));
             }
         }
     }
@@ -1325,7 +1326,7 @@ class MainPoint(T):MainPointI!(T){
             auto silo=i.owner;
             localContext.neighborHasEnergy(silo,i.points,eAndMin);
         }
-        localContext.nCenter.notify("attractorChange",Variant(&eAndMin));
+        localContext.nCenter.notify("attractorChange",box(&eAndMin));
     }
     /// the energy of a neighbor was calculated (or the minimum updated)
     void localNeighEnergy(PointAndDir[] neigh,DirDistances!(T)[] dirDist,PointEMin eAndMin){

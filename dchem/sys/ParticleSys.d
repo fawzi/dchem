@@ -12,7 +12,7 @@ import dchem.sys.Cell;
 import dchem.sys.SubMapping;
 import dchem.sys.SegmentedArray;
 import blip.util.NotificationCenter;
-import blip.core.Variant;
+import blip.core.Boxer;
 import blip.container.BitArray;
 import blip.container.Deque;
 import blip.container.BulkArray;
@@ -472,25 +472,25 @@ class ParticleKind: Serializable,CopiableObjectI,DerivTransfer{
         }
     }
     
-    void sysStructChanged(Variant pV){
+    void sysStructChanged(Box pV){
         mixin(withParticleSysMixin("sysStructChangedT","pV"));
     }
     /// position of particles changed, position,... are valid
-    void positionsChanged(Variant p){}
+    void positionsChanged(Box p){}
     /// cell changed
-    void cellChanged(Variant p){}
+    void cellChanged(Box p){}
     /// properties to be calculated did change
-    void propertiesRequestedChanged(Variant p){}
+    void propertiesRequestedChanged(Box p){}
     /// properties were allocated
-    void propertiesAllocated(Variant p){}
+    void propertiesAllocated(Box p){}
     /// will calculate the properties
-    void willCalculate(Variant p){}
+    void willCalculate(Box p){}
     /// did calculate the properties
-    void didCalculate(Variant p){}
+    void didCalculate(Box p){}
     /// did read the properties (no need to keep them in memory)
     void didReadProperties(){}
     /// request to try to reduce memory usage
-    void minimizeMemory(Variant p){}
+    void minimizeMemory(Box p){}
     
     /// adds to res in the tangential space of pos (derivative space) the equivalent (to first order)
     /// to the one that goes from pos.x-0.5*diffP to pos.x+0.5*diffP
@@ -920,7 +920,7 @@ class ParticleSys(T): CopiableObjectI,Serializable
     /// (can be used to add stuff to particles: extra dofs,...)
     void pKindsInitialSetup(){
         if (nCenter!is null)
-            nCenter.notify("kindsSet",Variant(this));
+            nCenter.notify("kindsSet",box(this));
     }
     /// system structure changed (particle added/removed, kinds added/removed)
     /// the segmented array structs should be initialized, and modifiable.
@@ -930,28 +930,28 @@ class ParticleSys(T): CopiableObjectI,Serializable
         derivOverlap.clear();
         this.reallocStructs();
         foreach(pKind;sysStruct.particleKinds.sDataLoop){
-            pKind.sysStructChanged(Variant(this));
+            pKind.sysStructChanged(box(this));
         }
         if (nCenter!is null)
-            nCenter.notify("sysStructChanged",Variant(this));
+            nCenter.notify("sysStructChanged",box(this));
         dynVars.dVarStruct.freezeStructs();
     }
     /// position of particles changed, position,... are valid
     void positionsChanged(){
         derivOverlap.invalidate();
         foreach(pKind;sysStruct.particleKinds.sDataLoop){
-            pKind.positionsChanged(Variant(this));
+            pKind.positionsChanged(box(this));
         }
         if (nCenter!is null)
-            nCenter.notify("positionsChanged",Variant(this));
+            nCenter.notify("positionsChanged",box(this));
     }
     /// cell changed
     void cellChanged(){
         foreach(pKind;sysStruct.particleKinds.sDataLoop){
-            pKind.cellChanged(Variant(this));
+            pKind.cellChanged(box(this));
         }
         if (nCenter!is null)
-            nCenter.notify("cellChanged",Variant(this));
+            nCenter.notify("cellChanged",box(this));
     }
     /// copy op
     void opSliceAssign(V)(V p){

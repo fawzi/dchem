@@ -6,14 +6,14 @@ import blip.io.BasicIO;
 import blip.io.Console;
 import dchem.Common;
 import blip.util.TangoLog;
-import blip.core.Variant;
+import blip.core.Boxer;
 import blip.BasicModels;
 import blip.parallel.mpi.MpiModels;
 import blip.container.GrowableArray;
 
 /// represents a task that can be sent over to another computer
 interface RemoteTask:Serializable{
-    void execute(Variant args);
+    void execute(Box args);
     void stop();
 }
 
@@ -152,7 +152,7 @@ class InputField:InputElement{
             rInp=new RootInput();
             s.context["RootInput"]=rInp;
         } else {
-            rInp=rInp0.get!(RootInput)();
+            rInp=unbox!(RootInput)(*rInp0);
         }
         rInp.addName(this);
     }
@@ -176,12 +176,12 @@ class InputField:InputElement{
             rInp=new RootInput();
             s.context["RootInput"]=rInp;
         } else {
-            rInp=rInp0.get!(RootInput)();
+            rInp=unbox!(RootInput)(*rInp0);
         }
     }
     Serializable postUnserialize(Unserializer s){
         if (name.length==0) return null;
-        return s.context["RootInput"].get!(RootInput)().makeUnique(this);
+        return unbox!(RootInput)(s.context["RootInput"]).makeUnique(this);
     }
     /// unify with another value
     void unify(InputField o,bool overwrite=false){
@@ -218,7 +218,7 @@ class RootInput{
     bool readInput(TextParser!(char) t,CharSink errorLog){
         scope js=new JsonUnserializer!(char)(t);
         js.sloppyCommas=true;
-        js.context["RootInput"]=Variant(this);
+        js.context["RootInput"]=box(this);
         t.newlineIsSpace=true;
         t.skipWhitespace();
         if (t.getSeparator()!="{"){
@@ -277,7 +277,7 @@ class RootInput{
         auto nNames=knownNames.keys;
         newKnownNames=null;
         scope js=new JsonSerializer!(char)("RootInputOut",s);
-        js.context["RootInput"]=Variant(this);
+        js.context["RootInput"]=box(this);
         while (true){
             foreach(k;nNames) {
                 js.handlers(k);

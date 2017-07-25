@@ -7,7 +7,6 @@ import blip.io.BasicIO;
 import dchem.input.ReadIn;
 import dchem.Common;
 import blip.util.TangoLog;
-import blip.core.Variant;
 import blip.io.StreamConverters;
 import tango.io.stream.DataFile;
 import tango.io.FilePath;

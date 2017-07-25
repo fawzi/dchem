@@ -13,7 +13,7 @@ import blip.io.FileStream;
 import blip.container.Set;
 import blip.container.GrowableArray;
 import blip.util.NotificationCenter;
-import blip.core.Variant;
+import blip.core.Boxer;
 import dchem.pnet.MainPoint;
 import blip.core.stacktrace.StackTrace;
 import dchem.calculator.FileCalculator;
@@ -96,9 +96,9 @@ class TrackSpecialPoints(T):SilosComponentI!(T){
     }
     
     /// callback that checks the flags changes
-    void flagsChanged(cstring notificationName,Callback* callback,Variant oldF){
+    void flagsChanged(cstring notificationName,Callback* callback,Box oldF){
         assert(notificationName=="localPointChangedGFlags");
-        auto flagChange=oldF.get!(GFlagsChange*)();
+        auto flagChange=unbox!(GFlagsChange*)(oldF);
         auto oldProb=specialPointForGFlags(flagChange.oldGFlags);
         auto newProb=specialPointForGFlags(flagChange.newGFlags);
         bool logged=false;
@@ -169,7 +169,7 @@ class TrackSpecialPoints(T):SilosComponentI!(T){
             }
         }
         if (!skip){
-            silos.nCenter.notify("specialPointAdd",Variant(&flagChange));
+            silos.nCenter.notify("specialPointAdd",box(&flagChange));
             logChange("add",flagChange);
         }
     }
@@ -179,16 +179,16 @@ class TrackSpecialPoints(T):SilosComponentI!(T){
             wasRemoved=specialPoints.remove(flagChange.point);
         }
         if (wasRemoved){
-            silos.nCenter.notify("specialPointRm",Variant(&flagChange));
+            silos.nCenter.notify("specialPointRm",box(&flagChange));
             logChange("rm ",flagChange);
         }
     }
     void specialPointTypeChange(GFlagsChange flagChange){
-        silos.nCenter.notify("specialPointTypeChange",Variant(&flagChange));
+        silos.nCenter.notify("specialPointTypeChange",box(&flagChange));
         logChange("tch",flagChange);
     }
     void specialPointProbChange(GFlagsChange flagChange){
-        silos.nCenter.notify("specialPointProbChange",Variant(&flagChange));
+        silos.nCenter.notify("specialPointProbChange",box(&flagChange));
         logChange("pch",flagChange);
     }
     void stop(){

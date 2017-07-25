@@ -10,7 +10,6 @@ import dchem.calculator.Calculator;
 import dchem.calculator.CalculatorModels;
 import dchem.pnet.PNetModels;
 import dchem.pnet.MainPoint;
-import blip.core.Variant;
 import blip.container.HashMap;
 import blip.sync.UniqueNumber;
 import blip.sync.Atomic;

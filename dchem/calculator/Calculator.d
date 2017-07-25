@@ -3,7 +3,7 @@ module dchem.calculator.Calculator;
 import dchem.Common;
 import blip.util.NotificationCenter;
 import blip.core.Traits: cmp,ctfe_rep;
-import blip.core.Variant;
+import blip.core.Boxer;
 import blip.io.BasicIO;
 import blip.io.Console;
 import blip.container.GrowableArray;
@@ -341,24 +341,24 @@ class ContextLimiter:InputElement{
         }
     }
 
-    void willActivateContextCB(char[]name,Callback*callBack,Variant v){
-        auto c=v.get!(CalculationContext)();
+    void willActivateContextCB(char[]name,Callback*callBack,Box v){
+        auto c=unbox!(CalculationContext)(v);
         synchronized(this){
             assert((c.contextId in contexts),"activated context not in list "~c.contextId);
             assert((c.contextId in activeContexts),"activated context already activated "~c.contextId);
             activeContexts[c.contextId]=c;
         }
     }
-    void willDeactivateContextCB(char[]name,Callback*callBack,Variant v){
-        auto c=v.get!(CalculationContext)();
+    void willDeactivateContextCB(char[]name,Callback*callBack,Box v){
+        auto c=unbox!(CalculationContext)(v);
         synchronized(this){
             assert((c.contextId in activeContexts),"deactivated context not in list "~c.contextId);
             activeContexts.remove(c.contextId);
         }
         waitForContexts.checkCondition();
     }
-    void willGiveBackContextCB(char[]name,Callback*callBack,Variant v){
-        auto c=v.get!(CalculationContext)();
+    void willGiveBackContextCB(char[]name,Callback*callBack,Box v){
+        auto c=unbox!(CalculationContext)(v);
         synchronized(this){
             assert((c.contextId in contexts),"gave back context not in list "~c.contextId);
             if((c.contextId in activeContexts)!is null)
@@ -536,7 +536,7 @@ class CalcContext:LocalCalculationContext{
         }
         return _pSysLowP;
     }
-    void sysStructChangedCallback(cstring n,Callback*cb,Variant v){
+    void sysStructChangedCallback(cstring n,Callback*cb,Box v){
         assert(n=="sysStructChanged","unexpected callback name:"~n);
         switch(activePrecision){
         case Precision.Real:
@@ -662,15 +662,15 @@ class CalcContext:LocalCalculationContext{
     /// called automatically after creation, but before any energy evaluation
     /// should be called before working again with a deactivated calculator
     void activate(){
-        nCenter.notify("willActivateContext",Variant(this));
+        nCenter.notify("willActivateContext",box(this));
     }
     /// call this to possibly get rid of all caches (i.e. before a pause in the calculation)
     void deactivate(){
-        nCenter.notify("willDeactivateContext",Variant(this));
+        nCenter.notify("willDeactivateContext",box(this));
     }
     /// call this to remove the context (after all calculations with this are finished)
     void giveBack(){
-        nCenter.notify("willGiveBackContext",Variant(this));
+        nCenter.notify("willGiveBackContext",box(this));
     }
     /// tries to stop a calculation in progress. Recovery after this is not possible
     /// giveBack should still be called

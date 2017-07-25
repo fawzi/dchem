@@ -14,7 +14,7 @@ import blip.io.FileStream;
 import blip.container.Set;
 import blip.container.GrowableArray;
 import blip.util.NotificationCenter;
-import blip.core.Variant;
+import blip.core.Boxer;
 import dchem.pnet.MainPoint;
 import blip.core.stacktrace.StackTrace;
 import dchem.calculator.FileCalculator;
@@ -657,8 +657,8 @@ class TopologyInfo(T):EmptyObserver!(T){
         if (checkB) checkForBoundary(point);
     }
     
-    void attractorChanged(cstring notificationName,Callback* callback,Variant oldF){
-        PointEMin* newMin=oldF.get!(PointEMin*)();
+    void attractorChanged(cstring notificationName,Callback* callback,Box oldF){
+        PointEMin* newMin=unbox!(PointEMin*)(oldF);
         pointAttractorChanged(*newMin);
     }
     

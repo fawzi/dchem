@@ -1,6 +1,6 @@
 /// requested properties for the current evaluation
 module dchem.sys.Requests;
-import blip.core.Variant;
+import blip.core.Boxer;
 import blip.serialization.Serialization;
 
 struct EnergyRequests{
@@ -15,5 +15,5 @@ struct EnergyRequests{
 
 class Requests{
     EnergyRequests energy;
-    Variant[char[]] others;
+    Box[char[]] others;
 }

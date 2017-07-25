@@ -12,7 +12,6 @@ import blip.sync.Atomic;
 import blip.core.Traits;
 import blip.serialization.Serialization;
 import blip.serialization.SerializationMixins;
-import blip.core.Variant;
 import blip.parallel.smp.WorkManager;
 import blip.container.AtomicSLink;
 import blip.container.Pool;
