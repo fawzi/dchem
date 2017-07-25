@@ -337,16 +337,6 @@ class Cp2kMethod:TemplateExecuter{
         subs["[port]"]=serv.port;
         super.setup(pWorld,log);
     }
-    bool verify(CharSink log){
-        bool res=true;
-        if ((cast(Cp2kServer)cp2kServer.contentObj)is null){
-            res=false;
-            sinkTogether(log,delegate void(CharSink s){
-                dumper(s)("cp2kServer in field ")(myFieldName)(" must be set and of type Cp2kServer\n");
-            });
-        }
-        return res;
-    }
     CalculationContext getCalculator(bool wait,ubyte[]history){
         auto ctx=Cp2kContext.createNew(this,collectAppender(delegate void(CharSink s){
             dumper(s)("cp2k")(ProcContext.instance.id)("-")(ProcContext.instance.localId.next());
