@@ -58,9 +58,9 @@ int main(char[][]args){
         foreach (ref p;sys.particles){
             scope pos=a2NA(p.pos);
             pos-=x0;
-            pos=dot(m,pos);
-            pos+=x0;
-            sout(p.name)(" ")(pos[0])(" ")(pos[1])(" ")(pos[2])("\n");
+            scope pos2=dot(m,pos);
+            pos2+=x0;
+            sout(p.name)(" ")(pos2[0])(" ")(pos2[1])(" ")(pos2[2])("\n");
         }
     }
     return 0;
