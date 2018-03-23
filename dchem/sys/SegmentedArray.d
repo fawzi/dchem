@@ -11,7 +11,6 @@ import blip.narray.NArray;
 import blip.sync.Atomic;
 import blip.core.Traits;
 import blip.serialization.Serialization;
-import blip.serialization.SerializationMixins;
 import blip.parallel.smp.WorkManager;
 import blip.container.AtomicSLink;
 import blip.container.Pool;
@@ -31,7 +30,7 @@ enum ParaFlags:int{
 }
 
 /// structure of a segmented array, kindStarts is valid only after freezing
-final class SegmentedArrayStruct{
+final class SegmentedArrayStruct: Serializable {
     enum Flags{
         None=0,   /// no special flags
         Frozen=1, /// kind dimensions cannot be changed anymore (this is set when an array is created)
@@ -46,8 +45,49 @@ final class SegmentedArrayStruct{
     index_type[]   kindIncrements; /// when looping the increment to add for each particle of the given kind
     index_type[]   mKindDims; /// minimum number of basic elements (this is max(1,_kindDims) if Min1, otherwise _kindDims)
     Flags flags;
-    mixin(serializeSome("dchem.sys.SegmentedArrayStruct","Describes the structure of a SegmentedArray",
-        "submapping|kRange|_kindDims|kindStarts"));
+
+  static ClassMetaInfo metaI;
+  static this(){
+    if (metaI!is null) return;
+    metaI=ClassMetaInfo.createForType!(typeof(this))("dchem.sys.SegmentedArrayStruct",
+                                                       "Describes the structure of a SegmentedArray");
+    metaI.addFieldOfType!(typeof(this.submapping))("submapping","");
+    metaI.addFieldOfType!(typeof(this.kRange))("kRange","");
+    metaI.addFieldOfType!(typeof(this._kindDims))("kindDims","");
+    metaI.addFieldOfType!(typeof(this.kindStarts))("kindStarts","");
+  }
+  ClassMetaInfo getSerializationMetaInfo(){
+    return metaI;
+  }
+  Serializable preUnserialize(Unserializer s) { return this; }
+  Serializable postUnserialize(Unserializer s) { return this; }
+  void preSerialize(Serializer s) { }
+  void postSerialize(Serializer s) { }
+  void serialize(Serializer s){
+    SubMapping submapping = this.submapping;
+    s.field(metaI[0],submapping);
+    KindRange kRange = this.kRange;
+    s.field(metaI[1], kRange);
+    index_type[] kindDims = this._kindDims;
+    s.field(metaI[2], kindDims);
+    index_type[] kindStarts = this.kindStarts;
+    s.field(metaI[3],kindStarts);
+  }
+   void unserialize(Unserializer s){
+    s.field(metaI[0], this.submapping);
+    s.field(metaI[1], this.kRange);
+    s.field(metaI[2], this._kindDims);
+    s.field(metaI[3], this.kindStarts);
+  }
+  string toString(){
+    return cast(string)serializeToArray(this);
+  }
+  void desc(void delegate(cstring) sink){
+    serializeToSink(sink,this);
+  }
+
+  /*mixin(serializeSome("dchem.sys.SegmentedArrayStruct","Describes the structure of a SegmentedArray",
+    "submapping|kRange|_kindDims|kindStarts"));*/
     mixin printOut!();
     /// allocates a new SegmentedArray with the given kind dimensions
     /// if the Min1 flag is set (default) then at least one value per kind is stored 
@@ -365,7 +405,7 @@ final class SegmentedArray(T){
     PoolI!(SegmentedArray) pool;
     
     mixin(serializeSome("SegmentedArray!("~T.stringof~")","A segmented array i.e some particle associated property.",
-        "kRange|kindOffsets|kindByteIncrements|mKindDims|arrayMap|guard"));
+        "kRange|kindOffsets|kindByteIncrements|mKindDims|arrayMap")); //|guard
     mixin printOut!();
     
     /+BulkArray!(T) data(){

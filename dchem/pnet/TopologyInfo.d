@@ -24,7 +24,7 @@ import blip.container.HashMap;
 import blip.core.Traits;
 import dchem.pnet.EmptyObserver;
 import dchem.pnet.DenseLocalPointArray;
-import blip.container.BatchedGrowableArray;
+import blip.container.UnserializableBatchedGrowableArray;
 import blip.container.MinHeap;
 import blip.container.AtomicSLink;
 import blip.math.IEEE;
@@ -77,7 +77,7 @@ struct Mins{
 }
 
 /// two points at the border between two minima
-struct BoundaryPointInfo{
+struct BoundaryPointInfo {
     Point p1; // the smaller of the two points
     Point p2; // the larger of the two points
     int dir12;
@@ -89,7 +89,7 @@ struct BoundaryPointInfo{
     bool shortest2;
     BoundaryPointInfo *next;
     BoundaryPointInfo *next2;
-    
+
     Point otherP(Point p){
         if (p==p1){
             return p2;
@@ -170,7 +170,7 @@ struct BoundaryPointInfo{
 /// information on a border between two minima
 class BorderInfo(T){
     Mins mins;
-    BatchedGrowableArray!(BoundaryPointInfo) pointInfo;
+    UnserializableBatchedGrowableArray!(BoundaryPointInfo) pointInfo;
     BoundaryPointInfo *freeList;
     SpecialCmpHeap!(size_t) tPoint;
     TopologyInfo!(T) topoInfo;
@@ -182,7 +182,7 @@ class BorderInfo(T){
     this(TopologyInfo!(T) topoInfo,Mins mins){
         this.topoInfo=topoInfo;
         this.mins=mins;
-        pointInfo=new BatchedGrowableArray!(BoundaryPointInfo)();
+        pointInfo=new UnserializableBatchedGrowableArray!(BoundaryPointInfo)();
         tPoint.cmpEls=&comparePIdx;
     }
     
@@ -283,8 +283,8 @@ class BorderInfo(T){
     /// merges borderInfo (b2 will be to removed)
     void mergeWith(BorderInfo!(T) b2){
         auto oldP=transitionPoint;
-        BatchedGrowableArray!(BoundaryPointInfo) shortPointInfo=b2.pointInfo;
-        BatchedGrowableArray!(BoundaryPointInfo) longPointInfo=pointInfo;
+        UnserializableBatchedGrowableArray!(BoundaryPointInfo) shortPointInfo=b2.pointInfo;
+        UnserializableBatchedGrowableArray!(BoundaryPointInfo) longPointInfo=pointInfo;
         if (pointInfo.length<b2.pointInfo.length){
             longPointInfo=b2.pointInfo;
             shortPointInfo=pointInfo;

@@ -2,6 +2,7 @@
 /// useful to unbundle extra method data from the points
 module dchem.pnet.DenseLocalPointArray;
 import blip.container.BatchedGrowableArray;
+import blip.container.UnserializableBatchedGrowableArray;
 import blip.serialization.Serialization;
 import dchem.pnet.PNetModels;
 import blip.util.BinSearch;
@@ -10,7 +11,7 @@ import blip.sync.Atomic;
 /// dense array of elements indexed by local point keys
 class DenseLocalPointArray(T){
     BatchedGrowableArray!(Point,batchSize) keys;
-    BatchedGrowableArray!(T,batchSize) values;
+    UnserializableBatchedGrowableArray!(T,batchSize) values;
     
     T opIndex(Point k){
         synchronized(this){
@@ -70,7 +71,7 @@ class DenseLocalPointArray(T){
     
     this(BatchedGrowableArray!(Point,batchSize) pointsKey){
         keys=pointsKey;
-        values=new BatchedGrowableArray!(T,batchSize)();
+        values=new UnserializableBatchedGrowableArray!(T,batchSize)();
     }
     this(){
         this(new BatchedGrowableArray!(Point,batchSize)());
